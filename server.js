@@ -23,11 +23,13 @@ if (!ADC.client_id) {
 }
 
 // ── Google OAuth strategy ────────────────────────────────────────────────────
+const CALLBACK_BASE = process.env.APP_URL || `http://localhost:${PORT}`;
+
 passport.use(new GoogleStrategy(
   {
-    clientID:     ADC.client_id,
-    clientSecret: ADC.client_secret,
-    callbackURL:  `http://localhost:${PORT}/auth/google/callback`,
+    clientID:     ADC.client_id     || 'UNCONFIGURED',
+    clientSecret: ADC.client_secret || 'UNCONFIGURED',
+    callbackURL:  `${CALLBACK_BASE}/auth/google/callback`,
     hd:           'gorock.org'
   },
   async (_accessToken, _refreshToken, profile, done) => {
