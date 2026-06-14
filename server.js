@@ -10,7 +10,7 @@ const path = require('path');
 const sheetsLib = require('./lib/sheets');
 
 const app  = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT;
 
 // OAuth credentials: env vars take precedence (required on Railway); fall back to local gcloud ADC file for dev
 let ADC = { client_id: process.env.GOOGLE_CLIENT_ID, client_secret: process.env.GOOGLE_CLIENT_SECRET };
@@ -87,6 +87,6 @@ app.get('/volunteer',    requireAuth,  (req, res) => res.sendFile(path.join(__di
 app.get('/social-feed',  requireBoard, (req, res) => res.sendFile(path.join(__dirname, 'views/social.html')));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`\n  ROCK Hub  →  http://localhost:${PORT}\n`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n  ROCK Hub  →  http://0.0.0.0:${PORT}\n`);
 });
