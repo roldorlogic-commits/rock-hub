@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ROCK Hub — Social Media</title>
+  <link rel="stylesheet" href="/css/vars.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/dashboard.css">
+  <link rel="stylesheet" href="/css/social.css">
+</head>
+<body class="dashboard-page">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <a href="/board" class="topbar-logo">
+        <img src="/img/rock-logo.png" class="topbar-logo-img" alt="The ROCK Association">
+        <div class="topbar-logo-text">
+          <span class="logo-rock">ROCK</span>
+          <span class="logo-hub">Hub</span>
+        </div>
+      </a>
+      <span class="topbar-page-title">Social Media</span>
+    </div>
+    <div class="topbar-right">
+      <button class="icon-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      </button>
+      <div class="user-chip" id="userChip">
+        <span class="user-chip-info">
+          <span class="user-chip-name" id="userName">—</span>
+          <span class="user-chip-email" id="userEmail">—</span>
+        </span>
+        <img class="avatar" id="userAvatar" src="" alt="">
+        <div class="user-dropdown" id="userDropdown">
+          <form method="POST" action="/auth/logout">
+            <button type="submit">Sign out</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <a href="/board" class="sidebar-logo">
+        <img src="/img/rock-logo.png" class="sidebar-logo-img" alt="The ROCK Association">
+        <div class="sidebar-logo-text">
+          <span class="sidebar-logo-name">The ROCK</span>
+          <span class="sidebar-logo-sub">Association · Hub</span>
+        </div>
+      </a>
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <a class="nav-item" href="/board">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            Dashboard
+          </a>
+          <a class="nav-item active" href="/social-feed">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            Social Media
+          </a>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-label">Compose</div>
+          <button class="nav-item" onclick="scrollTo({top:0,behavior:'smooth'})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            New Post
+          </button>
+          <button class="nav-item" onclick="document.getElementById('scheduledSection').scrollIntoView({behavior:'smooth'})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Scheduled
+          </button>
+          <button class="nav-item" onclick="document.getElementById('igSection').scrollIntoView({behavior:'smooth'})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+            Instagram Feed
+          </button>
+          <button class="nav-item" onclick="document.getElementById('partnerSection').scrollIntoView({behavior:'smooth'})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Partner Feed
+          </button>
+        </div>
+      </nav>
+      <div class="sidebar-footer">The ROCK Association</div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div style="padding:24px;" class="social-layout">
+
+        <!-- API Setup Notice (hidden once configured) -->
+        <div class="api-setup-notice" id="apiNotice" style="display:none">
+          <strong>Meta/Instagram API not configured.</strong> Add <code>META_ACCESS_TOKEN</code>, <code>META_PAGE_ID</code>,
+          and <code>INSTAGRAM_ACCESS_TOKEN</code> to your <code>.env</code> file to enable live post publishing
+          and the Instagram feed. The composer and scheduler below work independently.
+        </div>
+
+        <!-- ── Post Composer ─────────────────────────────────────────────────── -->
+        <div class="card composer-card">
+          <div class="card-header">
+            <span class="card-title">Create Post</span>
+            <span class="char-count" id="charCount">0 / 2200</span>
+          </div>
+
+          <div class="platform-toggles">
+            <label class="platform-toggle active" id="toggleFB">
+              <input type="checkbox" checked>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+              Facebook
+            </label>
+            <label class="platform-toggle" id="toggleIG">
+              <input type="checkbox">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+              Instagram
+            </label>
+          </div>
+
+          <textarea class="composer-textarea" id="postText"
+            placeholder="What's happening at The ROCK Association?&#10;&#10;Share an update, event announcement, or community news..."
+            maxlength="2200"></textarea>
+
+          <div id="mediaPreview" style="display:none;margin-bottom:12px;">
+            <img id="mediaImg" style="max-width:100%;border-radius:var(--radius);border:0.5px solid var(--gold-line);" src="" alt="">
+            <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="clearMedia()">Remove image</button>
+          </div>
+
+          <div class="composer-actions">
+            <div class="composer-tools">
+              <label class="icon-btn" title="Attach photo" style="cursor:pointer;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:16px;height:16px;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                <input type="file" accept="image/*" style="display:none;" id="mediaInput" onchange="handleMedia(this)">
+              </label>
+            </div>
+            <div class="schedule-group">
+              <input type="datetime-local" id="scheduleTime" title="Schedule post">
+              <button class="btn btn-outline btn-sm" onclick="schedulePost()">Schedule</button>
+              <button class="btn btn-gold btn-sm" onclick="publishPost()">Post Now</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Scheduled Posts ───────────────────────────────────────────────── -->
+        <div id="scheduledSection">
+          <div class="scheduled-header">
+            <span class="section-title">Scheduled Posts</span>
+            <button class="btn btn-ghost btn-sm" onclick="loadScheduled()">Refresh</button>
+          </div>
+          <div class="scheduled-grid" id="scheduledGrid">
+            <div style="grid-column:1/-1;" class="empty-state">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:24px;height:24px;margin:0 auto 8px;display:block;color:var(--gold-line)"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <p>No scheduled posts. Use the composer above to schedule a post.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Instagram Feed ────────────────────────────────────────────────── -->
+        <div id="igSection" style="margin-top:8px;">
+          <div class="instagram-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+            <span class="section-title">Instagram Feed</span>
+            <span style="font-size:11px;color:var(--text-muted);margin-left:auto;" id="igAccount">@gorock</span>
+          </div>
+          <div class="card" style="padding:16px;">
+            <div class="instagram-grid" id="igGrid">
+              <div class="ig-empty"><div class="loading-row"><div class="spinner"></div></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Partner Feed ─────────────────────────────────────────────────── -->
+        <div id="partnerSection" style="margin-top:8px;">
+          <div class="partner-header">
+            <div class="partner-header-left">
+              <span class="section-title">Partner Organizations</span>
+            </div>
+            <span style="font-size:10px;color:var(--text-muted);" id="partnerCount"></span>
+          </div>
+          <p class="partner-subhead" style="font-size:11px;color:var(--text-muted);margin-bottom:16px;line-height:1.6;">
+            Youth ministries &amp; organizations The ROCK partners with. Paste any public Instagram post URL
+            into a partner card to embed it here using Instagram's oEmbed API.
+          </p>
+          <div class="partner-grid" id="partnerGrid">
+            <div style="grid-column:1/-1;" class="empty-state">
+              <div class="loading-row"><div class="spinner"></div></div>
+            </div>
+          </div>
+          <div class="oembed-note">
+            <strong>How it works:</strong> Instagram's oEmbed API embeds a specific post by URL — it does not
+            auto-discover posts from an account. Copy any post link from a partner's public Instagram profile
+            (share → copy link) and paste it into their card below to add it to the feed.
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Instagram embed.js — loaded once, processes all blockquotes on the page -->
+  <script async src="https://www.instagram.com/embed.js" id="igEmbedScript"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/social.js"></script>
+</body>
+</html>

@@ -1,0 +1,242 @@
+[
+  {
+    "id": "edda",
+    "name": "Eglise De Dieu Apostolique",
+    "handle": "eglisededieuapostolique",
+    "location": "Orlando, FL",
+    "description": "Youth Explosion 2026 co-host & long-time ministry partner",
+    "posts": []
+  },
+  {
+    "id": "khcog",
+    "name": "Kissimmee Haitian Church of God",
+    "handle": "khcog_kissimmee",
+    "location": "Kissimmee, FL",
+    "description": "Annual youth gathering partner · Polk & Osceola County",
+    "posts": []
+  },
+  {
+    "id": "waytocalvary",
+    "name": "Way to Calvary Church of the Nazarene",
+    "handle": "waytocalvarychurch",
+    "location": "Orlando, FL",
+    "description": "Host venue & ministry partner for ROCK Night and leadership events",
+    "posts": []
+  },
+  {
+    "id": "yfccf",
+    "name": "Youth for Christ Central Florida",
+    "handle": "yfccentralfl",
+    "location": "Central Florida",
+    "description": "Regional youth outreach network partner",
+    "posts": []
+  },
+  {
+    "id": "kingdombuilders",
+    "name": "Kingdom Builders Youth Network",
+    "handle": "kingdombuilderscf",
+    "location": "Orlando, FL",
+    "description": "Cross-church discipleship & leadership development partner",
+    "posts": []
+  },
+  {
+    "id": "bethel",
+    "name": "Bethel Gospel Tabernacle Youth",
+    "handle": "bethelgospeltabernacle",
+    "location": "Orlando, FL",
+    "description": "Orange County youth ministry coalition partner",
+    "posts": []
+  },
+  {
+    "id": "ajebboyouth",
+    "name": "AJEBBO Youth Group",
+    "handle": "ajebboyouthgroup",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "wtcyouth",
+    "name": "WTC Youth",
+    "handle": "wtcyouth",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "cegyouth",
+    "name": "CEG Youth Orlando",
+    "handle": "cegyouthorlando",
+    "location": "Orlando, FL",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "rtcyouth",
+    "name": "RTC Youth Ministry",
+    "handle": "rtc_youthministry",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "christsanctified",
+    "name": "Christ Sanctified Youth",
+    "handle": "christsanctifiedyouth",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "zionsangels",
+    "name": "Zion's Angels Youth",
+    "handle": "zionsangelsyouth",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "tkckreyol",
+    "name": "TKC Kreyol",
+    "handle": "tkc_kreyol",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "youthglow",
+    "name": "Youth Glow",
+    "handle": "youth.glow",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "connectorlando",
+    "name": "Connect Orlando",
+    "handle": "connectorlando",
+    "location": "Orlando, FL",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "chosenvessels",
+    "name": "Chosen Vessels Youth",
+    "handle": "chosenvesselzyouth",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "lakenazcm",
+    "name": "Lake Naz CM",
+    "handle": "lakenaz_cm",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "uprisingyouth",
+    "name": "The Uprising Youth",
+    "handle": "the_uprisingyouth",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "scimyouth",
+    "name": "SCIM Youth",
+    "handle": "scimyouth",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "gmyth",
+    "name": "GM Youth",
+    "handle": "gm_yth",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "cogopyouth",
+    "name": "COGOP Youth Orlando",
+    "handle": "cogopyouthorlando",
+    "location": "Orlando, FL",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "aymfhabco",
+    "name": "AYM FHABCO",
+    "handle": "aym_fhabco",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "ncymtp",
+    "name": "NCYM TP",
+    "handle": "ncym_tp",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "newcbfya",
+    "name": "New CBF Young Adults",
+    "handle": "newcbf.ya",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "nextgenyouth",
+    "name": "Next Gen Youth Ministry",
+    "handle": "nextgenyouthministry_",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "lbcyouth",
+    "name": "LBC Youth Ministry",
+    "handle": "lbc_youthministry",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "theflockLBC",
+    "name": "The Flock LBC",
+    "handle": "theflock.lbc",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "riverofyouth",
+    "name": "River of Youth PHBC",
+    "handle": "riverofyouth.phbc",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "berakah2",
+    "name": "Berakah2 Youth",
+    "handle": "berakah2youth",
+    "location": "",
+    "description": "",
+    "posts": []
+  },
+  {
+    "id": "mchbcyouth",
+    "name": "MCHBC Youth",
+    "handle": "mchbc_youth",
+    "location": "",
+    "description": "",
+    "posts": []
+  }
+]

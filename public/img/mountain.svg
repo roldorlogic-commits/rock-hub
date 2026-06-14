@@ -1,0 +1,36 @@
+<svg viewBox="0 0 1440 420" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+  <defs>
+    <linearGradient id="mtnFade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#C9A96E" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#C9A96E" stop-opacity="0.08"/>
+    </linearGradient>
+  </defs>
+  <path d="
+    M0,420
+    L0,380
+    L60,340 L110,355 L170,300 L220,315
+    L300,210 L330,230 L370,175 L410,195
+    L480,120 L500,105 L520,120
+    L560,90 L590,108 L630,72 L660,92
+    L720,30 L750,50 L780,28 L810,48
+    L870,85 L900,70 L940,95
+    L990,140 L1020,125 L1060,155
+    L1110,190 L1140,175 L1180,200
+    L1240,245 L1270,235 L1310,260
+    L1360,295 L1400,285 L1440,305
+    L1440,420 Z
+  " fill="url(#mtnFade)"/>
+  <path d="
+    M0,380
+    L60,340 L110,355 L170,300 L220,315
+    L300,210 L330,230 L370,175 L410,195
+    L480,120 L500,105 L520,120
+    L560,90 L590,108 L630,72 L660,92
+    L720,30 L750,50 L780,28 L810,48
+    L870,85 L900,70 L940,95
+    L990,140 L1020,125 L1060,155
+    L1110,190 L1140,175 L1180,200
+    L1240,245 L1270,235 L1310,260
+    L1360,295 L1400,285 L1440,305
+  " fill="none" stroke="#C9A96E" stroke-width="1" opacity="0.6"/>
+</svg>

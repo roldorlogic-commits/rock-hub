@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ROCK Hub — Board Dashboard</title>
+  <link rel="stylesheet" href="/css/vars.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body class="dashboard-page">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="topbar-mountain" aria-hidden="true"><img src="/images/mountain-brand.svg" alt=""></div>
+    <div class="topbar-left">
+      <a href="/board" class="topbar-logo">
+        <img src="/img/rock-logo.png" class="topbar-logo-img" alt="The ROCK Association">
+        <div class="topbar-logo-text">
+          <span class="logo-rock">ROCK</span>
+          <span class="logo-hub">Hub</span>
+        </div>
+      </a>
+      <span class="topbar-page-title" id="pageTitle">Dashboard</span>
+    </div>
+    <div class="topbar-right">
+      <button class="icon-btn" title="Notifications" id="notifBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      </button>
+      <div class="user-chip" id="userChip">
+        <span class="user-chip-info">
+          <span class="user-chip-name" id="userName">—</span>
+          <span class="user-chip-email" id="userEmail">—</span>
+        </span>
+        <img class="avatar" id="userAvatar" src="" alt="">
+        <div class="user-dropdown" id="userDropdown">
+          <form method="POST" action="/auth/logout">
+            <button type="submit">Sign out</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <a href="/board" class="sidebar-logo">
+        <img src="/img/rock-logo.png" class="sidebar-logo-img" alt="The ROCK Association">
+        <div class="sidebar-logo-text">
+          <span class="sidebar-logo-name">The ROCK</span>
+          <span class="sidebar-logo-sub">Association · Hub</span>
+        </div>
+      </a>
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <button class="nav-item active" data-section="dashboard" onclick="showSection('dashboard',this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            Dashboard
+          </button>
+          <button class="nav-item" data-section="events" onclick="showSection('events',this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Events &amp; Programs
+          </button>
+          <button class="nav-item" data-section="tasks" onclick="showSection('tasks',this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Action Items
+          </button>
+          <button class="nav-item" data-section="contacts" onclick="showSection('contacts',this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Contacts
+          </button>
+          <button class="nav-item" data-section="files" onclick="showSection('files',this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            Files &amp; Docs
+          </button>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-label">Board</div>
+          <button class="nav-item" data-section="minutes" onclick="showSection('minutes',this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            Meeting Minutes
+          </button>
+          <button class="nav-item" data-section="reports" onclick="showSection('reports',this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            Reports
+          </button>
+          <a class="nav-item" href="/social-feed">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            Social Media
+          </a>
+          <button class="nav-item" data-section="settings" onclick="showSection('settings',this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Settings
+          </button>
+        </div>
+      </nav>
+      <div class="sidebar-footer">The ROCK Association</div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+
+      <!-- ── DASHBOARD OVERVIEW ─────────────────────────────────────────────── -->
+      <section id="dashboard" class="content-section active" style="position:relative;overflow:hidden;">
+        <div class="mountain-bg" aria-hidden="true" style="opacity:.07;bottom:-20px;"><img src="/images/mountain-brand.svg" alt="" style="opacity:1;mix-blend-mode:normal;filter:none;"></div>
+        <div style="position:relative;z-index:1;">
+        <div class="metrics-row" id="metricsRow">
+          <div class="metric-card"><div class="metric-label">Total Members</div><div class="metric-value" id="mMembers">—</div><div class="metric-sub">registered members</div></div>
+          <div class="metric-card"><div class="metric-label">Active Events</div><div class="metric-value" id="mEvents">—</div><div class="metric-sub">upcoming &amp; in-progress</div></div>
+          <div class="metric-card"><div class="metric-label">Active Volunteers</div><div class="metric-value" id="mVolunteers">—</div><div class="metric-sub">ready to serve</div></div>
+          <div class="metric-card"><div class="metric-label">Open Tasks</div><div class="metric-value" id="mTasks">—</div><div class="metric-sub">action items pending</div></div>
+        </div>
+
+        <div class="content-grid">
+          <!-- Upcoming Events -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Upcoming Events</span>
+              <a class="card-action" href="#" onclick="showSection('events',document.querySelector('[data-section=events]'));return false;">View all</a>
+            </div>
+            <div id="eventsPreview"><div class="loading-row"><div class="spinner"></div></div></div>
+          </div>
+
+          <!-- Action Items -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Action Items</span>
+              <a class="card-action" href="#" onclick="showSection('tasks',document.querySelector('[data-section=tasks]'));return false;">View all</a>
+            </div>
+            <div id="tasksPreview"><div class="loading-row"><div class="spinner"></div></div></div>
+          </div>
+
+          <!-- Event Progress (full width) -->
+          <div class="card full-width">
+            <div class="card-header">
+              <span class="card-title">Event Registration Progress</span>
+            </div>
+            <div id="progressSection"><div class="loading-row"><div class="spinner"></div></div></div>
+          </div>
+
+          <!-- Board Contacts -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Board Contacts</span>
+              <a class="card-action" href="#" onclick="showSection('contacts',document.querySelector('[data-section=contacts]'));return false;">View all</a>
+            </div>
+            <div id="contactsPreview"><div class="loading-row"><div class="spinner"></div></div></div>
+          </div>
+
+          <!-- Recent Files -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Recent Files</span>
+              <a class="card-action" href="#" onclick="showSection('files',document.querySelector('[data-section=files]'));return false;">View all</a>
+            </div>
+            <div id="filesPreview"><div class="loading-row"><div class="spinner"></div></div></div>
+          </div>
+        </div>
+        </div><!-- /z-index wrapper -->
+      </section>
+
+      <!-- ── EVENTS ─────────────────────────────────────────────────────────── -->
+      <section id="events" class="content-section">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Events &amp; Programs</span>
+            <span class="role-badge">Board View</span>
+          </div>
+          <div id="eventsFull"><div class="loading-row"><div class="spinner"></div></div></div>
+        </div>
+      </section>
+
+      <!-- ── TASKS ──────────────────────────────────────────────────────────── -->
+      <section id="tasks" class="content-section">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">All Action Items</span>
+            <span class="role-badge">Board View</span>
+          </div>
+          <div id="tasksFull"><div class="loading-row"><div class="spinner"></div></div></div>
+        </div>
+      </section>
+
+      <!-- ── CONTACTS ───────────────────────────────────────────────────────── -->
+      <section id="contacts" class="content-section">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Board &amp; Staff Directory</span>
+          </div>
+          <div id="contactsFull"><div class="loading-row"><div class="spinner"></div></div></div>
+        </div>
+      </section>
+
+      <!-- ── FILES ──────────────────────────────────────────────────────────── -->
+      <section id="files" class="content-section">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Files &amp; Documents</span>
+          </div>
+          <div id="filesFull"><div class="loading-row"><div class="spinner"></div></div></div>
+        </div>
+      </section>
+
+      <!-- ── MINUTES ────────────────────────────────────────────────────────── -->
+      <section id="minutes" class="content-section">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Meeting Minutes</span>
+            <span class="role-badge board">Board Only</span>
+          </div>
+          <div id="minutesFull"><div class="loading-row"><div class="spinner"></div></div></div>
+        </div>
+      </section>
+
+      <!-- ── REPORTS ────────────────────────────────────────────────────────── -->
+      <section id="reports" class="content-section">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Reports</span>
+            <span class="role-badge board">Board Only</span>
+          </div>
+          <div id="reportsFull"><div class="loading-row"><div class="spinner"></div></div></div>
+        </div>
+      </section>
+
+      <!-- ── SETTINGS ───────────────────────────────────────────────────────── -->
+      <section id="settings" class="content-section">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Settings</span>
+          </div>
+          <div style="padding:20px 0;color:var(--text-dim);font-size:13px;">
+            Settings panel — coming soon. Manage sheet data directly via the
+            <a href="https://docs.google.com/spreadsheets/d/1xaXzWMe69gAZHtZg6YtscKhuAB6YRUWoS85Qf8-kWSs" target="_blank">ROCK Hub Database</a>.
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/board.js"></script>
+</body>
+</html>

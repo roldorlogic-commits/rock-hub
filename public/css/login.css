@@ -1,0 +1,178 @@
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse at 20% 30%, rgba(201,169,110,.06) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 70%, rgba(27,58,107,.4) 0%, transparent 60%),
+    var(--bg-primary);
+}
+
+/* Subtle grid overlay */
+.login-page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--gold-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--gold-line) 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: .25;
+  pointer-events: none;
+}
+
+.login-container {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  background: var(--bg-secondary);
+  border: 0.5px solid var(--gold-line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* Gold top accent bar */
+.login-container::before {
+  content: '';
+  display: block;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+}
+
+.login-brand {
+  padding: 32px 40px 24px;
+  text-align: center;
+  border-bottom: 0.5px solid var(--gold-line);
+}
+
+.brand-logo {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.brand-rock {
+  font-family: 'Cinzel', serif;
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--text-white);
+  letter-spacing: .1em;
+}
+
+.brand-hub {
+  font-family: 'Jost', sans-serif;
+  font-size: 13px;
+  font-weight: 300;
+  letter-spacing: .4em;
+  color: var(--gold);
+  text-transform: uppercase;
+  align-self: center;
+}
+
+.brand-tagline {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 15px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.brand-org {
+  font-size: 11px;
+  color: var(--gold);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  opacity: .8;
+}
+
+.login-body {
+  padding: 28px 40px 36px;
+}
+
+.login-title {
+  font-family: 'Cinzel', serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-white);
+  margin-bottom: 8px;
+  letter-spacing: .05em;
+}
+
+.login-subtitle {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  margin-bottom: 24px;
+}
+
+.login-error {
+  background: rgba(207,110,110,.12);
+  border: 0.5px solid rgba(207,110,110,.4);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #CF6E6E;
+  margin-bottom: 16px;
+}
+
+.google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 20px;
+  background: var(--text-white);
+  color: #1a1a2e;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  transition: all var(--ease);
+  border: none;
+  text-decoration: none;
+  margin-bottom: 16px;
+}
+.google-btn:hover { background: #fff; opacity: .95; transform: translateY(-1px); }
+.google-btn:active { transform: translateY(0); }
+
+.login-note {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: .04em;
+}
+
+.login-footer {
+  position: fixed;
+  bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.login-footer a { color: var(--text-muted); }
+.login-footer a:hover { color: var(--gold); }
+.footer-sep { color: var(--gold-line); }
+
+/* ── Mountain on login page ────────────────────────────────────────────────── */
+.login-mountain {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  pointer-events: none;
+  z-index: 0;
+  line-height: 0;
+}
+.login-mountain img {
+  width: 100%;
+  display: block;
+  opacity: .14;
+}
+.login-container { position: relative; z-index: 1; }
+.login-footer     { position: fixed; bottom: 20px; z-index: 2; }

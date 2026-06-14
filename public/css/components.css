@@ -1,0 +1,289 @@
+/* ── Cards ─────────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--bg-secondary);
+  border: 0.5px solid var(--gold-line);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 0.5px solid var(--gold-line);
+}
+.card-title {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.card-action {
+  font-size: 11px;
+  color: var(--gold);
+  opacity: .7;
+  transition: opacity var(--ease);
+}
+.card-action:hover { opacity: 1; }
+
+/* ── Metric Cards ───────────────────────────────────────────────────────────── */
+.metric-card {
+  background: var(--bg-secondary);
+  border: 0.5px solid var(--gold-line);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+}
+.metric-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+.metric-value {
+  font-family: 'Cinzel', serif;
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-white);
+  line-height: 1;
+  margin-bottom: 8px;
+}
+.metric-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.metric-sub .up   { color: #6ECFA0; }
+.metric-sub .down { color: #CF6E6E; }
+
+/* ── Buttons ───────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  border: none;
+  transition: all var(--ease);
+}
+.btn-gold {
+  background: var(--gold);
+  color: #141729;
+}
+.btn-gold:hover { opacity: .9; }
+
+.btn-outline {
+  background: transparent;
+  border: 0.5px solid var(--gold-line);
+  color: var(--text-white);
+}
+.btn-outline:hover { border-color: var(--gold); color: var(--gold); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--gold);
+  padding: 6px 10px;
+}
+.btn-ghost:hover { background: var(--gold-faint); }
+
+.btn-sm { padding: 5px 12px; font-size: 11px; }
+
+/* ── Role Badge ────────────────────────────────────────────────────────────── */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--gold-line);
+  background: var(--gold-faint);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--gold);
+  white-space: nowrap;
+}
+.role-badge.board { border-color: var(--gold); }
+
+/* ── Status Pills ──────────────────────────────────────────────────────────── */
+.status-pill {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.status-pill.active, .status-pill.upcoming { background: rgba(110,207,160,.12); color: #6ECFA0; }
+.status-pill.pending   { background: rgba(201,169,110,.15); color: var(--gold); }
+.status-pill.completed { background: rgba(245,243,238,.08); color: var(--text-dim); }
+.status-pill.high      { background: rgba(207,110,110,.12); color: #CF6E6E; }
+
+/* ── Progress Bar ──────────────────────────────────────────────────────────── */
+.progress-track {
+  height: 5px;
+  background: rgba(201,169,110,.15);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--gold);
+  border-radius: 3px;
+  transition: width .6s ease;
+}
+
+/* ── Event Date Block ──────────────────────────────────────────────────────── */
+.date-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  padding: 8px 10px;
+  background: #1B2B52;
+  border: 0.5px solid var(--gold-line);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+.date-block .month {
+  font-family: 'Jost', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.date-block .day {
+  font-family: 'Cinzel', serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-white);
+  line-height: 1.1;
+}
+
+/* ── List Items ────────────────────────────────────────────────────────────── */
+.list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 0.5px solid var(--gold-line);
+}
+.list-item:last-child { border-bottom: none; padding-bottom: 0; }
+.list-item:first-child { padding-top: 0; }
+
+.item-info { flex: 1; min-width: 0; }
+.item-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.item-sub {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+/* ── Avatar ────────────────────────────────────────────────────────────────── */
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--gold-line);
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--bg-primary);
+}
+.avatar-initials {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--gold-line);
+  background: var(--gold-faint);
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  letter-spacing: .04em;
+}
+
+/* ── Icon Button ───────────────────────────────────────────────────────────── */
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--ease);
+}
+.icon-btn:hover { color: var(--text-white); background: var(--gold-faint); }
+.icon-btn svg { width: 16px; height: 16px; }
+
+/* ── Empty State ───────────────────────────────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-muted);
+}
+.empty-state p { font-size: 12px; margin-top: 6px; }
+
+/* ── Divider ───────────────────────────────────────────────────────────────── */
+.gold-divider {
+  height: 0.5px;
+  background: var(--gold-line);
+  margin: 16px 0;
+}
+
+/* ── Loading Spinner ───────────────────────────────────────────────────────── */
+.spinner {
+  width: 20px; height: 20px;
+  border: 2px solid var(--gold-line);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-row {
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+}
+
+/* ── Checkbox ──────────────────────────────────────────────────────────────── */
+.check-circle {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--gold-line);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--ease);
+}
+.check-circle.done {
+  border-color: #6ECFA0;
+  background: rgba(110,207,160,.15);
+}
+.check-circle.done::after {
+  content: '';
+  width: 8px; height: 5px;
+  border-left: 1.5px solid #6ECFA0;
+  border-bottom: 1.5px solid #6ECFA0;
+  transform: rotate(-45deg) translateY(-1px);
+}

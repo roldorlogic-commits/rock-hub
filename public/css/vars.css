@@ -1,0 +1,18 @@
+:root {
+  --bg-primary:   #141729;
+  --bg-secondary: #1E2340;
+  --gold:         #C9A96E;
+  --gold-line:    rgba(201,169,110,.35);
+  --gold-faint:   rgba(201,169,110,.10);
+  --text-white:   #F5F3EE;
+  --text-dim:     rgba(245,243,238,.7);
+  --text-muted:   rgba(245,243,238,.4);
+
+  --sidebar-w:   220px;
+  --topbar-h:    56px;
+  --radius:      6px;
+  --radius-sm:   4px;
+  --radius-lg:   10px;
+  --gap:         1px;
+  --ease:        150ms ease;
+}
