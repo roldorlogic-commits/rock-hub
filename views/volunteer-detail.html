@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ROCK Hub — Volunteer Detail</title>
+  <link rel="stylesheet" href="/css/vars.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/dashboard.css">
+  <link rel="stylesheet" href="/css/detail.css">
+</head>
+<body class="detail-page-body">
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <a href="/board" class="topbar-logo">
+        <img src="/img/rock-logo.png" class="topbar-logo-img" alt="The ROCK Association">
+        <div class="topbar-logo-text">
+          <span class="logo-rock">ROCK</span>
+          <span class="logo-hub">Hub</span>
+        </div>
+      </a>
+      <span class="topbar-page-title">Volunteer Detail</span>
+    </div>
+    <div class="topbar-right">
+      <div class="user-chip" id="userChip">
+        <span class="user-chip-info">
+          <span class="user-chip-name" id="userName">—</span>
+          <span class="user-chip-email" id="userEmail">—</span>
+        </span>
+        <img class="avatar" id="userAvatar" src="" alt="">
+        <div class="user-dropdown" id="userDropdown">
+          <form method="POST" action="/auth/logout">
+            <button type="submit">Sign out</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="detail-main">
+    <button class="back-link" onclick="history.length > 1 ? history.back() : (location.href = '/board')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      Back
+    </button>
+
+    <div id="volunteerDetail">
+      <div class="loading-row"><div class="spinner"></div></div>
+    </div>
+
+    <footer class="app-footer">© 2026 The ROCK Association · hub.gorock.org · v1.1.0</footer>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/volunteer-detail.js"></script>
+</body>
+</html>

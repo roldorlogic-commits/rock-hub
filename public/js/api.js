@@ -104,11 +104,36 @@ function docLinkInfo(d) {
   return { href: null };
 }
 
+const NO_LINK_TOOLTIP = 'No link available — update in the Database sheet';
+
 function docTitleHtml(d) {
   const title = d.Title || '—';
   const { href } = docLinkInfo(d);
   if (href) return `<a href="${href}" target="_blank" rel="noopener" style="color:var(--text-white);">${title}</a>`;
-  return `<span title="No link available" style="color:var(--text-dim);cursor:help;">${title}</span>`;
+  return `<span title="${NO_LINK_TOOLTIP}" style="color:var(--text-dim);cursor:help;">${title}</span>`;
+}
+
+// Shared row renderer used by the Documents page, Recent Files widget, and
+// volunteer Resources — the whole row opens the link (not just the title),
+// Board-only documents get a 🔒, and rows with no link show a disabled
+// tooltip instead of a dead link.
+function documentRow(d) {
+  const { href } = docLinkInfo(d);
+  const isBoardOnly = (d.AccessLevel || '').toLowerCase() === 'board';
+  const rowAttrs = href
+    ? ` class="list-item clickable" role="button" tabindex="0" onclick="window.open('${href}','_blank','noopener')" onkeydown="if(event.key==='Enter')window.open('${href}','_blank','noopener')"`
+    : ` class="list-item" title="${NO_LINK_TOOLTIP}" style="cursor:help;"`;
+  return `
+    <div${rowAttrs}>
+      <div class="file-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      </div>
+      <div class="item-info">
+        <div class="item-title">${d.Title || '—'}${isBoardOnly ? `<span class="doc-lock" title="Board only — restricted to the gorock.org Workspace domain">🔒</span>` : ''}</div>
+        <div class="item-sub">${d.Category || d.FileType || '—'} · ${fmtDate(d.UploadDate)}</div>
+      </div>
+      ${statusPill(d.Status)}
+    </div>`;
 }
 
 // ── Events ───────────────────────────────────────────────────────────────────
@@ -161,6 +186,216 @@ function renderAnnouncementItem(a) {
       <div class="announcement-meta">${a.PublishedBy ? `By ${a.PublishedBy}` : ''}${a.PublishDate ? ` · ${fmtDate(a.PublishDate)}` : ''}</div>
     </div>`;
 }
+
+// ── Interactive task rows ────────────────────────────────────────────────────
+// Shared by the board "Action Items" list and the volunteer "My Tasks" list.
+// `eventsById` (optional) resolves RelatedEventID to a clickable event name.
+function interactiveTaskRow(t, eventsById) {
+  const done  = t.Status === 'Completed';
+  const event = eventsById && eventsById[t.RelatedEventID];
+  const eventLink = t.RelatedEventID
+    ? (event
+        ? `<a href="#" class="task-event-link" onclick="goToSection('events');return false;">📅 ${event.EventName}</a>`
+        : `<span class="task-event-link" style="opacity:.5;">📅 ${t.RelatedEventID}</span>`)
+    : '';
+
+  return `
+    <div class="task-row interactive" data-task-id="${t.TaskID}">
+      <div class="check-circle${done ? ' done' : ''}" role="button" tabindex="0"
+           title="${done ? 'Mark as pending' : 'Mark as complete'}"
+           onclick="toggleTaskComplete('${t.TaskID}', ${done})"
+           onkeydown="if(event.key==='Enter')toggleTaskComplete('${t.TaskID}', ${done})"></div>
+      <div style="flex:1;min-width:0;">
+        <div class="task-title" style="${done ? 'opacity:.5;text-decoration:line-through;' : ''}">${t.Title || '—'}</div>
+        <div class="task-meta">
+          ${t.AssignedTo ? `${t.AssignedTo}` : ''}
+          ${t.DueDate ? `<span style="margin:0 4px;color:var(--gold-line);">·</span>${fmtDate(t.DueDate)}` : ''}
+          ${eventLink ? `<span style="margin:0 4px;color:var(--gold-line);">·</span>${eventLink}` : ''}
+        </div>
+        ${t.Notes ? `<div class="task-notes">${t.Notes}</div>` : ''}
+        <div class="task-controls">
+          <select class="task-status-select" onchange="updateTaskStatus('${t.TaskID}', this.value)">
+            <option value="Pending" ${t.Status === 'Pending' ? 'selected' : ''}>Pending</option>
+            <option value="In Progress" ${t.Status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+            <option value="Completed" ${t.Status === 'Completed' ? 'selected' : ''}>Completed</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="toggleNoteInput('${t.TaskID}')">+ Note</button>
+        </div>
+        <div class="task-note-input" id="noteInput-${t.TaskID}" style="display:none;">
+          <textarea placeholder="Add a note…" rows="2"></textarea>
+          <button class="btn btn-outline btn-sm" onclick="submitTaskNote('${t.TaskID}')">Save</button>
+        </div>
+      </div>
+      ${priorityPill(t.Priority)}
+    </div>`;
+}
+
+// Open/in-progress tasks first, completed tasks below a divider.
+function renderTaskListHtml(tasks, eventsById) {
+  const open = tasks.filter(t => t.Status !== 'Completed');
+  const done = tasks.filter(t => t.Status === 'Completed');
+  let html = open.map(t => interactiveTaskRow(t, eventsById)).join('');
+  if (done.length) {
+    html += `<div class="task-section-divider">Completed</div>`;
+    html += done.map(t => interactiveTaskRow(t, eventsById)).join('');
+  }
+  return html;
+}
+
+function toggleTaskComplete(taskId, currentlyDone) {
+  return patchTask(taskId, { Status: currentlyDone ? 'Pending' : 'Completed' });
+}
+
+function updateTaskStatus(taskId, status) {
+  return patchTask(taskId, { Status: status });
+}
+
+function toggleNoteInput(taskId) {
+  const el = document.getElementById(`noteInput-${taskId}`);
+  if (el) el.style.display = el.style.display === 'none' ? 'flex' : 'none';
+}
+
+function submitTaskNote(taskId) {
+  const wrap = document.getElementById(`noteInput-${taskId}`);
+  const text = wrap?.querySelector('textarea')?.value.trim();
+  if (!text) return;
+  return patchTask(taskId, { Note: text });
+}
+
+// Writes the change straight to the Tasks sheet, then re-runs whichever
+// task-loading function exists on the current page so the UI reflects it
+// immediately (board.js defines loadTasks, volunteer.js defines loadVTasks).
+async function patchTask(taskId, body) {
+  try {
+    const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || 'Could not update that task.');
+      return;
+    }
+    if (typeof loadTasks === 'function')  await loadTasks();
+    if (typeof loadVTasks === 'function') await loadVTasks();
+  } catch (e) {
+    alert('Network error — could not update that task. Please try again.');
+  }
+}
+
+// ── Global search (topbar) ──────────────────────────────────────────────────
+let searchDebounceTimer;
+
+function handleGlobalSearch(q) {
+  clearTimeout(searchDebounceTimer);
+  const resultsEl = document.getElementById('searchResults');
+  if (!resultsEl) return;
+  if (!q || q.trim().length < 2) { resultsEl.classList.remove('open'); resultsEl.innerHTML = ''; return; }
+  searchDebounceTimer = setTimeout(() => runGlobalSearch(q.trim()), 250);
+}
+
+async function runGlobalSearch(q) {
+  const resultsEl = document.getElementById('searchResults');
+  if (!resultsEl) return;
+  try {
+    const data = await apiFetch(`/api/search?q=${encodeURIComponent(q)}`);
+    const groups = [
+      { key: 'members', label: 'Members' },
+      { key: 'volunteers', label: 'Volunteers' },
+      { key: 'events', label: 'Events' },
+      { key: 'documents', label: 'Documents' }
+    ];
+    resultsEl.innerHTML = '';
+    let any = false;
+    groups.forEach(g => {
+      const items = data[g.key] || [];
+      if (!items.length) return;
+      any = true;
+      const labelEl = document.createElement('div');
+      labelEl.className = 'search-result-group-label';
+      labelEl.textContent = g.label;
+      resultsEl.appendChild(labelEl);
+      items.forEach(it => {
+        const row = document.createElement('div');
+        row.className = 'search-result-item';
+        row.textContent = it.label;
+        row.addEventListener('click', () => {
+          resultsEl.classList.remove('open');
+          if (g.key === 'members') location.href = `/members/${encodeURIComponent(it.id)}`;
+          else if (g.key === 'volunteers') location.href = `/volunteers/${encodeURIComponent(it.id)}`;
+          else if (g.key === 'events') goToSection('events');
+          else if (g.key === 'documents') it.href ? window.open(it.href, '_blank', 'noopener') : goToSection('files');
+        });
+        resultsEl.appendChild(row);
+      });
+    });
+    if (!any) resultsEl.innerHTML = `<div class="search-empty">No matches for "${q}".</div>`;
+    resultsEl.classList.add('open');
+  } catch (e) {
+    resultsEl.innerHTML = `<div class="search-empty">Search unavailable right now.</div>`;
+    resultsEl.classList.add('open');
+  }
+}
+
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('topbarSearch');
+  if (wrap && !wrap.contains(e.target)) document.getElementById('searchResults')?.classList.remove('open');
+});
+
+// ── Notifications bell ──────────────────────────────────────────────────────
+// "Unread" is tracked client-side (per-browser) since there's no per-user
+// read-state column in the Announcements sheet to persist it server-side.
+const SEEN_ANNOUNCEMENTS_KEY = 'rock_seen_announcements';
+let notifCache = [];
+
+function getSeenAnnouncementIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(SEEN_ANNOUNCEMENTS_KEY) || '[]')); }
+  catch { return new Set(); }
+}
+function markAnnouncementsSeen(ids) {
+  const seen = getSeenAnnouncementIds();
+  ids.forEach(id => seen.add(id));
+  localStorage.setItem(SEEN_ANNOUNCEMENTS_KEY, JSON.stringify([...seen]));
+}
+
+async function initNotifications(allowedAudiences) {
+  try {
+    const items = await apiFetch('/api/announcements');
+    notifCache = filterAnnouncements(items, allowedAudiences).slice(0, 5);
+    const seen = getSeenAnnouncementIds();
+    const unread = notifCache.filter(a => a.AnnouncementID && !seen.has(a.AnnouncementID));
+    const badge = document.getElementById('notifBadge');
+    if (badge) {
+      badge.style.display = unread.length ? 'flex' : 'none';
+      badge.textContent = unread.length > 9 ? '9+' : String(unread.length);
+    }
+  } catch (e) { /* bell just shows no badge if announcements can't be fetched */ }
+}
+
+function toggleNotifDropdown() {
+  const dd = document.getElementById('notifDropdown');
+  if (!dd) return;
+  const opening = !dd.classList.contains('open');
+  if (opening) {
+    dd.innerHTML = notifCache.length
+      ? `<div class="notif-dropdown-header">Recent Announcements</div>` + notifCache.map(a => `
+          <div class="notif-item">
+            <div class="notif-item-title">${isPinned(a) ? '📌 ' : ''}${a.Title}${audienceBadge(a.TargetAudience)}</div>
+            <div class="notif-item-meta">${a.PublishDate ? fmtDate(a.PublishDate) : ''}</div>
+          </div>`).join('')
+      : `<div class="search-empty">No announcements yet.</div>`;
+    markAnnouncementsSeen(notifCache.map(a => a.AnnouncementID).filter(Boolean));
+    const badge = document.getElementById('notifBadge');
+    if (badge) badge.style.display = 'none';
+  }
+  dd.classList.toggle('open');
+}
+
+document.addEventListener('click', e => {
+  const wrap = document.querySelector('.notif-wrap');
+  if (wrap && !wrap.contains(e.target)) document.getElementById('notifDropdown')?.classList.remove('open');
+});
 
 // ── User chip setup ──────────────────────────────────────────────────────────
 async function initUser() {

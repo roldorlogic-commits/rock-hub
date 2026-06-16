@@ -121,10 +121,29 @@
   letter-spacing: .06em;
   text-transform: uppercase;
 }
-.status-pill.active, .status-pill.upcoming { background: rgba(110,207,160,.12); color: #6ECFA0; }
-.status-pill.pending   { background: rgba(201,169,110,.15); color: var(--gold); }
-.status-pill.completed { background: rgba(245,243,238,.08); color: var(--text-dim); }
-.status-pill.high      { background: rgba(207,110,110,.12); color: #CF6E6E; }
+.status-pill.active, .status-pill.upcoming, .status-pill.cleared { background: rgba(110,207,160,.12); color: #6ECFA0; }
+.status-pill.pending    { background: rgba(201,169,110,.15); color: var(--gold); }
+.status-pill.completed, .status-pill.inactive { background: rgba(245,243,238,.08); color: var(--text-dim); }
+.status-pill.high, .status-pill.notstarted { background: rgba(207,110,110,.12); color: #CF6E6E; }
+
+/* ── Lock Icon (Board-only documents) ─────────────────────────────────────── */
+.doc-lock {
+  font-size: 11px;
+  margin-left: 4px;
+  opacity: .8;
+  cursor: help;
+}
+
+/* ── Clickable rows (members/volunteers/documents lists) ─────────────────── */
+.list-item.clickable, .contact-row.clickable {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--ease);
+  margin: 0 -8px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.list-item.clickable:hover, .contact-row.clickable:hover { background: var(--gold-faint); }
 
 /* ── Progress Bar ──────────────────────────────────────────────────────────── */
 .progress-track {

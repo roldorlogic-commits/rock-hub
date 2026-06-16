@@ -62,7 +62,11 @@ app.use(session({
   secret:            process.env.SESSION_SECRET,
   resave:            false,
   saveUninitialized: false,
-  cookie:            { maxAge: 24 * 60 * 60 * 1000 }
+  // httpOnly (default, stated explicitly) keeps the session cookie out of
+  // reach of client-side JS; sameSite:'lax' allows the Google OAuth redirect
+  // back into the app to still carry the cookie. 7 days so a board/volunteer
+  // signing in once stays signed in across normal browser sessions.
+  cookie: { httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 }
 }));
 app.use(passport.initialize());
 app.use(passport.session());
@@ -85,6 +89,11 @@ app.get('/', (req, res) => {
 app.get('/board',        requireBoard, (req, res) => res.sendFile(path.join(__dirname, 'views/board.html')));
 app.get('/volunteer',    requireAuth,  (req, res) => res.sendFile(path.join(__dirname, 'views/volunteer.html')));
 app.get('/social-feed',  requireBoard, (req, res) => res.sendFile(path.join(__dirname, 'views/social.html')));
+
+// Detail pages — open to both roles; the API endpoints behind them filter
+// which fields come back based on req.user.role.
+app.get('/members/:id',    requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'views/member-detail.html')));
+app.get('/volunteers/:id', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'views/volunteer-detail.html')));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {

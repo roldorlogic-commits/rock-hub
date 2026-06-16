@@ -89,7 +89,15 @@
           </button>
         </div>
       </nav>
-      <div class="sidebar-footer">The ROCK Association</div>
+      <div class="sidebar-footer">
+        <form method="POST" action="/auth/logout">
+          <button type="submit" class="sidebar-signout-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Sign Out
+          </button>
+        </form>
+        <div class="sidebar-footer-text">The ROCK Association</div>
+      </div>
     </aside>
 
     <!-- Main Content -->
@@ -203,6 +211,7 @@
         </div>
 
       </div>
+      <footer class="app-footer">© 2026 The ROCK Association · hub.gorock.org · v1.1.0</footer>
     </main>
   </div>
 

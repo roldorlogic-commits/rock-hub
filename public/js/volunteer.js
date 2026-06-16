@@ -1,15 +1,30 @@
 /* Volunteer Dashboard */
 
 let currentUser = null;
+// Populated by loadVEvents() so task rows can resolve RelatedEventID -> name.
+let eventsById = {};
+// EventIDs the signed-in volunteer has already registered for (drives the
+// "You're registered" badge and hides the Sign Up button for those events).
+let mySignupEventIds = [];
 
 (async () => {
   currentUser = await initUser();
   if (currentUser) fillWelcome(currentUser);
+  await loadMySignups();
+  await loadVEvents(); // populates eventsById before tasks render
   await Promise.all([
-    loadVStats(), loadVEvents(), loadVTasks(),
-    loadAnnouncements(), loadResources(), loadTeam()
+    loadVStats(), loadVTasks(),
+    loadAnnouncements(), loadResources(), loadTeam(),
+    initNotifications(['All', 'Volunteers'])
   ]);
 })();
+
+async function loadMySignups() {
+  try {
+    const { eventIds } = await apiFetch('/api/event-signups/mine');
+    mySignupEventIds = eventIds || [];
+  } catch (e) { mySignupEventIds = []; }
+}
 
 function fillWelcome(user) {
   const h = document.getElementById('welcomeHeading');
@@ -54,15 +69,24 @@ async function loadVStats() {
 async function loadVEvents() {
   try {
     const events = await apiFetch('/api/events');
+    eventsById = Object.fromEntries(events.filter(e => e.EventID).map(e => [e.EventID, e]));
     renderVEventsPreview(events);
     renderVEventsFull(events);
   } catch (e) {
-    document.getElementById('vEventsPreview').innerHTML = emptyState('Could not load events.');
+    document.getElementById('vEventsPreview').innerHTML = emptyState('Could not load events right now. Please try again shortly.');
   }
 }
 
 function vEventRow(ev, withSignup = false) {
   const db = fmtDateBlock(ev.StartDate);
+  const eventId    = ev.EventID || ev.EventName;
+  const registered = mySignupEventIds.includes(eventId);
+  const action = withSignup
+    ? (registered
+        ? `<span class="status-pill active">You're registered</span>`
+        : `<button class="btn btn-outline btn-sm" onclick="signUp('${eventId}')">Sign Up</button>`)
+    : statusPill(ev.Status || 'Upcoming');
+
   return `
     <div class="event-row">
       <div class="date-block">
@@ -77,7 +101,7 @@ function vEventRow(ev, withSignup = false) {
         </div>
         ${ev.CoordinatorName ? `<div class="event-meta" style="margin-top:2px;">Coordinator: ${ev.CoordinatorName}</div>` : ''}
       </div>
-      ${withSignup ? `<button class="btn btn-outline btn-sm" onclick="signUp('${ev.EventID || ev.EventName}')">Sign Up</button>` : statusPill(ev.Status || 'Upcoming')}
+      ${action}
     </div>`;
 }
 
@@ -96,7 +120,64 @@ function renderVEventsFull(events) {
 }
 
 function signUp(eventId) {
-  alert(`Sign-up noted for event: ${eventId}\n\n(Connect to a registration form or Sheets write endpoint to enable live sign-ups.)`);
+  const ev = eventsById[eventId];
+  document.getElementById('signupEventName').textContent = ev ? `${ev.EventName} · ${fmtDate(ev.StartDate)}${ev.Location ? ' · ' + ev.Location : ''}` : '';
+  document.getElementById('signupForm').dataset.eventId = eventId;
+  document.getElementById('signupName').value  = currentUser?.name  || '';
+  document.getElementById('signupEmail').value = currentUser?.email || '';
+  document.getElementById('signupPhone').value = '';
+  document.getElementById('signupRole').value  = '';
+  document.getElementById('signupNotes').value = '';
+  document.getElementById('signupAvailability').checked = false;
+  document.getElementById('signupForm').style.display = 'flex';
+  document.getElementById('signupSuccess').style.display = 'none';
+  document.getElementById('signupOverlay').classList.add('open');
+  document.getElementById('signupModal').classList.add('open');
+}
+
+function closeSignupModal() {
+  document.getElementById('signupOverlay')?.classList.remove('open');
+  document.getElementById('signupModal')?.classList.remove('open');
+}
+
+async function submitSignup(e) {
+  e.preventDefault();
+  const form    = document.getElementById('signupForm');
+  const eventId = form.dataset.eventId;
+  const [first, ...rest] = (document.getElementById('signupName').value || '').trim().split(/\s+/);
+
+  const body = {
+    FirstName: first || '',
+    LastName: rest.join(' '),
+    Email: document.getElementById('signupEmail').value.trim(),
+    Phone: document.getElementById('signupPhone').value.trim(),
+    PreferredRole: document.getElementById('signupRole').value.trim(),
+    Notes: document.getElementById('signupNotes').value.trim()
+  };
+
+  const btn = form.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    const res  = await fetch(`/api/event-signups/${encodeURIComponent(eventId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not sign up for this event.'); return; }
+
+    form.style.display = 'none';
+    const successEl = document.getElementById('signupSuccess');
+    successEl.style.display = 'block';
+    successEl.innerHTML = `<p>✅ ${data.message}</p>`;
+
+    if (!mySignupEventIds.includes(eventId)) mySignupEventIds.push(eventId);
+    await loadVEvents(); // refresh badges + registration progress
+  } catch (err) {
+    alert('Network error — could not sign up. Please try again.');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function loadVTasks() {
@@ -116,28 +197,15 @@ async function loadVTasks() {
   }
 }
 
-function vTaskRow(t) {
-  const done = t.Status === 'Completed';
-  return `
-    <div class="task-row">
-      <div class="check-circle${done ? ' done' : ''}"></div>
-      <div style="flex:1;min-width:0;">
-        <div class="task-title" style="${done ? 'opacity:.5;text-decoration:line-through;' : ''}">${t.Title || '—'}</div>
-        <div class="task-meta">${t.DueDate ? `Due ${fmtDate(t.DueDate)}` : ''}</div>
-      </div>
-      ${priorityPill(t.Priority)}
-    </div>`;
-}
-
 function renderVTasksPreview(tasks) {
   const el = document.getElementById('vTasksPreview');
   const open = tasks.filter(t => t.Status !== 'Completed').slice(0, 4);
-  el.innerHTML = open.length ? open.map(vTaskRow).join('') : emptyState('No open tasks assigned to you.');
+  el.innerHTML = open.length ? open.map(t => interactiveTaskRow(t, eventsById)).join('') : emptyState('No open tasks assigned to you right now.');
 }
 
 function renderVTasksFull(tasks) {
   const el = document.getElementById('vTasksFull');
-  el.innerHTML = tasks.length ? tasks.map(vTaskRow).join('') : emptyState('No tasks assigned to you yet.');
+  el.innerHTML = tasks.length ? renderTaskListHtml(tasks, eventsById) : emptyState('No tasks assigned to you yet — check back after your next event sign-up.');
 }
 
 async function loadAnnouncements() {
@@ -152,33 +220,20 @@ async function loadAnnouncements() {
   }
 }
 
-function resourceRow(d) {
-  return `
-    <div class="list-item">
-      <div class="file-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      </div>
-      <div class="item-info">
-        <div class="item-title">${docTitleHtml(d)}</div>
-        <div class="item-sub">${d.Category || d.FileType || '—'} · ${fmtDate(d.UploadDate)}</div>
-      </div>
-    </div>`;
-}
-
 async function loadResources() {
   try {
     const docs = await apiFetch('/api/documents');
     const pub = docs.filter(d => d.Title && (!d.AccessLevel || d.AccessLevel === 'All' || d.AccessLevel === 'Public'));
 
     document.getElementById('vResources').innerHTML = pub.length
-      ? pub.slice(0, 5).map(resourceRow).join('')
+      ? pub.slice(0, 5).map(documentRow).join('')
       : emptyState('No public resources yet.');
 
     document.getElementById('vResourcesFull').innerHTML = pub.length
-      ? pub.map(resourceRow).join('')
-      : emptyState('No resources yet. Add documents to the Documents sheet with AccessLevel "All".');
+      ? pub.map(documentRow).join('')
+      : emptyState('No resources yet — check back soon, or ask a board member to add one.');
   } catch (e) {
-    document.getElementById('vResources').innerHTML = emptyState('Could not load resources.');
+    document.getElementById('vResources').innerHTML = emptyState('Could not load resources right now. Please try again shortly.');
   }
 }
 
@@ -190,17 +245,19 @@ async function loadTeam() {
       ? vols.slice(0, 10).map(v => {
           const name = [v.FirstName, v.LastName].filter(Boolean).join(' ') || v.Email || '—';
           return `
-            <div class="contact-row">
+            <div class="contact-row clickable" role="button" tabindex="0"
+                 onclick="location.href='/volunteers/${encodeURIComponent(v.VolunteerID)}'"
+                 onkeydown="if(event.key==='Enter')location.href='/volunteers/${encodeURIComponent(v.VolunteerID)}'">
               ${avatarHtml(name, null)}
               <div class="contact-info">
                 <div class="contact-name">${name}</div>
                 <div class="contact-email">${v.PreferredRole || v.Skills || '—'}</div>
               </div>
-              <span class="status-pill ${v.Status?.toLowerCase() === 'active' ? 'active' : 'pending'}">${v.Status || 'Active'}</span>
+              <span class="status-pill ${v.Status?.toLowerCase() === 'active' ? 'active' : 'inactive'}">${v.Status || 'Active'}</span>
             </div>`;
         }).join('')
-      : emptyState('No team members yet. Add volunteers to the Volunteers sheet.');
+      : emptyState('No team members yet — volunteers will show up here once they join.');
   } catch (e) {
-    document.getElementById('vTeam').innerHTML = emptyState('Could not load team.');
+    document.getElementById('vTeam').innerHTML = emptyState('Could not load your team right now. Please try again shortly.');
   }
 }
