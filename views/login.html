@@ -10,32 +10,96 @@
 </head>
 <body class="login-page">
 
-  <div class="login-container">
+  <div class="login-container wide">
     <div class="login-brand">
       <div class="brand-logo">
-        <img src="/img/rock-logo.png" alt="The ROCK Association" style="height:76px;width:auto;filter:drop-shadow(0 4px 16px rgba(201,169,110,.3));">
+        <img src="/img/rock-logo.png" alt="The ROCK Association" style="height:140px;width:auto;filter:drop-shadow(0 4px 16px rgba(201,169,110,.3));">
       </div>
       <p class="brand-tagline">The ROCK Association Intranet</p>
       <p class="brand-org">gorock.org</p>
     </div>
 
     <div class="login-body">
-      <h2 class="login-title">Welcome Back</h2>
-      <p class="login-subtitle">Sign in with your gorock.org Google Workspace account to access the ROCK Hub dashboard and resources.</p>
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tabBoard" onclick="switchAuthTab('board')">Board / Staff</button>
+        <button class="auth-tab" id="tabVolunteer" onclick="switchAuthTab('volunteer')">Volunteer</button>
+      </div>
 
       <div class="login-error" id="loginError" style="display:none"></div>
+      <div class="login-success" id="loginSuccess" style="display:none"></div>
 
-      <a href="/auth/google" class="google-btn">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-        </svg>
-        Sign in with Google
-      </a>
+      <!-- ── BOARD / STAFF PATH ────────────────────────────────────────────── -->
+      <div id="boardPath" class="auth-path">
+        <h2 class="login-title">Welcome Back</h2>
+        <p class="login-subtitle">Sign in with your gorock.org Google Workspace account to access the ROCK Hub dashboard and resources.</p>
 
-      <p class="login-note">Access restricted to @gorock.org accounts</p>
+        <a href="/auth/google" class="google-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
+          Sign in with Google
+        </a>
+
+        <p class="login-note">Access restricted to @gorock.org accounts</p>
+      </div>
+
+      <!-- ── VOLUNTEER PATH ────────────────────────────────────────────────── -->
+      <div id="volunteerPath" class="auth-path" style="display:none;">
+
+        <div class="volunteer-toggle">
+          <label class="radio-label"><input type="radio" name="volMode" value="returning" checked onchange="switchVolunteerMode('returning')"> Returning Volunteer</label>
+          <label class="radio-label"><input type="radio" name="volMode" value="new" onchange="switchVolunteerMode('new')"> New Volunteer</label>
+        </div>
+
+        <!-- Returning volunteer: email + password -->
+        <form id="loginForm" onsubmit="handleVolunteerLogin(event)">
+          <label>Email <input type="email" id="loginEmail" required autocomplete="username"></label>
+          <label>Password
+            <div class="password-wrap">
+              <input type="password" id="loginPassword" required autocomplete="current-password">
+              <button type="button" class="pw-toggle" onclick="togglePw('loginPassword', this)">Show</button>
+            </div>
+          </label>
+          <button type="submit" class="btn-volunteer-submit">Log In</button>
+          <p style="text-align:center;margin-top:12px;"><a href="#" id="forgotLink" onclick="openForgotPassword();return false;" style="font-size:11px;">Forgot Password?</a></p>
+        </form>
+
+        <!-- Forgot password (replaces the login form inline) -->
+        <form id="forgotForm" style="display:none;" onsubmit="handleForgotPassword(event)">
+          <p class="login-subtitle" style="margin-bottom:14px;">Enter your email and we'll send a password reset link, valid for 1 hour.</p>
+          <label>Email <input type="email" id="forgotEmail" required></label>
+          <button type="submit" class="btn-volunteer-submit">Send Reset Link</button>
+          <p style="text-align:center;margin-top:12px;"><a href="#" onclick="closeForgotPassword();return false;" style="font-size:11px;">Back to login</a></p>
+        </form>
+
+        <!-- New volunteer: registration -->
+        <form id="registerForm" style="display:none;" onsubmit="handleVolunteerRegister(event)">
+          <label>First Name * <input type="text" id="regFirstName" required></label>
+          <label>Last Name * <input type="text" id="regLastName" required></label>
+          <label>Email * <input type="email" id="regEmail" required autocomplete="username"></label>
+          <label>Phone Number * <input type="tel" id="regPhone" required></label>
+          <label>Password * <span class="field-hint">(min 8 characters)</span>
+            <div class="password-wrap">
+              <input type="password" id="regPassword" minlength="8" required autocomplete="new-password">
+              <button type="button" class="pw-toggle" onclick="togglePw('regPassword', this)">Show</button>
+            </div>
+          </label>
+          <label>Confirm Password * <input type="password" id="regConfirmPassword" minlength="8" required autocomplete="new-password"></label>
+          <label>Church / Organization <span class="field-hint">(optional)</span><input type="text" id="regChurch"></label>
+          <label class="checkbox-label"><input type="checkbox" id="regAgree" required> I agree to the ROCK Association volunteer terms</label>
+          <button type="submit" class="btn-volunteer-submit">Create Account</button>
+        </form>
+
+        <!-- Registration success screen -->
+        <div id="registerSuccess" style="display:none;text-align:center;padding:12px 0;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:36px;height:36px;color:#6ECFA0;margin:0 auto 14px;display:block;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <p id="registerSuccessMsg" style="font-size:13px;color:var(--text-white);line-height:1.6;margin-bottom:16px;"></p>
+          <a href="#" onclick="resetVolunteerForms();return false;" style="font-size:12px;">← Back to login</a>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -51,18 +115,6 @@
     <span>&copy; 2026</span>
   </footer>
 
-  <script>
-    const p = new URLSearchParams(location.search);
-    const msgs = {
-      access_denied:   'Access denied. Use your @gorock.org Google account.',
-      login_required:  'Please sign in to access ROCK Hub.'
-    };
-    const msg = msgs[p.get('error')];
-    if (msg) {
-      const el = document.getElementById('loginError');
-      el.textContent = msg;
-      el.style.display = 'block';
-    }
-  </script>
+  <script src="/js/login.js"></script>
 </body>
 </html>

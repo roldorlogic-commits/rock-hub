@@ -75,9 +75,17 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             Events
           </button>
+          <button class="nav-item" data-section="mysignups" onclick="showSection('mysignups',this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            My Sign-Ups
+          </button>
           <button class="nav-item" data-section="mytasks" onclick="showSection('mytasks',this)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
             My Tasks
+          </button>
+          <button class="nav-item" data-section="myhours" onclick="showSection('myhours',this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            My Hours
           </button>
           <button class="nav-item" data-section="resources" onclick="showSection('resources',this)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
@@ -142,7 +150,7 @@
         <div class="metrics-row three" style="margin-bottom:20px;">
           <div class="metric-card clickable" role="button" tabindex="0" aria-label="View upcoming events" onclick="goToSection('events')" onkeydown="if(event.key==='Enter')goToSection('events')"><div class="metric-label">Upcoming Events</div><div class="metric-value" id="vEvents">—</div><div class="metric-sub">scheduled near you</div></div>
           <div class="metric-card clickable" role="button" tabindex="0" aria-label="View my tasks" onclick="goToSection('mytasks')" onkeydown="if(event.key==='Enter')goToSection('mytasks')"><div class="metric-label">My Open Tasks</div><div class="metric-value" id="vTasks">—</div><div class="metric-sub">assigned to you</div></div>
-          <div class="metric-card"><div class="metric-label">Hours Logged</div><div class="metric-value" id="vHours">—</div><div class="metric-sub">your contribution</div></div>
+          <div class="metric-card clickable" role="button" tabindex="0" aria-label="View my hours" onclick="goToSection('myhours')" onkeydown="if(event.key==='Enter')goToSection('myhours')"><div class="metric-label">Hours Logged</div><div class="metric-value" id="vHours">—</div><div class="metric-sub">your contribution</div></div>
         </div>
 
         <div class="content-grid">
@@ -172,10 +180,20 @@
             <div id="vAnnouncements"><div class="loading-row"><div class="spinner"></div></div></div>
           </div>
 
+          <!-- My Sign-Ups -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">My Sign-Ups</span>
+              <a class="card-action" href="#" onclick="showSection('mysignups',document.querySelector('[data-section=mysignups]'));return false;">See all</a>
+            </div>
+            <div id="mySignupsPreview"><div class="loading-row"><div class="spinner"></div></div></div>
+          </div>
+
           <!-- My Role Card -->
           <div class="card">
             <div class="card-header">
               <span class="card-title">My Profile</span>
+              <a class="card-action" href="#" onclick="openProfileEdit();return false;">Edit</a>
             </div>
             <div class="role-card-inner">
               <div class="avatar-initials" id="profileInitials" style="width:56px;height:56px;font-size:18px;margin:0 auto 4px;"></div>
@@ -207,6 +225,16 @@
         </div>
       </section>
 
+      <!-- ── MY SIGN-UPS ────────────────────────────────────────────────────── -->
+      <section id="mysignups" class="content-section">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">My Sign-Ups</span>
+          </div>
+          <div id="mySignupsFull"><div class="loading-row"><div class="spinner"></div></div></div>
+        </div>
+      </section>
+
       <!-- ── MY TASKS ───────────────────────────────────────────────────────── -->
       <section id="mytasks" class="content-section">
         <div class="card">
@@ -214,6 +242,17 @@
             <span class="card-title">My Tasks</span>
           </div>
           <div id="vTasksFull"><div class="loading-row"><div class="spinner"></div></div></div>
+        </div>
+      </section>
+
+      <!-- ── MY HOURS ─────────────────────────────────────────────────────── -->
+      <section id="myhours" class="content-section">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">My Hours</span>
+            <button class="btn btn-gold btn-sm" onclick="openLogHoursModal()">+ Log Hours</button>
+          </div>
+          <div id="vHoursFull"><div class="loading-row"><div class="spinner"></div></div></div>
         </div>
       </section>
 
@@ -258,6 +297,39 @@
       <button type="submit" class="btn btn-gold" style="width:100%;justify-content:center;margin-top:4px;">Submit Sign-Up</button>
     </form>
     <div class="modal-success" id="signupSuccess" style="display:none;"></div>
+  </div>
+
+  <div class="modal-overlay" id="profileOverlay" onclick="closeProfileEdit()"></div>
+  <div class="modal-box" id="profileModal">
+    <button class="icon-btn slide-panel-close" onclick="closeProfileEdit()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Edit My Profile</div>
+    <form id="profileForm" onsubmit="submitProfileEdit(event)">
+      <label>Phone <input type="tel" id="profilePhone"></label>
+      <label>Church / Organization <input type="text" id="profileChurch"></label>
+      <label>Availability <input type="text" id="profileAvailability" placeholder="e.g. Saturday,Sunday"></label>
+      <label>Skills <input type="text" id="profileSkills" placeholder="e.g. Mentoring, Setup"></label>
+      <button type="submit" class="btn btn-gold" style="width:100%;justify-content:center;margin-top:4px;">Save Changes</button>
+    </form>
+    <div class="modal-success" id="profileSuccess" style="display:none;"></div>
+  </div>
+
+  <div class="modal-overlay" id="logHoursOverlay" onclick="closeLogHoursModal()"></div>
+  <div class="modal-box" id="logHoursModal">
+    <button class="icon-btn slide-panel-close" onclick="closeLogHoursModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Log Volunteer Hours</div>
+    <form id="logHoursForm" onsubmit="submitLogHours(event)">
+      <label>Hours <input type="number" id="logHoursHours" min="0.25" step="0.25" required placeholder="e.g. 2.5"></label>
+      <label>Date <input type="date" id="logHoursDate" required></label>
+      <label>Activity <input type="text" id="logHoursActivity" required placeholder="e.g. Event setup, Mentoring, Food distribution"></label>
+      <label>Related Event <select id="logHoursEvent"><option value="">— No specific event —</option></select></label>
+      <label>Notes <textarea id="logHoursNotes" rows="2" placeholder="(optional)"></textarea></label>
+      <button type="submit" class="btn btn-gold" style="width:100%;justify-content:center;margin-top:4px;">Save Hours</button>
+    </form>
+    <div class="modal-success" id="logHoursSuccess" style="display:none;"></div>
   </div>
 
   <script src="/js/api.js"></script>

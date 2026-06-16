@@ -11,18 +11,6 @@
     var(--bg-primary);
 }
 
-/* Subtle grid overlay */
-.login-page::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image:
-    linear-gradient(var(--gold-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--gold-line) 1px, transparent 1px);
-  background-size: 40px 40px;
-  opacity: .25;
-  pointer-events: none;
-}
 
 .login-container {
   position: relative;
@@ -32,7 +20,9 @@
   border: 0.5px solid var(--gold-line);
   border-radius: 12px;
   overflow: hidden;
+  margin: 24px 0;
 }
+.login-container.wide { max-width: 440px; }
 
 /* Gold top accent bar */
 .login-container::before {
@@ -119,6 +109,118 @@
   color: #CF6E6E;
   margin-bottom: 16px;
 }
+.login-success {
+  background: rgba(110,207,160,.12);
+  border: 0.5px solid rgba(110,207,160,.4);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #6ECFA0;
+  margin-bottom: 16px;
+}
+
+/* ── Auth Path Tabs ────────────────────────────────────────────────────────── */
+.auth-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  padding: 3px;
+  background: var(--bg-primary);
+  border: 0.5px solid var(--gold-line);
+  border-radius: var(--radius);
+}
+.auth-tab {
+  flex: 1;
+  padding: 9px 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all var(--ease);
+}
+.auth-tab.active { background: var(--gold-faint); color: var(--gold); }
+.auth-tab:hover:not(.active) { color: var(--text-white); }
+
+/* ── Volunteer forms ───────────────────────────────────────────────────────── */
+.volunteer-toggle {
+  display: flex;
+  gap: 18px;
+  margin-bottom: 18px;
+  justify-content: center;
+}
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.radio-label input { width: auto; cursor: pointer; }
+
+#volunteerPath form { display: flex; flex-direction: column; gap: 13px; }
+#volunteerPath label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  color: var(--text-dim);
+}
+#volunteerPath label.checkbox-label {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+#volunteerPath label.checkbox-label input { width: auto; margin-top: 2px; }
+#volunteerPath input[type="text"],
+#volunteerPath input[type="email"],
+#volunteerPath input[type="tel"],
+#volunteerPath input[type="password"] { width: 100%; }
+.field-hint { font-weight: 400; color: var(--text-muted); text-transform: none; letter-spacing: 0; }
+
+.password-wrap { position: relative; display: flex; }
+.password-wrap input { flex: 1; padding-right: 56px; }
+.pw-toggle {
+  position: absolute;
+  right: 6px; top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+
+.btn-volunteer-submit {
+  width: 100%;
+  padding: 12px 20px;
+  background: var(--gold);
+  color: #141729;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all var(--ease);
+  margin-top: 4px;
+}
+.btn-volunteer-submit:hover { opacity: .9; transform: translateY(-1px); }
+.btn-volunteer-submit:disabled { opacity: .5; cursor: default; transform: none; }
 
 .google-btn {
   display: flex;

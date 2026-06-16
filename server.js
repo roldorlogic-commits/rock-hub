@@ -1,9 +1,10 @@
 'use strict';
 
 require('dotenv').config();
-const express  = require('express');
-const session  = require('express-session');
-const passport = require('passport');
+const express      = require('express');
+const session      = require('express-session');
+const cookieParser = require('cookie-parser');
+const passport      = require('passport');
 const { Strategy: GoogleStrategy } = require('passport-google-oauth20');
 const fs   = require('fs');
 const path = require('path');
@@ -70,32 +71,48 @@ app.use(session({
 }));
 app.use(passport.initialize());
 app.use(passport.session());
+app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Routes ───────────────────────────────────────────────────────────────────
 app.use('/auth',    require('./routes/auth')(passport));
 app.use('/api',     require('./routes/api'));
+app.use('/api',     require('./routes/events'));
 app.use('/social',  require('./routes/social'));
 
-const { requireAuth, requireBoard } = require('./middleware/auth');
+const { requireAuth, requireBoard, requireBoardOrAdmin, requireActiveVolunteer, getJwtVolunteer } = require('./middleware/auth');
 
 app.get('/', (req, res) => {
   if (req.isAuthenticated()) {
     return res.redirect(req.user.role === 'Board' ? '/board' : '/volunteer');
   }
+  const jv = getJwtVolunteer(req);
+  if (jv) return res.redirect(jv.authStatus === 'Active' ? '/volunteer' : '/volunteer/pending-approval');
   res.sendFile(path.join(__dirname, 'views/login.html'));
 });
 
+app.get('/register',       (req, res) => res.redirect('/?tab=volunteer&mode=new'));
+app.get('/reset-password', (req, res) => res.sendFile(path.join(__dirname, 'views/reset-password.html')));
+
 app.get('/board',        requireBoard, (req, res) => res.sendFile(path.join(__dirname, 'views/board.html')));
-app.get('/volunteer',    requireAuth,  (req, res) => res.sendFile(path.join(__dirname, 'views/volunteer.html')));
+app.get('/volunteer',    requireActiveVolunteer, (req, res) => res.sendFile(path.join(__dirname, 'views/volunteer.html')));
 app.get('/social-feed',  requireBoard, (req, res) => res.sendFile(path.join(__dirname, 'views/social.html')));
+
+app.get('/volunteer/pending-approval', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'views/pending-approval.html')));
+app.get('/volunteers/pending', requireBoardOrAdmin, (req, res) => res.sendFile(path.join(__dirname, 'views/pending-volunteers.html')));
 
 // Detail pages — open to both roles; the API endpoints behind them filter
 // which fields come back based on req.user.role.
 app.get('/members/:id',    requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'views/member-detail.html')));
 app.get('/volunteers/:id', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'views/volunteer-detail.html')));
+app.get('/events/:id',     requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'views/event-detail.html')));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n  ROCK Hub  →  http://0.0.0.0:${PORT}\n`);
-});
+sheetsLib.ensureAllAppSheets()
+  .then(created => { if (created.length) console.log('Created missing sheet tabs:', created.join(', ')); })
+  .catch(err => console.error('Could not verify/create app sheet tabs on boot:', err.message))
+  .finally(() => {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`\n  ROCK Hub  →  http://0.0.0.0:${PORT}\n`);
+    });
+  });

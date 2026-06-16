@@ -5,7 +5,8 @@ const fs      = require('fs');
 const path    = require('path');
 const router  = express.Router();
 const sheets  = require('../lib/sheets');
-const { requireAuth, requireBoard } = require('../middleware/auth');
+const email   = require('../lib/email');
+const { requireAuth, requireBoard, requireBoardOrAdmin } = require('../middleware/auth');
 
 router.use(requireAuth);
 
@@ -70,6 +71,68 @@ router.get('/members/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── My volunteer profile (GET) — must precede /:id ─────────────────────────
+// Returns the Volunteers-sheet row for the currently signed-in volunteer.
+// Board members (who may not have a VolunteerID) are looked up by email.
+router.get('/volunteers/me', async (req, res) => {
+  try {
+    const vol = req.user.volunteerId
+      ? await sheets.getVolunteerById(req.user.volunteerId)
+      : (await sheets.getVolunteers()).find(v => v.Email?.toLowerCase() === (req.user.email || '').toLowerCase());
+    if (!vol) return res.status(404).json({ error: 'No volunteer profile found.' });
+    res.json(vol);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Pending volunteer approvals (Board/Admin only) ──────────────────────────
+// Registered before the /volunteers/:id route below so the literal path
+// "pending" isn't swallowed as a :id value.
+router.get('/volunteers/pending', requireBoardOrAdmin, async (req, res) => {
+  try {
+    const [authRows, volunteers] = await Promise.all([sheets.getVolunteerAuth(), sheets.getVolunteers()]);
+    const pending = authRows.filter(a => a.Status === 'Pending').map(a => {
+      const v = volunteers.find(x => x.VolunteerID === a.VolunteerID) || {};
+      const churchMatch = (v.Notes || '').match(/Church\/Org:\s*([^.]+)\.?/);
+      return {
+        VolunteerID: a.VolunteerID,
+        Email: a.Email,
+        FirstName: v.FirstName || '',
+        LastName: v.LastName || '',
+        Phone: v.Phone || '',
+        Church: churchMatch ? churchMatch[1].trim() : '',
+        RegisteredAt: a.CreatedAt || v.JoinDate || ''
+      };
+    });
+    res.json(pending);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/volunteers/:id/confirm', requireBoardOrAdmin, async (req, res) => {
+  try {
+    const authRow = await sheets.findRow('VolunteerAuth', 'VolunteerID', req.params.id);
+    if (!authRow) return res.status(404).json({ error: 'Volunteer registration not found.' });
+
+    await sheets.updateRowFields('Volunteers', 'VolunteerID', req.params.id, { Status: 'Active' });
+    await sheets.updateRowFields('VolunteerAuth', 'Email', authRow.Email, { Status: 'Active', UpdatedAt: todayStr() });
+    await email.send(authRow.Email, 'Your ROCK Hub account has been approved!',
+      'Your account has been approved! Log in at hub.gorock.org to get started.');
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/volunteers/:id/decline', requireBoardOrAdmin, async (req, res) => {
+  try {
+    const authRow = await sheets.findRow('VolunteerAuth', 'VolunteerID', req.params.id);
+    if (!authRow) return res.status(404).json({ error: 'Volunteer registration not found.' });
+
+    await sheets.updateRowFields('Volunteers', 'VolunteerID', req.params.id, { Status: 'Declined' });
+    await sheets.updateRowFields('VolunteerAuth', 'Email', authRow.Email, { Status: 'Declined', UpdatedAt: todayStr() });
+    await email.send(authRow.Email, 'ROCK Hub volunteer registration update',
+      "Thank you for your interest. Unfortunately we're unable to confirm your volunteer registration at this time. Contact vicepresident@gorock.org for more information.");
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Volunteer detail ─────────────────────────────────────────────────────────
 router.get('/volunteers/:id', async (req, res) => {
   try {
@@ -110,71 +173,10 @@ router.patch('/tasks/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Event sign-up ────────────────────────────────────────────────────────────
-// Lightweight local store tracking which (event, email) pairs have signed up,
-// so the UI can show a "You're registered" badge and avoid double-counting
-// RegisteredCount. New volunteers are also written into the Volunteers sheet.
-const SIGNUPS_FILE = path.join(__dirname, '../config/event-signups.json');
-
-function readSignups() {
-  try { return JSON.parse(fs.readFileSync(SIGNUPS_FILE, 'utf8')); } catch { return {}; }
-}
-function writeSignups(data) {
-  fs.writeFileSync(SIGNUPS_FILE, JSON.stringify(data, null, 2));
-}
-
-router.post('/event-signups/:eventId', async (req, res) => {
-  try {
-    const eventId = req.params.eventId;
-    const { FirstName, LastName, Email, Phone, AvailabilityDays, PreferredRole, Notes } = req.body || {};
-    if (!Email || !FirstName) return res.status(400).json({ error: 'Name and email are required.' });
-
-    const event = await sheets.findRow('Events', 'EventID', eventId);
-    if (!event) return res.status(404).json({ error: 'Event not found.' });
-
-    const signups = readSignups();
-    const list = signups[eventId] || [];
-    const alreadyRegistered = list.some(s => s.email.toLowerCase() === Email.toLowerCase());
-
-    if (!alreadyRegistered) {
-      const volunteers  = await sheets.getVolunteers();
-      const existingVol = volunteers.find(v => v.Email?.toLowerCase() === Email.toLowerCase());
-
-      if (!existingVol) {
-        const volunteerId = `VOL${String(volunteers.length + 1).padStart(3, '0')}`;
-        const note = `Signed up via ${event.EventName} event registration.${Notes ? ' ' + Notes : ''}`;
-        await sheets.appendRow('Volunteers', {
-          VolunteerID: volunteerId,
-          FirstName, LastName: LastName || '', Email, Phone: Phone || '',
-          AvailabilityDays: AvailabilityDays || '',
-          Skills: PreferredRole || '',
-          BackgroundCheckStatus: 'Not Started',
-          HoursLogged: '0',
-          PreferredRole: PreferredRole || '',
-          Status: 'Active',
-          JoinDate: todayStr(),
-          Notes: note
-        });
-      }
-
-      const newCount = (parseInt(event.RegisteredCount, 10) || 0) + 1;
-      await sheets.updateRowFields('Events', 'EventID', eventId, { RegisteredCount: newCount });
-
-      list.push({ email: Email, name: `${FirstName} ${LastName || ''}`.trim(), date: todayStr() });
-      signups[eventId] = list;
-      writeSignups(signups);
-    }
-
-    res.json({ ok: true, alreadyRegistered, message: "You're signed up! We'll be in touch with more details." });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-router.get('/event-signups/mine', (req, res) => {
-  const signups = readSignups();
-  const email = (req.user.email || '').toLowerCase();
-  const eventIds = Object.keys(signups).filter(id => (signups[id] || []).some(s => s.email.toLowerCase() === email));
-  res.json({ eventIds });
-});
+// Event sign-up now lives in routes/events.js, backed by the EventRegistrations
+// sheet (POST /api/events/:id/signup, GET /api/my-registrations) rather than
+// the local JSON file this used to use — see that file for the Part 1 / Part 2
+// event-management + volunteer-auth work.
 
 // ── Global search ────────────────────────────────────────────────────────────
 router.get('/search', async (req, res) => {

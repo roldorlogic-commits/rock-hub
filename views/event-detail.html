@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ROCK Hub — Event</title>
+  <link rel="stylesheet" href="/css/vars.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/dashboard.css">
+  <link rel="stylesheet" href="/css/detail.css">
+</head>
+<body class="event-detail-body">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="topbar-back" id="backBtn" aria-label="Go back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      </button>
+      <a href="/" class="topbar-logo" id="topbarHome">
+        <img src="/img/rock-logo.png" class="topbar-logo-img" alt="The ROCK Association">
+        <div class="topbar-logo-text">
+          <span class="logo-rock">ROCK</span>
+          <span class="logo-hub">Hub</span>
+        </div>
+      </a>
+      <span class="topbar-page-title" id="pageTitle">Event</span>
+    </div>
+    <div class="topbar-right">
+      <div class="user-chip" id="userChip">
+        <span class="user-chip-info">
+          <span class="user-chip-name" id="userName">—</span>
+          <span class="user-chip-email" id="userEmail">—</span>
+        </span>
+        <img class="avatar" id="userAvatar" src="" alt="">
+        <div class="user-dropdown" id="userDropdown">
+          <form method="POST" action="/auth/logout">
+            <button type="submit">Sign out</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Sticky Event Hero: title · meta · stepper · countdown -->
+  <div class="event-hero" id="eventHero">
+    <div class="event-hero-inner">
+      <div class="event-hero-loading" id="eventHeroLoading">
+        <div class="spinner"></div>
+      </div>
+
+      <div id="eventHeroContent" style="display:none;">
+        <div class="event-hero-title-row">
+          <div class="event-hero-title-wrap">
+            <h1 class="event-hero-title" id="eventTitle">—</h1>
+            <div class="event-hero-meta" id="eventMeta"></div>
+          </div>
+          <div class="event-hero-actions" id="eventHeroActions"></div>
+        </div>
+        <div class="event-hero-bottom">
+          <div class="event-stepper" id="eventStepper"></div>
+          <div class="event-countdown" id="eventCountdown"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sticky Tab Bar -->
+  <div class="event-tabs-bar" id="eventTabsBar">
+    <div class="event-tabs-inner">
+      <button class="event-tab active" data-tab="overview"      onclick="switchTab('overview',this)">Overview</button>
+      <button class="event-tab"        data-tab="registrations" onclick="switchTab('registrations',this)">Registrations</button>
+      <button class="event-tab"        data-tab="checklist"     onclick="switchTab('checklist',this)">Checklist</button>
+      <button class="event-tab"        data-tab="budget"        onclick="switchTab('budget',this)">Budget</button>
+      <button class="event-tab"        data-tab="documents"     onclick="switchTab('documents',this)">Documents</button>
+      <button class="event-tab"        data-tab="announcements" onclick="switchTab('announcements',this)">Announcements</button>
+      <button class="event-tab"        data-tab="attendance"    onclick="switchTab('attendance',this)">Attendance</button>
+    </div>
+  </div>
+
+  <!-- Tab Panes -->
+  <main class="event-detail-main">
+
+    <div id="tab-overview" class="tab-pane active">
+      <div id="overviewContent"><div class="loading-row"><div class="spinner"></div></div></div>
+    </div>
+
+    <div id="tab-registrations" class="tab-pane">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Registrations</span></div>
+        <div id="registrationsContent"><div class="loading-row"><div class="spinner"></div></div></div>
+      </div>
+    </div>
+
+    <div id="tab-checklist" class="tab-pane">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Checklist</span></div>
+        <div id="checklistContent"><div class="loading-row"><div class="spinner"></div></div></div>
+      </div>
+    </div>
+
+    <div id="tab-budget" class="tab-pane">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Budget</span></div>
+        <div id="budgetContent"><div class="loading-row"><div class="spinner"></div></div></div>
+      </div>
+    </div>
+
+    <div id="tab-documents" class="tab-pane">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Documents</span></div>
+        <div id="documentsContent"><div class="loading-row"><div class="spinner"></div></div></div>
+      </div>
+    </div>
+
+    <div id="tab-announcements" class="tab-pane">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Announcements</span></div>
+        <div id="announcementsContent"><div class="loading-row"><div class="spinner"></div></div></div>
+      </div>
+    </div>
+
+    <div id="tab-attendance" class="tab-pane">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Attendance</span></div>
+        <div id="attendanceContent"><div class="loading-row"><div class="spinner"></div></div></div>
+      </div>
+    </div>
+
+    <footer class="app-footer">© 2026 The ROCK Association · hub.gorock.org · v1.1.0</footer>
+  </main>
+
+  <!-- ── Add Registrant Modal (Board only) ───────────────────────────────────── -->
+  <div class="modal-overlay" id="addRegOverlay" onclick="closeAddRegModal()"></div>
+  <div class="modal-box" id="addRegModal">
+    <button class="icon-btn slide-panel-close" onclick="closeAddRegModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Add Registrant</div>
+    <p class="modal-subtitle">Manually register someone for this event.</p>
+    <form id="addRegForm" onsubmit="event.preventDefault(); submitAddReg();">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label>First Name <span style="color:var(--gold);">*</span>
+          <input type="text" id="addReg_FirstName" placeholder="First name" autocomplete="given-name">
+        </label>
+        <label>Last Name
+          <input type="text" id="addReg_LastName" placeholder="Last name" autocomplete="family-name">
+        </label>
+      </div>
+      <label>Email <span style="color:var(--gold);">*</span>
+        <input type="email" id="addReg_Email" placeholder="email@example.com" autocomplete="email">
+      </label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label>Phone
+          <input type="tel" id="addReg_Phone" placeholder="(555) 000-0000" autocomplete="tel">
+        </label>
+        <label>Role
+          <input type="text" id="addReg_Role" placeholder="e.g. Setup Crew">
+        </label>
+      </div>
+      <label>Notes
+        <textarea id="addReg_Notes" rows="2" placeholder="Internal notes…"></textarea>
+      </label>
+      <p class="form-error" id="addRegError" style="display:none;"></p>
+      <div class="modal-nav">
+        <button type="button" class="btn btn-outline" onclick="closeAddRegModal()">Cancel</button>
+        <button type="submit" class="btn btn-gold" id="addRegSubmitBtn">Add Registrant</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── Add Checklist Item Modal ──────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="addChkOverlay" onclick="closeAddChecklistModal()"></div>
+  <div class="modal-box" id="addChkModal">
+    <button class="icon-btn slide-panel-close" onclick="closeAddChecklistModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Add Checklist Item</div>
+    <form id="addChkForm" onsubmit="event.preventDefault(); submitAddChecklist();">
+      <label>Item <span style="color:var(--gold);">*</span>
+        <input type="text" id="addChk_Item" placeholder="What needs to be done?">
+      </label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label>Category
+          <select id="addChk_Category">
+            <option>Logistics</option><option>Marketing</option><option>Volunteers</option>
+            <option>Day-Of</option><option>Follow-Up</option><option>Other</option>
+          </select>
+        </label>
+        <label>Priority
+          <select id="addChk_Priority">
+            <option value="Medium">Medium</option><option value="High">High</option><option value="Low">Low</option>
+          </select>
+        </label>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label>Assigned To
+          <input type="text" id="addChk_AssignedTo" placeholder="Name or email">
+        </label>
+        <label>Due Date
+          <input type="date" id="addChk_DueDate">
+        </label>
+      </div>
+      <label>Notes
+        <textarea id="addChk_Notes" rows="2" placeholder="Optional notes…"></textarea>
+      </label>
+      <p class="form-error" id="addChkError" style="display:none;"></p>
+      <div class="modal-nav">
+        <button type="button" class="btn btn-outline" onclick="closeAddChecklistModal()">Cancel</button>
+        <button type="submit" class="btn btn-gold" id="addChkSubmitBtn">Add Item</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── Add Budget Item Modal ──────────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="addBudgetOverlay" onclick="closeAddBudgetModal()"></div>
+  <div class="modal-box" id="addBudgetModal">
+    <button class="icon-btn slide-panel-close" onclick="closeAddBudgetModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Add Budget Item</div>
+    <form id="addBudgetForm" onsubmit="event.preventDefault(); submitAddBudget();">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label style="grid-column:1/-1;">Item <span style="color:var(--gold);">*</span>
+          <input type="text" id="addBudget_Item" placeholder="e.g. Venue rental">
+        </label>
+        <label>Category
+          <select id="addBudget_Category">
+            <option value="Income">Income</option>
+            <option value="Venue">Venue</option><option value="Food">Food &amp; Drinks</option>
+            <option value="Supplies">Supplies</option><option value="Transportation">Transportation</option>
+            <option value="Marketing">Marketing</option><option value="Personnel">Personnel</option>
+            <option value="Other">Other</option>
+          </select>
+        </label>
+        <label>Status
+          <select id="addBudget_Status">
+            <option value="Planned">Planned</option><option value="Pending">Pending</option><option value="Paid">Paid</option>
+          </select>
+        </label>
+        <label>Estimated Cost ($)
+          <input type="number" id="addBudget_Estimated" min="0" step="0.01" placeholder="0.00">
+        </label>
+        <label>Actual Cost ($)
+          <input type="number" id="addBudget_Actual" min="0" step="0.01" placeholder="0.00">
+        </label>
+        <label>Paid By
+          <input type="text" id="addBudget_PaidBy" placeholder="Name">
+        </label>
+        <label>Receipt URL
+          <input type="url" id="addBudget_ReceiptURL" placeholder="https://…">
+        </label>
+        <label style="grid-column:1/-1;">Notes
+          <textarea id="addBudget_Notes" rows="2" placeholder="Optional notes…"></textarea>
+        </label>
+      </div>
+      <p class="form-error" id="addBudgetError" style="display:none;"></p>
+      <div class="modal-nav">
+        <button type="button" class="btn btn-outline" onclick="closeAddBudgetModal()">Cancel</button>
+        <button type="submit" class="btn btn-gold" id="addBudgetSubmitBtn">Add Item</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── Attach Document Modal ──────────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="addDocOverlay" onclick="closeAddDocModal()"></div>
+  <div class="modal-box" id="addDocModal">
+    <button class="icon-btn slide-panel-close" onclick="closeAddDocModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Attach Document</div>
+    <p class="modal-subtitle">Link a file or resource to this event.</p>
+    <form id="addDocForm" onsubmit="event.preventDefault(); submitAddDoc();">
+      <label>Title <span style="color:var(--gold);">*</span>
+        <input type="text" id="addDoc_Title" placeholder="e.g. Event Flyer">
+      </label>
+      <label>URL <span style="color:var(--gold);">*</span>
+        <input type="url" id="addDoc_URL" placeholder="https://drive.google.com/…">
+      </label>
+      <label>Access Level
+        <select id="addDoc_Access">
+          <option value="All">All — visible to volunteers</option>
+          <option value="Board">Board only</option>
+        </select>
+      </label>
+      <p class="form-error" id="addDocError" style="display:none;"></p>
+      <div class="modal-nav">
+        <button type="button" class="btn btn-outline" onclick="closeAddDocModal()">Cancel</button>
+        <button type="submit" class="btn btn-gold" id="addDocSubmitBtn">Attach</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── Walk-In Modal ────────────────────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="walkinOverlay" onclick="closeWalkinModal()"></div>
+  <div class="modal-box" id="walkinModal">
+    <button class="icon-btn slide-panel-close" onclick="closeWalkinModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Record Walk-In</div>
+    <p class="modal-subtitle">Add someone who didn't pre-register.</p>
+    <form id="walkinForm" onsubmit="event.preventDefault(); submitWalkin();">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label>First Name <span style="color:var(--gold);">*</span>
+          <input type="text" id="walkin_FirstName" placeholder="First name" autocomplete="given-name">
+        </label>
+        <label>Last Name
+          <input type="text" id="walkin_LastName" placeholder="Last name" autocomplete="family-name">
+        </label>
+      </div>
+      <label>Email <span style="color:var(--gold);">*</span>
+        <input type="email" id="walkin_Email" placeholder="email@example.com" autocomplete="email">
+      </label>
+      <p class="form-error" id="walkinError" style="display:none;"></p>
+      <div class="modal-nav">
+        <button type="button" class="btn btn-outline" onclick="closeWalkinModal()">Cancel</button>
+        <button type="submit" class="btn btn-gold" id="walkinSubmitBtn">Check In</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/event-detail.js"></script>
+</body>
+</html>

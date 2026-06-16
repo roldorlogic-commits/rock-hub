@@ -89,6 +89,13 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3L22 4"/><circle cx="9" cy="12" r="8"/></svg>
             Volunteers
           </button>
+          <a class="nav-item" href="/volunteers/pending" style="justify-content:space-between;">
+            <span style="display:flex;align-items:center;gap:10px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Pending Volunteers
+            </span>
+            <span class="nav-badge" id="pendingVolunteersBadge" style="display:none;"></span>
+          </a>
           <button class="nav-item" data-section="contacts" onclick="showSection('contacts',this)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             Contacts
@@ -205,7 +212,10 @@
         <div class="card">
           <div class="card-header">
             <span class="card-title">Events &amp; Programs</span>
-            <span class="role-badge">Board View</span>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <button class="btn btn-gold btn-sm" onclick="openCreateEventModal()">+ Create Event</button>
+              <span class="role-badge">Board View</span>
+            </div>
           </div>
           <div id="eventsFull"><div class="loading-row"><div class="spinner"></div></div></div>
         </div>
@@ -340,6 +350,100 @@
     </button>
     <div class="slide-panel-body"></div>
   </aside>
+
+  <!-- ── Create Event modal (Board only) ──────────────────────────────────── -->
+  <div class="modal-overlay" id="createEventOverlay" onclick="closeCreateEventModal()"></div>
+  <div class="modal-box" id="createEventModal" style="width:500px;">
+    <button class="icon-btn slide-panel-close" onclick="closeCreateEventModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Create New Event</div>
+
+    <!-- Step indicator -->
+    <div class="step-indicator" id="createStepIndicator">
+      <div class="step-dot active" id="createDot1">1</div>
+      <div class="step-line"></div>
+      <div class="step-dot" id="createDot2">2</div>
+      <div class="step-line"></div>
+      <div class="step-dot" id="createDot3">3</div>
+    </div>
+
+    <div id="createStepForm" style="display:flex;flex-direction:column;gap:12px;">
+
+      <!-- Pane 1: Basics -->
+      <div id="createPane1" style="display:flex;flex-direction:column;gap:12px;">
+        <div class="step-label">Basics</div>
+        <label>Event Name <span style="color:var(--gold);">*</span>
+          <input type="text" id="ce_name" placeholder="e.g. Summer Community Cookout">
+        </label>
+        <label>Event Type
+          <select id="ce_type">
+            <option value="">— Select type —</option>
+            <option>Community</option>
+            <option>Fundraiser</option>
+            <option>Meeting</option>
+            <option>Service</option>
+            <option>Worship</option>
+            <option>Other</option>
+          </select>
+        </label>
+        <label>Description
+          <textarea id="ce_desc" rows="3" placeholder="Brief description of the event…"></textarea>
+        </label>
+      </div>
+
+      <!-- Pane 2: When & Where -->
+      <div id="createPane2" style="display:none;flex-direction:column;gap:12px;">
+        <div class="step-label">When &amp; Where</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label>Start Date <span style="color:var(--gold);">*</span>
+            <input type="date" id="ce_startDate">
+          </label>
+          <label>End Date
+            <input type="date" id="ce_endDate">
+          </label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label>Start Time <input type="time" id="ce_startTime"></label>
+          <label>End Time   <input type="time" id="ce_endTime"></label>
+        </div>
+        <label>Location
+          <input type="text" id="ce_location" placeholder="e.g. Riverside Community Center">
+        </label>
+        <label>Address
+          <input type="text" id="ce_address" placeholder="Street address (optional)">
+        </label>
+      </div>
+
+      <!-- Pane 3: Details -->
+      <div id="createPane3" style="display:none;flex-direction:column;gap:12px;">
+        <div class="step-label">Details</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label>Capacity <input type="number" id="ce_capacity" min="0" placeholder="0 = unlimited"></label>
+          <label>Volunteers Needed <input type="number" id="ce_volunteers" min="0" placeholder="0"></label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label>Registration Deadline <input type="date" id="ce_regDeadline"></label>
+          <label>Cost ($) <input type="number" id="ce_cost" min="0" step="0.01" placeholder="0.00"></label>
+        </div>
+        <label>Coordinator Name
+          <input type="text" id="ce_coordName" placeholder="Person leading this event">
+        </label>
+        <label>Coordinator Email
+          <input type="email" id="ce_coordEmail" placeholder="coordinator@example.com">
+        </label>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="modal-nav" id="createEventNav">
+      <button class="btn btn-outline btn-sm" id="createPrevBtn" onclick="createEventPrev()" style="display:none;">← Back</button>
+      <button class="btn btn-gold btn-sm"    id="createNextBtn" onclick="createEventNext()">Next →</button>
+      <button class="btn btn-gold btn-sm"    id="createSubmitBtn" onclick="submitCreateEvent()" style="display:none;">Create Event</button>
+    </div>
+
+    <div class="modal-success" id="createEventSuccess" style="display:none;"></div>
+  </div>
 
   <script src="/js/api.js"></script>
   <script src="/js/board.js"></script>

@@ -3,27 +3,63 @@
 let currentUser = null;
 // Populated by loadVEvents() so task rows can resolve RelatedEventID -> name.
 let eventsById = {};
-// EventIDs the signed-in volunteer has already registered for (drives the
-// "You're registered" badge and hides the Sign Up button for those events).
-let mySignupEventIds = [];
+// Full EventRegistrations rows for the signed-in volunteer (drives the
+// "Pending"/"Confirmed" badge on event cards and the My Sign-Ups page).
+let mySignups = [];
 
 (async () => {
   currentUser = await initUser();
   if (currentUser) fillWelcome(currentUser);
   await loadMySignups();
+  renderMySignupsPreview();
+  renderMySignupsFull();
   await loadVEvents(); // populates eventsById before tasks render
   await Promise.all([
     loadVStats(), loadVTasks(),
     loadAnnouncements(), loadResources(), loadTeam(),
+    loadVHours(),
     initNotifications(['All', 'Volunteers'])
   ]);
 })();
 
 async function loadMySignups() {
   try {
-    const { eventIds } = await apiFetch('/api/event-signups/mine');
-    mySignupEventIds = eventIds || [];
-  } catch (e) { mySignupEventIds = []; }
+    mySignups = await apiFetch('/api/my-registrations');
+  } catch (e) { mySignups = []; }
+}
+
+function mySignupFor(eventId) {
+  return mySignups.find(r => r.EventID === eventId);
+}
+
+function renderMySignupsList(signups) {
+  if (!signups.length) return emptyState('No sign-ups yet — browse Events to find something to get involved with.');
+  return signups.map(r => {
+    const cls = r.Status === 'Confirmed' ? 'active' : r.Status === 'Waitlisted' ? 'pending' : 'pending';
+    return `
+      <div class="event-row">
+        <div class="date-block">
+          <span class="month">${fmtDateBlock(r.StartDate).month}</span>
+          <span class="day">${fmtDateBlock(r.StartDate).day}</span>
+        </div>
+        <div class="event-info">
+          <div class="event-name">${r.EventName || r.EventID}</div>
+          <div class="event-meta">
+            <span>${fmtDate(r.StartDate)}</span>
+            ${r.Location ? `<span class="event-meta-sep">·</span><span>${r.Location}</span>` : ''}
+            ${r.Role ? `<span class="event-meta-sep">·</span><span>${r.Role}</span>` : ''}
+          </div>
+        </div>
+        <span class="status-pill ${cls}">${r.Status}</span>
+      </div>`;
+  }).join('');
+}
+
+function renderMySignupsPreview() {
+  document.getElementById('mySignupsPreview').innerHTML = renderMySignupsList(mySignups.slice(0, 4));
+}
+function renderMySignupsFull() {
+  document.getElementById('mySignupsFull').innerHTML = renderMySignupsList(mySignups);
 }
 
 function fillWelcome(user) {
@@ -43,8 +79,10 @@ function fillWelcome(user) {
 
 async function loadVStats() {
   try {
-    const [events, tasks, vols] = await Promise.all([
-      apiFetch('/api/events'), apiFetch('/api/tasks'), apiFetch('/api/volunteers')
+    const [events, tasks, vol] = await Promise.all([
+      apiFetch('/api/events'),
+      apiFetch('/api/tasks'),
+      apiFetch('/api/volunteers/me').catch(() => null)
     ]);
     document.getElementById('vEvents').textContent = events.filter(isUpcomingEvent).length || '0';
 
@@ -55,14 +93,10 @@ async function loadVStats() {
       return (assignee === myEmail || assignee === myName) && t.Status !== 'Completed';
     });
     document.getElementById('vTasks').textContent = myTasks.length || '0';
+    document.getElementById('vHours').textContent = vol?.HoursLogged || '0';
 
-    // Hours logged from volunteers sheet
-    const myVol = vols.find(v => v.Email?.toLowerCase() === myEmail.toLowerCase());
-    document.getElementById('vHours').textContent = myVol?.HoursLogged || '0';
-
-    // Update profile dept
     const pd = document.getElementById('profileDept');
-    if (pd && myVol?.PreferredRole) pd.textContent = myVol.PreferredRole;
+    if (pd && vol?.PreferredRole) pd.textContent = vol.PreferredRole;
   } catch (e) { console.error('VStats:', e); }
 }
 
@@ -78,17 +112,25 @@ async function loadVEvents() {
 }
 
 function vEventRow(ev, withSignup = false) {
-  const db = fmtDateBlock(ev.StartDate);
-  const eventId    = ev.EventID || ev.EventName;
-  const registered = mySignupEventIds.includes(eventId);
+  const db      = fmtDateBlock(ev.StartDate);
+  const eventId = ev.EventID || ev.EventName;
+  const mine    = mySignupFor(eventId);
+
+  // The whole row navigates to the detail page; the Sign Up button stops
+  // propagation so it opens the modal instead.
+  const href = ev.EventID ? `/events/${encodeURIComponent(ev.EventID)}` : null;
+  const row  = href
+    ? `class="event-row clickable" role="button" tabindex="0" onclick="location.href='${href}'" onkeydown="if(event.key==='Enter')location.href='${href}'"`
+    : `class="event-row"`;
+
   const action = withSignup
-    ? (registered
-        ? `<span class="status-pill active">You're registered</span>`
-        : `<button class="btn btn-outline btn-sm" onclick="signUp('${eventId}')">Sign Up</button>`)
+    ? (mine
+        ? `<span class="status-pill ${mine.Status === 'Confirmed' ? 'active' : 'pending'}">${mine.Status}</span>`
+        : `<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();signUp('${eventId}')">Sign Up</button>`)
     : statusPill(ev.Status || 'Upcoming');
 
   return `
-    <div class="event-row">
+    <div ${row}>
       <div class="date-block">
         <span class="month">${db.month}</span>
         <span class="day">${db.day}</span>
@@ -151,14 +193,14 @@ async function submitSignup(e) {
     LastName: rest.join(' '),
     Email: document.getElementById('signupEmail').value.trim(),
     Phone: document.getElementById('signupPhone').value.trim(),
-    PreferredRole: document.getElementById('signupRole').value.trim(),
+    Role: document.getElementById('signupRole').value.trim(),
     Notes: document.getElementById('signupNotes').value.trim()
   };
 
   const btn = form.querySelector('button[type="submit"]');
   btn.disabled = true;
   try {
-    const res  = await fetch(`/api/event-signups/${encodeURIComponent(eventId)}`, {
+    const res  = await fetch(`/api/events/${encodeURIComponent(eventId)}/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -169,9 +211,11 @@ async function submitSignup(e) {
     form.style.display = 'none';
     const successEl = document.getElementById('signupSuccess');
     successEl.style.display = 'block';
-    successEl.innerHTML = `<p>✅ ${data.message}</p>`;
+    successEl.innerHTML = `<p>✅ ${data.waitlisted ? "You've been added to the waitlist — we'll reach out if a spot opens up." : data.message}</p>`;
 
-    if (!mySignupEventIds.includes(eventId)) mySignupEventIds.push(eventId);
+    await loadMySignups();
+    renderMySignupsPreview();
+    renderMySignupsFull();
     await loadVEvents(); // refresh badges + registration progress
   } catch (err) {
     alert('Network error — could not sign up. Please try again.');
@@ -259,5 +303,163 @@ async function loadTeam() {
       : emptyState('No team members yet — volunteers will show up here once they join.');
   } catch (e) {
     document.getElementById('vTeam').innerHTML = emptyState('Could not load your team right now. Please try again shortly.');
+  }
+}
+
+// ── Editable profile (phone, church, availability, skills) ─────────────────
+let myVolunteerCache = null;
+
+async function openProfileEdit() {
+  try {
+    const vols = await apiFetch('/api/volunteers');
+    const myEmail = (currentUser?.email ?? '').toLowerCase();
+    myVolunteerCache = vols.find(v => v.Email?.toLowerCase() === myEmail) || null;
+  } catch (e) { myVolunteerCache = null; }
+
+  const churchMatch = (myVolunteerCache?.Notes || '').match(/Church\/Org:\s*([^.]+)\.?/);
+  document.getElementById('profilePhone').value        = myVolunteerCache?.Phone || '';
+  document.getElementById('profileChurch').value        = churchMatch ? churchMatch[1].trim() : '';
+  document.getElementById('profileAvailability').value  = myVolunteerCache?.AvailabilityDays || '';
+  document.getElementById('profileSkills').value        = myVolunteerCache?.Skills || '';
+
+  document.getElementById('profileForm').style.display = 'flex';
+  document.getElementById('profileSuccess').style.display = 'none';
+  document.getElementById('profileOverlay').classList.add('open');
+  document.getElementById('profileModal').classList.add('open');
+}
+
+function closeProfileEdit() {
+  document.getElementById('profileOverlay')?.classList.remove('open');
+  document.getElementById('profileModal')?.classList.remove('open');
+}
+
+async function submitProfileEdit(e) {
+  e.preventDefault();
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/volunteers/me', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        Phone: document.getElementById('profilePhone').value.trim(),
+        Church: document.getElementById('profileChurch').value.trim(),
+        AvailabilityDays: document.getElementById('profileAvailability').value.trim(),
+        Skills: document.getElementById('profileSkills').value.trim()
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not save your profile.'); return; }
+
+    document.getElementById('profileForm').style.display = 'none';
+    const successEl = document.getElementById('profileSuccess');
+    successEl.style.display = 'block';
+    successEl.innerHTML = '<p>✅ Your profile has been updated.</p>';
+    setTimeout(closeProfileEdit, 1200);
+  } catch (err) {
+    alert('Network error — could not save your profile. Please try again.');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── My Hours ────────────────────────────────────────────────────────────────
+
+async function loadVHours() {
+  const el = document.getElementById('vHoursFull');
+  if (!el) return;
+  try {
+    const log = await apiFetch('/api/my-hours');
+    if (!log.length) {
+      el.innerHTML = emptyState('No hours logged yet — use the "Log Hours" button above to record your volunteer time.');
+      return;
+    }
+    const totalHours = log.reduce((sum, h) => sum + (parseFloat(h.Hours) || 0), 0);
+    el.innerHTML = `
+      <div class="metrics-row three" style="margin-bottom:16px;">
+        <div class="metric-card"><div class="metric-label">Total Hours</div><div class="metric-value">${totalHours}</div></div>
+        <div class="metric-card"><div class="metric-label">Sessions</div><div class="metric-value">${log.length}</div></div>
+        <div class="metric-card"><div class="metric-label">Most Recent</div><div class="metric-value" style="font-size:14px;">${fmtDate(log[0]?.Date)}</div></div>
+      </div>
+      ${log.map(h => {
+        const hrs = parseFloat(h.Hours) || 0;
+        return `
+          <div class="task-row">
+            <div style="flex:1;min-width:0;">
+              <div class="task-title">${h.Activity || '—'}</div>
+              <div class="task-meta">
+                ${fmtDate(h.Date)}
+                ${h.EventName ? `<span style="margin:0 4px;color:var(--gold-line);">·</span>${h.EventName}` : ''}
+                ${h.Notes ? `<span style="margin:0 4px;color:var(--gold-line);">·</span>${h.Notes}` : ''}
+              </div>
+            </div>
+            <span class="status-pill active">${hrs} hr${hrs !== 1 ? 's' : ''}</span>
+          </div>`;
+      }).join('')}`;
+  } catch (e) {
+    el.innerHTML = emptyState('Could not load hours right now. Please try again shortly.');
+  }
+}
+
+function openLogHoursModal() {
+  document.getElementById('logHoursDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('logHoursHours').value = '';
+  document.getElementById('logHoursActivity').value = '';
+  document.getElementById('logHoursNotes').value = '';
+
+  const sel = document.getElementById('logHoursEvent');
+  if (sel) {
+    const opts = Object.values(eventsById)
+      .filter(isUpcomingEvent)
+      .sort((a, b) => new Date(a.StartDate || 0) - new Date(b.StartDate || 0))
+      .map(e => `<option value="${e.EventID}">${e.EventName}${e.StartDate ? ' · ' + fmtDate(e.StartDate) : ''}</option>`)
+      .join('');
+    sel.innerHTML = '<option value="">— No specific event —</option>' + opts;
+  }
+
+  document.getElementById('logHoursForm').style.display = 'flex';
+  document.getElementById('logHoursSuccess').style.display = 'none';
+  document.getElementById('logHoursOverlay').classList.add('open');
+  document.getElementById('logHoursModal').classList.add('open');
+}
+
+function closeLogHoursModal() {
+  document.getElementById('logHoursOverlay')?.classList.remove('open');
+  document.getElementById('logHoursModal')?.classList.remove('open');
+}
+
+async function submitLogHours(e) {
+  e.preventDefault();
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    const hrs = parseFloat(document.getElementById('logHoursHours').value);
+    const body = {
+      Hours: hrs,
+      Date: document.getElementById('logHoursDate').value,
+      Activity: document.getElementById('logHoursActivity').value.trim(),
+      EventID: document.getElementById('logHoursEvent').value,
+      Notes: document.getElementById('logHoursNotes').value.trim()
+    };
+    const res = await fetch('/api/my-hours', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not log hours.'); return; }
+
+    document.getElementById('logHoursForm').style.display = 'none';
+    const successEl = document.getElementById('logHoursSuccess');
+    successEl.style.display = 'block';
+    successEl.innerHTML = `<p>✅ ${hrs} hour${hrs !== 1 ? 's' : ''} logged! Running total: ${data.newTotal} hrs.</p>`;
+
+    document.getElementById('vHours').textContent = data.newTotal;
+    await loadVHours();
+    setTimeout(closeLogHoursModal, 1800);
+  } catch (err) {
+    alert('Network error — could not log hours. Please try again.');
+  } finally {
+    btn.disabled = false;
   }
 }

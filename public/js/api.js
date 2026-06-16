@@ -18,7 +18,7 @@ function showSection(id, navEl) {
     dashboard:'Dashboard', events:'Events & Programs', tasks:'Action Items',
     contacts:'Contacts', files:'Files & Docs', minutes:'Meeting Minutes',
     reports:'Reports', settings:'Settings', members:'Members', volunteers:'Volunteers',
-    mytasks:'My Tasks', resources:'Resources', myteam:'My Team'
+    mytasks:'My Tasks', mysignups:'My Sign-Ups', resources:'Resources', myteam:'My Team'
   };
   const pt = document.getElementById('pageTitle');
   if (pt) pt.textContent = titles[id] || id;

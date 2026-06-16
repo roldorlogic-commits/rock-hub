@@ -234,6 +234,21 @@ html, body { height: 100%; }
   border-left-color: var(--gold);
 }
 
+.nav-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--gold);
+  color: #141729;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .nav-item.locked {
   opacity: .3;
   pointer-events: none;
@@ -359,6 +374,8 @@ html, body { height: 100%; }
 }
 .event-row:last-child { border-bottom: none; padding-bottom: 0; }
 .event-row:first-child { padding-top: 0; }
+.event-row.clickable { cursor: pointer; border-radius: var(--radius-sm); transition: background 0.15s; }
+.event-row.clickable:hover { background: var(--gold-faint); }
 
 .event-info { flex: 1; min-width: 0; }
 .event-name { font-size: 13px; font-weight: 500; color: var(--text-white); margin-bottom: 3px; }
@@ -630,6 +647,44 @@ html, body { height: 100%; }
   color: var(--text-white);
   font-size: 13px;
   line-height: 1.6;
+}
+
+/* ── Multi-step Create Event ──────────────────────────────────────────────── */
+.step-indicator {
+  display: flex;
+  align-items: center;
+  margin: 14px 0 20px;
+}
+.step-dot {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  border: 1.5px solid var(--gold-line);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+  color: var(--text-dim);
+  flex-shrink: 0;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.step-dot.active { background: var(--gold); border-color: var(--gold); color: #000; }
+.step-dot.done   { background: var(--gold-faint); border-color: var(--gold); color: var(--gold); }
+.step-line       { flex: 1; height: 1px; background: var(--gold-line); }
+.step-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  color: var(--gold);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.create-step { display: flex; flex-direction: column; gap: 12px; }
+.modal-nav {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 0.5px solid var(--gold-line);
 }
 
 /* ── Global Search (topbar) ───────────────────────────────────────────────── */

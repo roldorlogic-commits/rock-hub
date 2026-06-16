@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ROCK Hub — Awaiting Approval</title>
+  <link rel="stylesheet" href="/css/vars.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/login.css">
+</head>
+<body class="login-page">
+
+  <div class="login-container">
+    <div class="login-brand">
+      <div class="brand-logo">
+        <img src="/img/rock-logo.png" alt="The ROCK Association" style="height:76px;width:auto;filter:drop-shadow(0 4px 16px rgba(201,169,110,.3));">
+      </div>
+      <p class="brand-tagline">The ROCK Association Intranet</p>
+      <p class="brand-org">gorock.org</p>
+    </div>
+
+    <div class="login-body" style="text-align:center;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:40px;height:40px;color:var(--gold);margin:0 auto 16px;display:block;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <h2 class="login-title" id="pendingHeading">Your account is awaiting approval</h2>
+      <p class="login-subtitle" id="pendingId">
+        Thanks for registering! A board member needs to confirm your volunteer status before you can sign in.
+        You'll receive an email as soon as that happens — no need to keep checking back.
+      </p>
+
+      <form method="POST" action="/auth/logout" style="margin-top:8px;">
+        <button type="submit" class="btn-volunteer-submit" style="background:transparent;border:0.5px solid var(--gold-line);color:var(--text-dim);">Sign Out</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="login-mountain" aria-hidden="true">
+    <img src="/images/mountain-brand.svg" alt="">
+  </div>
+
+  <footer class="login-footer">
+    <span>The ROCK Association</span>
+    <span class="footer-sep">·</span>
+    <a href="https://gorock.org" target="_blank" rel="noopener">gorock.org</a>
+    <span class="footer-sep">·</span>
+    <span>&copy; 2026</span>
+  </footer>
+
+  <script src="/js/api.js"></script>
+  <script>
+    (async () => {
+      try {
+        const user = await apiFetch('/api/me');
+        if (user?.firstName) {
+          document.getElementById('pendingHeading').textContent = `Hi ${user.firstName} — your account is awaiting approval`;
+        }
+      } catch (e) { /* keep generic heading */ }
+    })();
+  </script>
+</body>
+</html>

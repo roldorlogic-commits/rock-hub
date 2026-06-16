@@ -9,7 +9,7 @@ let eventsById = {};
   await Promise.all([
     loadStats(), loadTasks(), loadContacts(), loadFiles(),
     loadMembers(), loadVolunteersFull(), loadAnnouncements(),
-    initNotifications(['All', 'Board'])
+    initNotifications(['All', 'Board']), loadPendingVolunteerBadge()
   ]);
 })();
 
@@ -37,9 +37,13 @@ async function loadEvents() {
 }
 
 function eventRow(ev) {
-  const db = fmtDateBlock(ev.StartDate);
+  const db  = fmtDateBlock(ev.StartDate);
+  const href = ev.EventID ? `/events/${encodeURIComponent(ev.EventID)}` : null;
+  const row  = href
+    ? `class="event-row clickable" role="button" tabindex="0" onclick="location.href='${href}'" onkeydown="if(event.key==='Enter')location.href='${href}'"`
+    : `class="event-row"`;
   return `
-    <div class="event-row">
+    <div ${row}>
       <div class="date-block">
         <span class="month">${db.month}</span>
         <span class="day">${db.day}</span>
@@ -68,25 +72,31 @@ function renderEventsFull(events) {
   const el = document.getElementById('eventsFull');
   const sorted = sortByStartDate(events);
   el.innerHTML = sorted.length
-    ? sorted.map(ev => `
-        <div class="event-row">
-          <div class="date-block">
-            <span class="month">${fmtDateBlock(ev.StartDate).month}</span>
-            <span class="day">${fmtDateBlock(ev.StartDate).day}</span>
-          </div>
-          <div class="event-info">
-            <div class="event-name">${ev.EventName || '—'}</div>
-            <div class="event-meta">
-              <span>${fmtDate(ev.StartDate)}</span>
-              ${ev.Location  ? `<span class="event-meta-sep">·</span><span>${ev.Location}</span>` : ''}
-              ${ev.Capacity  ? `<span class="event-meta-sep">·</span><span>Cap: ${ev.Capacity}</span>` : ''}
+    ? sorted.map(ev => {
+        const href = ev.EventID ? `/events/${encodeURIComponent(ev.EventID)}` : null;
+        const row  = href
+          ? `class="event-row clickable" role="button" tabindex="0" onclick="location.href='${href}'" onkeydown="if(event.key==='Enter')location.href='${href}'"`
+          : `class="event-row"`;
+        return `
+          <div ${row}>
+            <div class="date-block">
+              <span class="month">${fmtDateBlock(ev.StartDate).month}</span>
+              <span class="day">${fmtDateBlock(ev.StartDate).day}</span>
             </div>
-          </div>
-          <div style="flex-shrink:0;text-align:right;">
-            ${statusPill(ev.Status || 'Upcoming')}
-            ${ev.CoordinatorName ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">${ev.CoordinatorName}</div>` : ''}
-          </div>
-        </div>`).join('')
+            <div class="event-info">
+              <div class="event-name">${ev.EventName || '—'}</div>
+              <div class="event-meta">
+                <span>${fmtDate(ev.StartDate)}</span>
+                ${ev.Location ? `<span class="event-meta-sep">·</span><span>${ev.Location}</span>` : ''}
+                ${ev.Capacity ? `<span class="event-meta-sep">·</span><span>Cap: ${ev.Capacity}</span>` : ''}
+              </div>
+            </div>
+            <div style="flex-shrink:0;text-align:right;">
+              ${statusPill(ev.Status || 'Upcoming')}
+              ${ev.CoordinatorName ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">${ev.CoordinatorName}</div>` : ''}
+            </div>
+          </div>`;
+      }).join('')
     : emptyState('No events yet. Add rows to the Events sheet in Google Sheets.');
 }
 
@@ -320,6 +330,16 @@ function renderVolunteersFull(vols) {
     : emptyState('No volunteers yet — add your first volunteer to the Volunteers sheet to see them here.');
 }
 
+// ── Pending volunteers sidebar badge ─────────────────────────────────────────
+async function loadPendingVolunteerBadge() {
+  const badge = document.getElementById('pendingVolunteersBadge');
+  if (!badge) return;
+  try {
+    const pending = await apiFetch('/api/volunteers/pending');
+    if (pending.length) { badge.textContent = pending.length; badge.style.display = 'flex'; }
+  } catch (e) { /* badge just stays hidden if this fails */ }
+}
+
 // ── Announcements ────────────────────────────────────────────────────────────
 async function loadAnnouncements() {
   try {
@@ -330,5 +350,114 @@ async function loadAnnouncements() {
       : emptyState('No announcements yet. Add them to the Announcements sheet.');
   } catch (e) {
     document.getElementById('announcementsPreview').innerHTML = emptyState('Could not load announcements.');
+  }
+}
+
+// ── Create Event modal ───────────────────────────────────────────────────────
+let _ceStep = 1;
+const _CE_STEPS = 3;
+
+function openCreateEventModal() {
+  _ceStep = 1;
+  const fields = [
+    'ce_name','ce_type','ce_desc',
+    'ce_startDate','ce_endDate','ce_startTime','ce_endTime','ce_location','ce_address',
+    'ce_capacity','ce_volunteers','ce_regDeadline','ce_cost','ce_coordName','ce_coordEmail'
+  ];
+  fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('createEventSuccess').style.display = 'none';
+  document.getElementById('createStepForm').style.display    = 'flex';
+  document.getElementById('createEventNav').style.display    = 'flex';
+  document.getElementById('createStepIndicator').style.display = 'flex';
+  _syncCeStep();
+  document.getElementById('createEventOverlay').classList.add('open');
+  document.getElementById('createEventModal').classList.add('open');
+}
+
+function closeCreateEventModal() {
+  document.getElementById('createEventOverlay')?.classList.remove('open');
+  document.getElementById('createEventModal')?.classList.remove('open');
+}
+
+function _syncCeStep() {
+  for (let i = 1; i <= _CE_STEPS; i++) {
+    const pane = document.getElementById(`createPane${i}`);
+    const dot  = document.getElementById(`createDot${i}`);
+    if (pane) pane.style.display = i === _ceStep ? 'flex' : 'none';
+    if (dot)  dot.className = 'step-dot' + (i === _ceStep ? ' active' : i < _ceStep ? ' done' : '');
+  }
+  const prev = document.getElementById('createPrevBtn');
+  const next = document.getElementById('createNextBtn');
+  const sub  = document.getElementById('createSubmitBtn');
+  if (prev) prev.style.display = _ceStep > 1 ? '' : 'none';
+  if (next) next.style.display = _ceStep < _CE_STEPS ? '' : 'none';
+  if (sub)  sub.style.display  = _ceStep === _CE_STEPS ? '' : 'none';
+}
+
+function createEventNext() {
+  if (_ceStep === 1 && !document.getElementById('ce_name').value.trim()) {
+    alert('Event name is required before continuing.');
+    document.getElementById('ce_name').focus();
+    return;
+  }
+  if (_ceStep === 2 && !document.getElementById('ce_startDate').value) {
+    alert('Start date is required before continuing.');
+    document.getElementById('ce_startDate').focus();
+    return;
+  }
+  if (_ceStep < _CE_STEPS) { _ceStep++; _syncCeStep(); }
+}
+
+function createEventPrev() {
+  if (_ceStep > 1) { _ceStep--; _syncCeStep(); }
+}
+
+async function submitCreateEvent() {
+  const name      = document.getElementById('ce_name').value.trim();
+  const startDate = document.getElementById('ce_startDate').value;
+  if (!name || !startDate) { alert('Event name and start date are required.'); return; }
+
+  const btn = document.getElementById('createSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Creating…';
+  try {
+    const body = {
+      EventName:            name,
+      EventType:            document.getElementById('ce_type').value,
+      Description:          document.getElementById('ce_desc').value.trim(),
+      StartDate:            startDate,
+      EndDate:              document.getElementById('ce_endDate').value || startDate,
+      StartTime:            document.getElementById('ce_startTime').value,
+      EndTime:              document.getElementById('ce_endTime').value,
+      Location:             document.getElementById('ce_location').value.trim(),
+      Address:              document.getElementById('ce_address').value.trim(),
+      Capacity:             document.getElementById('ce_capacity').value || '0',
+      VolunteersNeeded:     document.getElementById('ce_volunteers').value || '0',
+      RegistrationDeadline: document.getElementById('ce_regDeadline').value,
+      Cost:                 document.getElementById('ce_cost').value || '0',
+      CoordinatorName:      document.getElementById('ce_coordName').value.trim(),
+      CoordinatorEmail:     document.getElementById('ce_coordEmail').value.trim()
+    };
+    const res  = await fetch('/api/events', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not create event.'); return; }
+
+    document.getElementById('createStepForm').style.display     = 'none';
+    document.getElementById('createEventNav').style.display     = 'none';
+    document.getElementById('createStepIndicator').style.display = 'none';
+    const ok = document.getElementById('createEventSuccess');
+    ok.style.display = 'block';
+    ok.innerHTML = `
+      <p>✅ <strong>${name}</strong> created with Planning status.</p>
+      <a class="btn btn-gold btn-sm" style="margin-top:12px;display:inline-flex;" href="/events/${encodeURIComponent(data.EventID)}">Open Event →</a>`;
+
+    await loadEvents();
+  } catch (err) {
+    alert('Network error — could not create event. Please try again.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Create Event';
   }
 }
