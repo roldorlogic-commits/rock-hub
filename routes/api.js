@@ -9,6 +9,19 @@ router.use(requireAuth);
 
 router.get('/me', (req, res) => res.json(req.user));
 
+// "Upcoming" mirrors the front-end definition: Active or Planning status,
+// with a start date today or later (events missing a StartDate still count).
+function isUpcomingEvent(e) {
+  if (!e.EventName) return false;
+  if (!['Active', 'Planning'].includes(e.Status)) return false;
+  if (!e.StartDate) return true;
+  const start = new Date(e.StartDate + 'T00:00:00');
+  if (isNaN(start)) return true;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return start >= today;
+}
+
 router.get('/stats', async (req, res) => {
   try {
     const [members, events, volunteers, tasks] = await Promise.all([
@@ -19,7 +32,7 @@ router.get('/stats', async (req, res) => {
     ]);
     res.json({
       totalMembers:     members.length,
-      activeEvents:     events.filter(e => ['Active','Upcoming'].includes(e.Status)).length,
+      activeEvents:     events.filter(isUpcomingEvent).length,
       activeVolunteers: volunteers.filter(v => v.Status === 'Active').length,
       openTasks:        tasks.filter(t => t.Status !== 'Completed').length
     });

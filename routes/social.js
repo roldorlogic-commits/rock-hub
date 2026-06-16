@@ -81,6 +81,40 @@ router.delete('/partners/:id/posts', (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Partner orgs: auto-pull latest post via Instagram oEmbed ────────────────
+// Instagram's oEmbed endpoint is documented to embed a *specific post* URL,
+// not a profile — but we attempt it with the partner's profile URL per the
+// requested approach, and fall back gracefully (the front-end shows a
+// "View on Instagram" button) when it can't resolve a post.
+router.get('/partners/:id/auto', async (req, res) => {
+  const partners = readPartners();
+  const partner  = partners.find(p => p.id === req.params.id);
+  if (!partner) return res.status(404).json({ ok: false, error: 'Partner not found.' });
+
+  const token = process.env.INSTAGRAM_ACCESS_TOKEN;
+  if (!token) return res.json({ ok: false, reason: 'not_configured' });
+
+  try {
+    const profileUrl = `https://www.instagram.com/${partner.handle}/`;
+    const r = await fetch(
+      `https://graph.facebook.com/v19.0/instagram_oembed` +
+      `?url=${encodeURIComponent(profileUrl)}&access_token=${token}&omitscript=true`
+    );
+    const data = await r.json();
+    if (data.error || !data.thumbnail_url) {
+      return res.json({ ok: false, reason: 'fetch_failed', error: data.error?.message });
+    }
+    res.json({
+      ok: true,
+      thumbnail_url: data.thumbnail_url,
+      caption:       data.title || '',
+      author_name:   data.author_name || partner.handle
+    });
+  } catch (err) {
+    res.json({ ok: false, reason: 'error', error: err.message });
+  }
+});
+
 // ── oEmbed proxy ──────────────────────────────────────────────────────────────
 // Instagram's oEmbed endpoint embeds a SPECIFIC known post URL.
 // It does NOT discover latest posts from an account — a post URL must be provided.

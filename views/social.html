@@ -15,6 +15,9 @@
   <!-- Topbar -->
   <header class="topbar">
     <div class="topbar-left">
+      <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
       <a href="/board" class="topbar-logo">
         <img src="/img/rock-logo.png" class="topbar-logo-img" alt="The ROCK Association">
         <div class="topbar-logo-text">
@@ -44,6 +47,7 @@
   </header>
 
   <div class="app-layout">
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
     <!-- Sidebar -->
     <aside class="sidebar">
       <a href="/board" class="sidebar-logo">
@@ -177,7 +181,10 @@
             <div class="partner-header-left">
               <span class="section-title">Partner Organizations</span>
             </div>
-            <span style="font-size:10px;color:var(--text-muted);" id="partnerCount"></span>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="font-size:10px;color:var(--text-muted);" id="partnerCount"></span>
+              <button class="btn btn-ghost btn-sm partner-refresh-btn" id="refreshPartnersBtn" onclick="refreshPartnerFeed()">Refresh Feed</button>
+            </div>
           </div>
           <p class="partner-subhead" style="font-size:11px;color:var(--text-muted);margin-bottom:16px;line-height:1.6;">
             Youth ministries &amp; organizations The ROCK partners with. Paste any public Instagram post URL

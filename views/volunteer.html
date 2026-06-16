@@ -14,6 +14,9 @@
   <!-- Topbar -->
   <header class="topbar">
     <div class="topbar-left">
+      <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
       <a href="/volunteer" class="topbar-logo">
         <img src="/img/rock-logo.png" class="topbar-logo-img" alt="The ROCK Association">
         <div class="topbar-logo-text">
@@ -43,6 +46,7 @@
   </header>
 
   <div class="app-layout">
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
     <!-- Sidebar -->
     <aside class="sidebar">
       <a href="/volunteer" class="sidebar-logo">
@@ -119,8 +123,8 @@
         </div>
 
         <div class="metrics-row three" style="margin-bottom:20px;">
-          <div class="metric-card"><div class="metric-label">Upcoming Events</div><div class="metric-value" id="vEvents">—</div><div class="metric-sub">scheduled near you</div></div>
-          <div class="metric-card"><div class="metric-label">My Open Tasks</div><div class="metric-value" id="vTasks">—</div><div class="metric-sub">assigned to you</div></div>
+          <div class="metric-card clickable" role="button" tabindex="0" aria-label="View upcoming events" onclick="goToSection('events')" onkeydown="if(event.key==='Enter')goToSection('events')"><div class="metric-label">Upcoming Events</div><div class="metric-value" id="vEvents">—</div><div class="metric-sub">scheduled near you</div></div>
+          <div class="metric-card clickable" role="button" tabindex="0" aria-label="View my tasks" onclick="goToSection('mytasks')" onkeydown="if(event.key==='Enter')goToSection('mytasks')"><div class="metric-label">My Open Tasks</div><div class="metric-value" id="vTasks">—</div><div class="metric-sub">assigned to you</div></div>
           <div class="metric-card"><div class="metric-label">Hours Logged</div><div class="metric-value" id="vHours">—</div><div class="metric-sub">your contribution</div></div>
         </div>
 

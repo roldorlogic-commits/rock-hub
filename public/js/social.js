@@ -200,8 +200,52 @@ async function loadPartnerFeed() {
     });
     if (countEl) countEl.textContent = `${partners.length} partners`;
     grid.innerHTML = partners.map(p => renderPartnerCard(p)).join('');
+
+    // For any partner without a manually-added post, try to auto-pull their
+    // latest Instagram post; falls back to a "View on Instagram" button.
+    partners.filter(p => !p.posts.length).forEach(fetchAutoPost);
   } catch (e) {
     grid.innerHTML = '<div style="grid-column:1/-1;color:var(--text-muted);font-size:12px;padding:16px;">Could not load partners.</div>';
+  }
+}
+
+// Re-fetches the whole partner feed (list + auto-pulled posts). Wired to the
+// "Refresh Feed" button; also runs once automatically on page load.
+async function refreshPartnerFeed() {
+  const btn = document.getElementById('refreshPartnersBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Refreshing…'; }
+  try {
+    await loadPartnerFeed();
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Refresh Feed'; }
+  }
+}
+
+function viewOnInstagramBtn(handle) {
+  return `
+    <a class="ig-view-btn" href="https://www.instagram.com/${handle}/" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+      View on Instagram
+    </a>`;
+}
+
+async function fetchAutoPost(partner) {
+  const slot = document.getElementById(`autopost-${partner.id}`);
+  if (!slot) return;
+  try {
+    const res  = await fetch(`/social/partners/${partner.id}/auto`);
+    const data = await res.json();
+    if (data.ok && data.thumbnail_url) {
+      slot.innerHTML = `
+        <a class="partner-auto-post" href="https://www.instagram.com/${partner.handle}/" target="_blank" rel="noopener">
+          <img src="${data.thumbnail_url}" alt="Latest Instagram post" loading="lazy">
+          ${data.caption ? `<div class="partner-auto-caption">${data.caption.slice(0, 140)}</div>` : ''}
+        </a>`;
+    } else {
+      slot.innerHTML = viewOnInstagramBtn(partner.handle);
+    }
+  } catch (e) {
+    slot.innerHTML = viewOnInstagramBtn(partner.handle);
   }
 }
 
@@ -217,9 +261,8 @@ function renderPartnerCard(partner) {
         </div>
        </div>`
     : `<div class="partner-posts">
-        <div class="partner-preview-empty">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
-          No post added yet
+        <div class="partner-auto-slot" id="autopost-${partner.id}">
+          <div class="loading-row"><div class="spinner"></div></div>
         </div>
        </div>`;
 

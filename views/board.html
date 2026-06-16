@@ -15,6 +15,9 @@
   <header class="topbar">
     <div class="topbar-mountain" aria-hidden="true"><img src="/images/mountain-brand.svg" alt=""></div>
     <div class="topbar-left">
+      <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
       <a href="/board" class="topbar-logo">
         <img src="/img/rock-logo.png" class="topbar-logo-img" alt="The ROCK Association">
         <div class="topbar-logo-text">
@@ -44,6 +47,7 @@
   </header>
 
   <div class="app-layout">
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
     <!-- Sidebar -->
     <aside class="sidebar">
       <a href="/board" class="sidebar-logo">
@@ -66,6 +70,14 @@
           <button class="nav-item" data-section="tasks" onclick="showSection('tasks',this)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
             Action Items
+          </button>
+          <button class="nav-item" data-section="members" onclick="showSection('members',this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>
+            Members
+          </button>
+          <button class="nav-item" data-section="volunteers" onclick="showSection('volunteers',this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3L22 4"/><circle cx="9" cy="12" r="8"/></svg>
+            Volunteers
           </button>
           <button class="nav-item" data-section="contacts" onclick="showSection('contacts',this)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -108,10 +120,10 @@
         <div class="mountain-bg" aria-hidden="true" style="opacity:.07;bottom:-20px;"><img src="/images/mountain-brand.svg" alt="" style="opacity:1;mix-blend-mode:normal;filter:none;"></div>
         <div style="position:relative;z-index:1;">
         <div class="metrics-row" id="metricsRow">
-          <div class="metric-card"><div class="metric-label">Total Members</div><div class="metric-value" id="mMembers">—</div><div class="metric-sub">registered members</div></div>
-          <div class="metric-card"><div class="metric-label">Active Events</div><div class="metric-value" id="mEvents">—</div><div class="metric-sub">upcoming &amp; in-progress</div></div>
-          <div class="metric-card"><div class="metric-label">Active Volunteers</div><div class="metric-value" id="mVolunteers">—</div><div class="metric-sub">ready to serve</div></div>
-          <div class="metric-card"><div class="metric-label">Open Tasks</div><div class="metric-value" id="mTasks">—</div><div class="metric-sub">action items pending</div></div>
+          <div class="metric-card clickable" role="button" tabindex="0" aria-label="View all members" onclick="goToSection('members')" onkeydown="if(event.key==='Enter')goToSection('members')"><div class="metric-label">Total Members</div><div class="metric-value" id="mMembers">—</div><div class="metric-sub">registered members</div></div>
+          <div class="metric-card clickable" role="button" tabindex="0" aria-label="View all events" onclick="goToSection('events')" onkeydown="if(event.key==='Enter')goToSection('events')"><div class="metric-label">Active Events</div><div class="metric-value" id="mEvents">—</div><div class="metric-sub">upcoming &amp; in-progress</div></div>
+          <div class="metric-card clickable" role="button" tabindex="0" aria-label="View all volunteers" onclick="goToSection('volunteers')" onkeydown="if(event.key==='Enter')goToSection('volunteers')"><div class="metric-label">Active Volunteers</div><div class="metric-value" id="mVolunteers">—</div><div class="metric-sub">ready to serve</div></div>
+          <div class="metric-card clickable" role="button" tabindex="0" aria-label="View all tasks" onclick="goToSection('tasks')" onkeydown="if(event.key==='Enter')goToSection('tasks')"><div class="metric-label">Open Tasks</div><div class="metric-value" id="mTasks">—</div><div class="metric-sub">action items pending</div></div>
         </div>
 
         <div class="content-grid">
@@ -139,6 +151,14 @@
               <span class="card-title">Event Registration Progress</span>
             </div>
             <div id="progressSection"><div class="loading-row"><div class="spinner"></div></div></div>
+          </div>
+
+          <!-- Announcements (full width) -->
+          <div class="card full-width">
+            <div class="card-header">
+              <span class="card-title">Announcements</span>
+            </div>
+            <div id="announcementsPreview"><div class="loading-row"><div class="spinner"></div></div></div>
           </div>
 
           <!-- Board Contacts -->
@@ -181,6 +201,28 @@
             <span class="role-badge">Board View</span>
           </div>
           <div id="tasksFull"><div class="loading-row"><div class="spinner"></div></div></div>
+        </div>
+      </section>
+
+      <!-- ── MEMBERS ────────────────────────────────────────────────────────── -->
+      <section id="members" class="content-section">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Members</span>
+            <span class="role-badge">Board View</span>
+          </div>
+          <div id="membersFull"><div class="loading-row"><div class="spinner"></div></div></div>
+        </div>
+      </section>
+
+      <!-- ── VOLUNTEERS ─────────────────────────────────────────────────────── -->
+      <section id="volunteers" class="content-section">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Volunteers</span>
+            <span class="role-badge">Board View</span>
+          </div>
+          <div id="volunteersFull"><div class="loading-row"><div class="spinner"></div></div></div>
         </div>
       </section>
 

@@ -465,3 +465,72 @@
   line-height: 1.6;
 }
 .api-setup-notice strong { color: var(--gold); }
+
+/* ── Auto-pulled Instagram post (partner cards) ───────────────────────────── */
+.partner-auto-slot { min-height: 60px; }
+.partner-auto-post {
+  display: flex;
+  gap: 10px;
+  padding: 4px 0;
+  text-decoration: none;
+  color: inherit;
+}
+.partner-auto-post img {
+  width: 64px; height: 64px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 0.5px solid var(--gold-line);
+  flex-shrink: 0;
+}
+.partner-auto-caption {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ig-view-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 8px;
+  background: var(--gold-faint);
+  border: 0.5px solid var(--gold-line);
+  border-radius: var(--radius-sm);
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all var(--ease);
+}
+.ig-view-btn:hover { background: var(--gold); color: var(--bg-primary); }
+.ig-view-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+.partner-refresh-btn[disabled] { opacity: .5; cursor: default; }
+
+/* ── Responsive ────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .social-layout { max-width: 100%; padding: 16px !important; }
+
+  .scheduled-grid,
+  .instagram-grid,
+  .partner-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .composer-actions { flex-wrap: wrap; }
+  .schedule-group { flex-wrap: wrap; }
+}
+
+@media (max-width: 480px) {
+  .scheduled-grid,
+  .instagram-grid,
+  .partner-grid {
+    grid-template-columns: 1fr;
+  }
+}

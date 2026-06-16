@@ -2,7 +2,10 @@
 
 (async () => {
   await initUser();
-  await Promise.all([loadStats(), loadEvents(), loadTasks(), loadContacts(), loadFiles()]);
+  await Promise.all([
+    loadStats(), loadEvents(), loadTasks(), loadContacts(), loadFiles(),
+    loadMembers(), loadVolunteersFull(), loadAnnouncements()
+  ]);
 })();
 
 async function loadStats() {
@@ -38,17 +41,18 @@ function eventRow(ev) {
       <div class="event-info">
         <div class="event-name">${ev.EventName || 'Untitled Event'}</div>
         <div class="event-meta">
-          ${ev.EventType ? `<span>${ev.EventType}</span><span class="event-meta-sep">·</span>` : ''}
-          ${ev.Location  ? `<span>${ev.Location}</span>` : ''}
+          <span>${fmtDate(ev.StartDate)}</span>
+          ${ev.Location  ? `<span class="event-meta-sep">·</span><span>${ev.Location}</span>` : ''}
           ${ev.Status    ? `<span class="event-meta-sep">·</span>${statusPill(ev.Status)}` : ''}
         </div>
+        ${ev.CoordinatorName ? `<div class="event-meta" style="margin-top:2px;">Coordinator: ${ev.CoordinatorName}</div>` : ''}
       </div>
     </div>`;
 }
 
 function renderEventsPreview(events) {
   const el = document.getElementById('eventsPreview');
-  const upcoming = events.filter(e => e.EventName).slice(0, 5);
+  const upcoming = sortByStartDate(events.filter(isUpcomingEvent)).slice(0, 5);
   el.innerHTML = upcoming.length
     ? upcoming.map(eventRow).join('')
     : emptyState('No upcoming events. Add them to the Events sheet.');
@@ -56,8 +60,9 @@ function renderEventsPreview(events) {
 
 function renderEventsFull(events) {
   const el = document.getElementById('eventsFull');
-  el.innerHTML = events.length
-    ? events.map(ev => `
+  const sorted = sortByStartDate(events);
+  el.innerHTML = sorted.length
+    ? sorted.map(ev => `
         <div class="event-row">
           <div class="date-block">
             <span class="month">${fmtDateBlock(ev.StartDate).month}</span>
@@ -66,7 +71,7 @@ function renderEventsFull(events) {
           <div class="event-info">
             <div class="event-name">${ev.EventName || '—'}</div>
             <div class="event-meta">
-              ${ev.EventType ? `<span>${ev.EventType}</span>` : ''}
+              <span>${fmtDate(ev.StartDate)}</span>
               ${ev.Location  ? `<span class="event-meta-sep">·</span><span>${ev.Location}</span>` : ''}
               ${ev.Capacity  ? `<span class="event-meta-sep">·</span><span>Cap: ${ev.Capacity}</span>` : ''}
             </div>
@@ -81,23 +86,24 @@ function renderEventsFull(events) {
 
 function renderProgress(events) {
   const el = document.getElementById('progressSection');
-  const withCap = events.filter(e => e.EventName && e.Capacity && parseInt(e.Capacity) > 0);
+  const withCap = events.filter(e => e.EventName && parseInt(e.Capacity) > 0);
   if (!withCap.length) {
     el.innerHTML = emptyState('Add Capacity to events to see registration progress.');
     return;
   }
-  el.innerHTML = withCap.slice(0,6).map((ev, i) => {
-    const pct = Math.min(100, Math.round(Math.random() * 80 + 10)); // placeholder — replace with actual registration count
-    const opacities = [1, 0.85, 0.7, 0.55, 0.4, 0.25];
+  el.innerHTML = withCap.slice(0, 6).map(ev => {
+    const capacity   = parseInt(ev.Capacity) || 0;
+    const registered = parseInt(ev.RegisteredCount) || 0;
+    const pct = capacity > 0 ? Math.min(100, Math.round((registered / capacity) * 100)) : 0;
     return `
       <div class="progress-item">
         <div class="progress-name">${ev.EventName}</div>
         <div class="progress-wrap">
           <div class="progress-track">
-            <div class="progress-fill" style="width:${pct}%;opacity:${opacities[i] ?? 0.5}"></div>
+            <div class="progress-fill" style="width:${pct}%"></div>
           </div>
         </div>
-        <div class="progress-pct">${pct}%</div>
+        <div class="progress-pct">${registered} / ${capacity} registered</div>
       </div>`;
   }).join('');
 }
@@ -193,14 +199,13 @@ async function loadFiles() {
 }
 
 function fileRow(d) {
-  const href = d.FileURL ? `href="${d.FileURL}" target="_blank" rel="noopener"` : '';
   return `
     <div class="list-item">
       <div class="file-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
       </div>
       <div class="item-info">
-        <div class="item-title"><a ${href} style="color:var(--text-white);">${d.Title || '—'}</a></div>
+        <div class="item-title">${docTitleHtml(d)}</div>
         <div class="item-sub">${d.Category || d.FileType || '—'} · ${fmtDate(d.UploadDate)}</div>
       </div>
       ${statusPill(d.Status)}
@@ -228,4 +233,73 @@ function renderReports(docs) {
   const el = document.getElementById('reportsFull');
   const rpts = docs.filter(d => d.Category?.toLowerCase().includes('report'));
   el.innerHTML = rpts.length ? rpts.map(fileRow).join('') : emptyState('No reports yet. Tag documents with Category "Report".');
+}
+
+// ── Members ──────────────────────────────────────────────────────────────────
+async function loadMembers() {
+  try {
+    const members = await apiFetch('/api/members');
+    renderMembersFull(members);
+  } catch (e) {
+    document.getElementById('membersFull').innerHTML = emptyState('Could not load members.');
+  }
+}
+
+function renderMembersFull(members) {
+  const el = document.getElementById('membersFull');
+  el.innerHTML = members.length
+    ? members.map(m => {
+        const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || m.Email || '—';
+        return `
+          <div class="contact-row">
+            ${avatarHtml(name, null)}
+            <div class="contact-info">
+              <div class="contact-name">${name}</div>
+              <div class="contact-email">${m.Email || '—'}</div>
+            </div>
+            <span class="status-pill ${m.MembershipStatus?.toLowerCase() === 'active' ? 'active' : 'pending'}">${m.MembershipStatus || '—'}</span>
+          </div>`;
+      }).join('')
+    : emptyState('No members yet. Add rows to the Members sheet.');
+}
+
+// ── Volunteers (full list) ──────────────────────────────────────────────────
+async function loadVolunteersFull() {
+  try {
+    const vols = await apiFetch('/api/volunteers');
+    renderVolunteersFull(vols);
+  } catch (e) {
+    document.getElementById('volunteersFull').innerHTML = emptyState('Could not load volunteers.');
+  }
+}
+
+function renderVolunteersFull(vols) {
+  const el = document.getElementById('volunteersFull');
+  el.innerHTML = vols.length
+    ? vols.map(v => {
+        const name = [v.FirstName, v.LastName].filter(Boolean).join(' ') || v.Email || '—';
+        return `
+          <div class="contact-row">
+            ${avatarHtml(name, null)}
+            <div class="contact-info">
+              <div class="contact-name">${name}</div>
+              <div class="contact-email">${v.PreferredRole || v.Email || '—'}</div>
+            </div>
+            <span class="status-pill ${v.Status?.toLowerCase() === 'active' ? 'active' : 'pending'}">${v.Status || '—'}</span>
+          </div>`;
+      }).join('')
+    : emptyState('No volunteers yet. Add rows to the Volunteers sheet.');
+}
+
+// ── Announcements ────────────────────────────────────────────────────────────
+async function loadAnnouncements() {
+  try {
+    const items  = await apiFetch('/api/announcements');
+    const active = filterAnnouncements(items, ['All', 'Board']);
+    document.getElementById('announcementsPreview').innerHTML = active.length
+      ? active.slice(0, 4).map(renderAnnouncementItem).join('')
+      : emptyState('No announcements yet. Add them to the Announcements sheet.');
+  } catch (e) {
+    document.getElementById('announcementsPreview').innerHTML = emptyState('Could not load announcements.');
+  }
 }

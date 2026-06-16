@@ -1,5 +1,6 @@
 /* ── App Shell ─────────────────────────────────────────────────────────────── */
-.dashboard-page { overflow: hidden; }
+html, body { height: 100%; }
+.dashboard-page { height: 100vh; overflow: hidden; }
 
 .topbar {
   position: fixed;
@@ -137,7 +138,7 @@
 .app-layout {
   display: flex;
   margin-top: var(--topbar-h);
-  min-height: calc(100vh - var(--topbar-h));
+  height: calc(100vh - var(--topbar-h));
 }
 
 .sidebar {
@@ -251,8 +252,10 @@
 .main-content {
   flex: 1;
   margin-left: var(--sidebar-w);
-  min-height: calc(100vh - var(--topbar-h));
+  height: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .content-section { display: none; padding: 24px; }
@@ -355,7 +358,7 @@
 .progress-item:first-child { padding-top: 0; }
 .progress-name { font-size: 12px; font-weight: 500; min-width: 140px; color: var(--text-white); }
 .progress-wrap { flex: 1; }
-.progress-pct { font-size: 11px; color: var(--gold); min-width: 36px; text-align: right; }
+.progress-pct { font-size: 11px; color: var(--gold); min-width: 110px; text-align: right; white-space: nowrap; }
 
 /* ── File Item ─────────────────────────────────────────────────────────────── */
 .file-icon {
@@ -456,3 +459,116 @@
 .welcome-banner { position: relative; overflow: hidden; }
 .welcome-banner .mountain-bg img { opacity: .18; }
 .welcome-banner > *:not(.mountain-bg) { position: relative; z-index: 1; }
+
+/* ── Hamburger Menu (mobile) ───────────────────────────────────────────────── */
+.hamburger-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-white);
+  padding: 8px;
+  margin-right: 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.hamburger-btn:hover { background: var(--gold-faint); }
+.hamburger-btn svg { width: 20px; height: 20px; }
+
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  top: var(--topbar-h);
+  background: rgba(10, 12, 24, .6);
+  z-index: 150;
+}
+.sidebar-overlay.open { display: block; }
+
+/* ── Clickable Metric Cards ────────────────────────────────────────────────── */
+.metric-card.clickable {
+  cursor: pointer;
+  transition: border-color var(--ease), transform var(--ease);
+}
+.metric-card.clickable:hover,
+.metric-card.clickable:focus-visible {
+  border-color: var(--gold);
+  transform: translateY(-2px);
+}
+.metric-card.clickable:focus-visible { outline: 1px solid var(--gold); outline-offset: 2px; }
+
+/* ── Announcement Audience Badge ───────────────────────────────────────────── */
+.audience-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  border: 1px solid transparent;
+}
+.audience-badge.board      { background: rgba(201,169,110,.18); color: var(--gold);   border-color: var(--gold); }
+.audience-badge.volunteers { background: rgba(91,140,255,.15);  color: #5B8CFF;       border-color: rgba(91,140,255,.4); }
+.audience-badge.all        { background: rgba(245,243,238,.08); color: var(--text-dim); border-color: var(--gold-line); }
+
+.announcement-item.pinned { border-left: 2px solid var(--gold); padding-left: 10px; }
+
+/* ── Responsive (375px – 768px) ────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .progress-name { min-width: 110px; }
+}
+
+@media (max-width: 768px) {
+  .hamburger-btn { display: flex; }
+
+  .topbar-page-title { display: none; }
+  .topbar-logo { width: auto; padding: 0 10px; }
+
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    z-index: 200;
+    width: 240px;
+  }
+  .sidebar.mobile-open { transform: translateX(0); }
+
+  .main-content { margin-left: 0; }
+
+  .content-section { padding: 16px; }
+  .card { padding: 16px; }
+
+  .metrics-row,
+  .metrics-row.three {
+    grid-template-columns: 1fr;
+  }
+
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .welcome-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 20px;
+  }
+  .welcome-assignment { text-align: left; }
+
+  .progress-item { flex-wrap: wrap; gap: 8px; }
+  .progress-name { min-width: 100%; }
+  .progress-wrap { flex: 1 1 100%; order: 2; }
+  .progress-pct { order: 3; min-width: 100%; text-align: left; }
+
+  .event-meta { flex-wrap: wrap; }
+}
+
+@media (max-width: 480px) {
+  .metric-value { font-size: 26px; }
+  .card { padding: 14px; }
+  .content-section { padding: 12px; }
+}
