@@ -364,6 +364,11 @@ router.patch('/checklist/:id', async (req, res) => {
     if (req.body.AssignedTo !== undefined) fields.AssignedTo = req.body.AssignedTo;
     if (req.body.DueDate !== undefined)    fields.DueDate = req.body.DueDate;
     if (req.body.Notes !== undefined)      fields.Notes = req.body.Notes;
+    if (req.user.role === 'Board') {
+      if (req.body.Item     !== undefined) fields.Item     = req.body.Item;
+      if (req.body.Category !== undefined) fields.Category = req.body.Category;
+      if (req.body.Priority !== undefined) fields.Priority = req.body.Priority;
+    }
     const updated = await sheets.updateRowFields('EventChecklist', 'ChecklistID', req.params.id, fields);
     res.json(updated);
   } catch (err) { res.status(500).json({ error: err.message }); }

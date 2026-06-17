@@ -306,3 +306,48 @@
   border-bottom: 1.5px solid #6ECFA0;
   transform: rotate(-45deg) translateY(-1px);
 }
+
+/* ── Quill rich text editor (dark theme overrides) ──────────────────────────── */
+.quill-field {
+  border: 0.5px solid var(--gold-line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.quill-field .ql-toolbar.ql-snow {
+  border: none;
+  border-bottom: 0.5px solid var(--gold-line);
+  background: var(--bg-primary);
+  padding: 5px 8px;
+}
+.quill-field .ql-container.ql-snow {
+  border: none;
+  background: var(--bg-secondary);
+  font-family: 'Jost', sans-serif;
+  font-size: 13px;
+}
+.quill-field .ql-editor { min-height: 70px; padding: 8px 12px; color: var(--text-white); }
+.quill-field.quill-tall .ql-editor { min-height: 110px; }
+.quill-field .ql-editor.ql-blank::before { color: var(--text-muted); font-style: normal; }
+.quill-field .ql-editor p, .quill-field .ql-editor li { color: var(--text-white); }
+.quill-field .ql-toolbar.ql-snow .ql-stroke { stroke: var(--text-dim); }
+.quill-field .ql-toolbar.ql-snow .ql-fill   { fill:   var(--text-dim); }
+.quill-field .ql-toolbar.ql-snow .ql-picker-label { color: var(--text-dim); border-color: var(--gold-line); }
+.quill-field .ql-toolbar.ql-snow button:hover .ql-stroke,
+.quill-field .ql-toolbar.ql-snow .ql-active .ql-stroke { stroke: var(--gold); }
+.quill-field .ql-toolbar.ql-snow button:hover .ql-fill,
+.quill-field .ql-toolbar.ql-snow .ql-active .ql-fill   { fill: var(--gold); }
+.quill-field .ql-toolbar.ql-snow .ql-picker-options {
+  background: var(--bg-secondary);
+  border-color: var(--gold-line);
+}
+.quill-field .ql-toolbar.ql-snow .ql-picker-item { color: var(--text-dim); }
+/* Inline task note editor (smaller) */
+.quill-inline .ql-editor { min-height: 52px; }
+/* Display rich text output cleanly */
+.ann-item-body p, .detail-field-value p, .task-notes p { margin: 0 0 4px; }
+.ann-item-body ul, .ann-item-body ol,
+.detail-field-value ul, .detail-field-value ol,
+.task-notes ul, .task-notes ol { margin: 0 0 4px 16px; padding: 0; }
+/* Clickable checklist rows */
+.chk-row.chk-clickable { cursor: pointer; transition: background .1s; }
+.chk-row.chk-clickable:hover { background: rgba(201,169,110,.06); }

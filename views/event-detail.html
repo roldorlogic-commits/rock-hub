@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/css/components.css">
   <link rel="stylesheet" href="/css/dashboard.css">
   <link rel="stylesheet" href="/css/detail.css">
+  <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
 </head>
 <body class="event-detail-body">
 
@@ -202,9 +203,8 @@
           <input type="date" id="addChk_DueDate">
         </label>
       </div>
-      <label>Notes
-        <textarea id="addChk_Notes" rows="2" placeholder="Optional notes…"></textarea>
-      </label>
+      <label style="margin-bottom:2px;">Notes</label>
+      <div id="addChk_Notes" class="quill-field"></div>
       <p class="form-error" id="addChkError" style="display:none;"></p>
       <div class="modal-nav">
         <button type="button" class="btn btn-outline" onclick="closeAddChecklistModal()">Cancel</button>
@@ -320,6 +320,50 @@
     </form>
   </div>
 
+  <!-- ── Edit Checklist Item Modal ─────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="editChkOverlay" onclick="closeEditChkModal()"></div>
+  <div class="modal-box" id="editChkModal">
+    <button class="icon-btn slide-panel-close" onclick="closeEditChkModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Edit Checklist Item</div>
+    <form id="editChkForm" onsubmit="event.preventDefault(); submitEditChecklist();">
+      <input type="hidden" id="editChk_ID">
+      <label>Item <span style="color:var(--gold);">*</span>
+        <input type="text" id="editChk_Item" placeholder="What needs to be done?">
+      </label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label>Category
+          <select id="editChk_Category">
+            <option>Logistics</option><option>Marketing</option><option>Volunteers</option>
+            <option>Day-Of</option><option>Follow-Up</option><option>Other</option>
+          </select>
+        </label>
+        <label>Priority
+          <select id="editChk_Priority">
+            <option value="Medium">Medium</option><option value="High">High</option><option value="Low">Low</option>
+          </select>
+        </label>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label>Assigned To
+          <input type="text" id="editChk_AssignedTo" placeholder="Name or email">
+        </label>
+        <label>Due Date
+          <input type="date" id="editChk_DueDate">
+        </label>
+      </div>
+      <label style="margin-bottom:2px;">Notes</label>
+      <div id="editChk_Notes" class="quill-field"></div>
+      <p class="form-error" id="editChkError" style="display:none;"></p>
+      <div class="modal-nav">
+        <button type="button" class="btn btn-outline" onclick="closeEditChkModal()">Cancel</button>
+        <button type="submit" class="btn btn-gold" id="editChkSubmitBtn">Save Changes</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/event-detail.js"></script>
 </body>

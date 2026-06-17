@@ -177,8 +177,15 @@ function _btnLoading(id, loading, label) {
 
 function renderOverview(ev) {
   const el = document.getElementById('overviewContent');
-  if (currentUser?.role === 'Board') _renderOverviewEdit(el, ev);
-  else _renderOverviewReadOnly(el, ev);
+  if (currentUser?.role === 'Board') {
+    _renderOverviewEdit(el, ev);
+    _initQuill('edit_Description', 'Event description…');
+    _quillSet('edit_Description', ev.Description || '');
+    _initQuill('edit_RegistrationInfo', 'Extra info shown to registrants…');
+    _quillSet('edit_RegistrationInfo', ev.RegistrationInfo || '');
+  } else {
+    _renderOverviewReadOnly(el, ev);
+  }
 }
 
 function _roField(label, value, fullSpan) {
@@ -206,8 +213,8 @@ function _renderOverviewReadOnly(el, ev) {
           ${_roField('Status', statusPill(ev.Status || 'Planning'))}
           ${_roField('Registration Deadline', fmtDate(ev.RegistrationDeadline))}
           ${_roField('Cost', ev.Cost && ev.Cost !== '0' ? '$' + parseFloat(ev.Cost).toFixed(2) : '')}
-          ${ev.Description ? _roField('Description', _esc(ev.Description), true) : ''}
-          ${ev.RegistrationInfo ? _roField('Registration Info', _esc(ev.RegistrationInfo), true) : ''}
+          ${ev.Description ? _roField('Description', ev.Description, true) : ''}
+          ${ev.RegistrationInfo ? _roField('Registration Info', ev.RegistrationInfo, true) : ''}
         </div>
       </div>
       <div class="card">
@@ -281,10 +288,10 @@ function _renderOverviewEdit(el, ev) {
           <input type="text" id="edit_CoordinatorName" value="${_esc(ev.CoordinatorName)}"></div>
         <div class="edit-field"><label>Coordinator Email</label>
           <input type="email" id="edit_CoordinatorEmail" value="${_esc(ev.CoordinatorEmail)}"></div>
-        <div class="edit-field span-full"><label>Description</label>
-          <textarea id="edit_Description" rows="4" placeholder="Event description…">${_esc(ev.Description)}</textarea></div>
-        <div class="edit-field span-full"><label>Registration Info</label>
-          <textarea id="edit_RegistrationInfo" rows="2" placeholder="Extra info shown to registrants…">${_esc(ev.RegistrationInfo)}</textarea></div>
+        <div class="edit-field span-full"><label style="margin-bottom:4px;">Description</label>
+          <div id="edit_Description" class="quill-field quill-tall"></div></div>
+        <div class="edit-field span-full"><label style="margin-bottom:4px;">Registration Info</label>
+          <div id="edit_RegistrationInfo" class="quill-field"></div></div>
       </div>
     </div>`;
 }
@@ -304,8 +311,8 @@ async function saveOverview() {
     Capacity: g('edit_Capacity'), VolunteersNeeded: g('edit_VolunteersNeeded'),
     RegistrationDeadline: g('edit_RegistrationDeadline'), Cost: g('edit_Cost'),
     CoordinatorName: g('edit_CoordinatorName'), CoordinatorEmail: g('edit_CoordinatorEmail'),
-    Description: document.getElementById('edit_Description')?.value ?? '',
-    RegistrationInfo: document.getElementById('edit_RegistrationInfo')?.value ?? '',
+    Description: _quillVal('edit_Description'),
+    RegistrationInfo: _quillVal('edit_RegistrationInfo'),
   };
   if (!fields.EventName) {
     _setStatus(statusEl, 'Event name is required.', 'error');
@@ -485,6 +492,8 @@ async function submitAddReg() {
 
 // ── Checklist tab ─────────────────────────────────────────────────────────────
 
+let _chkItemCache = {};
+
 async function loadChecklist() {
   _tabLoad('checklistContent', async (el) => {
     const items = await apiFetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/checklist`);
@@ -515,6 +524,9 @@ function renderChecklistTab(items, el) {
 
   if (!items.length) { el.innerHTML = header + emptyState('No checklist items yet.'); return; }
 
+  _chkItemCache = {};
+  for (const item of items) _chkItemCache[item.ChecklistID] = item;
+
   const CAT_ORDER = ['Logistics','Marketing','Volunteers','Day-Of','Follow-Up'];
   const groups = {};
   for (const item of items) {
@@ -540,13 +552,15 @@ const CHK_ICONS = {
 const CHK_NEXT = { Pending: 'In Progress', 'In Progress': 'Completed', Completed: 'Pending' };
 
 function _checklistRow(item, isBoard) {
-  const status  = item.Status || 'Pending';
-  const next    = CHK_NEXT[status] || 'Pending';
-  const cls     = status === 'Completed' ? 'done' : status === 'In Progress' ? 'inprogress' : '';
+  const status   = item.Status || 'Pending';
+  const next     = CHK_NEXT[status] || 'Pending';
+  const cls      = status === 'Completed' ? 'done' : status === 'In Progress' ? 'inprogress' : '';
   const trashIco = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
-  return `<div class="chk-row${status === 'Completed' ? ' chk-done' : ''}">
+  const editIco  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+  return `<div class="chk-row${status === 'Completed' ? ' chk-done' : ''}${isBoard ? ' chk-clickable' : ''}"
+              ${isBoard ? `onclick="openEditChkModal('${_esc(item.ChecklistID)}')"` : ''}>
     <button class="chk-toggle ${cls}" title="Mark ${next}"
-            onclick="cycleChecklistStatus('${item.ChecklistID}','${next}')">
+            onclick="event.stopPropagation(); cycleChecklistStatus('${item.ChecklistID}','${next}')">
       ${CHK_ICONS[status] || CHK_ICONS.Pending}
     </button>
     <div class="chk-body">
@@ -554,12 +568,12 @@ function _checklistRow(item, isBoard) {
       <div class="chk-item-meta">
         ${item.AssignedTo ? `<span>→ ${_esc(item.AssignedTo)}</span>` : ''}
         ${item.DueDate    ? `<span>Due ${fmtDate(item.DueDate)}</span>` : ''}
-        ${item.Notes      ? `<span title="${_esc(item.Notes)}">📝</span>` : ''}
+        ${item.Notes      ? `<span title="Has notes">📝</span>` : ''}
       </div>
     </div>
     ${priorityPill(item.Priority)}
     ${isBoard ? `<button class="chk-delete icon-btn" title="Delete item"
-                         onclick="deleteChecklistItem('${item.ChecklistID}')">${trashIco}</button>` : ''}
+                         onclick="event.stopPropagation(); deleteChecklistItem('${item.ChecklistID}')">${trashIco}</button>` : ''}
   </div>`;
 }
 
@@ -582,8 +596,59 @@ async function deleteChecklistItem(id) {
   } catch (e) { alert('Network error.'); }
 }
 
-function openAddChecklistModal()  { document.getElementById('addChkForm')?.reset(); _modalError('addChkError',''); _openModal('addChkOverlay','addChkModal'); }
+function openAddChecklistModal()  {
+  document.getElementById('addChkForm')?.reset();
+  _modalError('addChkError','');
+  _openModal('addChkOverlay','addChkModal');
+  _initQuill('addChk_Notes', 'Optional notes…');
+}
 function closeAddChecklistModal() { _closeModal('addChkOverlay','addChkModal'); }
+
+function openEditChkModal(checklistId) {
+  const item = _chkItemCache[checklistId];
+  if (!item) return;
+  document.getElementById('editChk_ID').value         = checklistId;
+  document.getElementById('editChk_Item').value        = item.Item || '';
+  document.getElementById('editChk_Category').value    = item.Category || 'Logistics';
+  document.getElementById('editChk_Priority').value    = item.Priority || 'Medium';
+  document.getElementById('editChk_AssignedTo').value  = item.AssignedTo || '';
+  document.getElementById('editChk_DueDate').value     = item.DueDate || '';
+  _modalError('editChkError', '');
+  _openModal('editChkOverlay', 'editChkModal');
+  _initQuill('editChk_Notes', 'Optional notes…');
+  _quillSet('editChk_Notes', item.Notes || '');
+}
+
+function closeEditChkModal() { _closeModal('editChkOverlay', 'editChkModal'); }
+
+async function submitEditChecklist() {
+  const id   = document.getElementById('editChk_ID')?.value;
+  const item = (document.getElementById('editChk_Item')?.value ?? '').trim();
+  if (!item) { _modalError('editChkError', 'Item description is required.'); return; }
+  _modalError('editChkError', '');
+  _btnLoading('editChkSubmitBtn', true, 'Save Changes');
+  try {
+    const res = await fetch(`/api/checklist/${encodeURIComponent(id)}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        Item:       item,
+        Category:   document.getElementById('editChk_Category')?.value  || 'Logistics',
+        Priority:   document.getElementById('editChk_Priority')?.value   || 'Medium',
+        AssignedTo: (document.getElementById('editChk_AssignedTo')?.value ?? '').trim(),
+        DueDate:    document.getElementById('editChk_DueDate')?.value    || '',
+        Notes:      _quillVal('editChk_Notes')
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) { _modalError('editChkError', data.error || 'Failed.'); return; }
+    closeEditChkModal();
+    await loadChecklist();
+  } catch (err) {
+    _modalError('editChkError', 'Network error — please try again.');
+  } finally {
+    _btnLoading('editChkSubmitBtn', false, 'Save Changes');
+  }
+}
 
 async function submitAddChecklist() {
   const g    = id => (document.getElementById(id)?.value ?? '').trim();
@@ -596,7 +661,7 @@ async function submitAddChecklist() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ Item: item, Category: g('addChk_Category'),
         AssignedTo: g('addChk_AssignedTo'), DueDate: g('addChk_DueDate'),
-        Priority: g('addChk_Priority'), Notes: g('addChk_Notes') })
+        Priority: g('addChk_Priority'), Notes: _quillVal('addChk_Notes') })
     });
     const data = await res.json();
     if (!res.ok) { _modalError('addChkError', data.error || 'Failed.'); return; }
@@ -801,7 +866,7 @@ function renderAnnouncementsTab(items, el) {
     <div class="compose-box">
       <div class="compose-box-title">New Announcement</div>
       <input type="text" id="ann_Subject" placeholder="Subject *">
-      <textarea id="ann_Body" rows="3" placeholder="Message…" style="resize:vertical;"></textarea>
+      <div id="ann_Body" class="quill-field" style="margin-bottom:2px;"></div>
       <div class="compose-row">
         <select id="ann_Recipients" style="flex:1;">
           <option value="All Registrants">All Registrants</option>
@@ -821,6 +886,7 @@ function renderAnnouncementsTab(items, el) {
     : emptyState('No announcements sent for this event yet.');
 
   el.innerHTML = composeHtml + `<div class="ann-list">${listHtml}</div>`;
+  if (isBoard) _initQuill('ann_Body', 'Message…');
 }
 
 function _annRow(a) {
@@ -828,13 +894,14 @@ function _annRow(a) {
   return `<div class="ann-item">
     <div class="ann-item-subject">${_esc(a.Subject || '(no subject)')}</div>
     <div class="ann-item-meta">${_esc(byLine)}</div>
-    <div class="ann-item-body">${_esc(a.Body || '')}</div>
+    <div class="ann-item-body">${a.Body || ''}</div>
   </div>`;
 }
 
 async function submitAnnouncement() {
   const g       = id => (document.getElementById(id)?.value ?? '').trim();
-  const subject = g('ann_Subject'), body = document.getElementById('ann_Body')?.value?.trim() ?? '';
+  const subject = g('ann_Subject');
+  const body    = _quillVal('ann_Body');
   const errEl   = document.getElementById('annError');
   if (!subject || !body) {
     errEl.textContent = 'Subject and message body are required.';
@@ -851,9 +918,8 @@ async function submitAnnouncement() {
     });
     const data = await res.json();
     if (!res.ok) { errEl.textContent = data.error || 'Could not send.'; errEl.style.display = 'block'; return; }
-    // Clear compose form and reload list
+    // Clear compose form and reload list (reload re-initialises Quill)
     document.getElementById('ann_Subject').value = '';
-    document.getElementById('ann_Body').value    = '';
     errEl.style.display = 'none';
     _tabLoaded.announcements = false;
     await loadAnnouncements();

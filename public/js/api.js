@@ -6,6 +6,41 @@ async function apiFetch(path) {
   return res.json();
 }
 
+// ── Quill rich text editor helpers ────────────────────────────────────────────
+const _quills = {};
+const _QUILL_OPTS = {
+  modules: { toolbar: [
+    ['bold', 'italic', 'underline'],
+    [{ list: 'ordered' }, { list: 'bullet' }],
+    [{ color: [] }]
+  ]},
+  theme: 'snow'
+};
+
+function _initQuill(id, placeholder) {
+  if (_quills[id]) { delete _quills[id]; }
+  const el = document.getElementById(id);
+  if (!el) return null;
+  el.innerHTML = '';
+  const q = new Quill(el, { ..._QUILL_OPTS, placeholder: placeholder || '' });
+  _quills[id] = q;
+  return q;
+}
+
+function _quillVal(id) {
+  const q = _quills[id];
+  if (!q) return '';
+  const html = q.root.innerHTML;
+  return html === '<p><br></p>' ? '' : html;
+}
+
+function _quillSet(id, html) {
+  const q = _quills[id];
+  if (!q) return;
+  if (html) q.clipboard.dangerouslyPasteHTML(html);
+  else q.setContents([]);
+}
+
 // ── Section switching ────────────────────────────────────────────────────────
 function showSection(id, navEl) {
   document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
@@ -16,8 +51,8 @@ function showSection(id, navEl) {
 
   const titles = {
     dashboard:'Dashboard', events:'Events & Programs', tasks:'Action Items',
-    contacts:'Contacts', files:'Files & Docs', minutes:'Meeting Minutes',
-    reports:'Reports', settings:'Settings', members:'Members', volunteers:'Volunteers',
+    contacts:'Board Directory', files:'Files & Docs', minutes:'Meeting Minutes',
+    reports:'Reports', settings:'Settings', members:'Contacts', volunteers:'Volunteers',
     mytasks:'My Tasks', mysignups:'My Sign-Ups', resources:'Resources', myteam:'My Team'
   };
   const pt = document.getElementById('pageTitle');
@@ -222,7 +257,7 @@ function interactiveTaskRow(t, eventsById) {
           <button class="btn btn-ghost btn-sm" onclick="toggleNoteInput('${t.TaskID}')">+ Note</button>
         </div>
         <div class="task-note-input" id="noteInput-${t.TaskID}" style="display:none;">
-          <textarea placeholder="Add a note…" rows="2"></textarea>
+          <div id="noteQuill-${t.TaskID}" class="quill-field quill-inline"></div>
           <button class="btn btn-outline btn-sm" onclick="submitTaskNote('${t.TaskID}')">Save</button>
         </div>
       </div>
@@ -252,14 +287,16 @@ function updateTaskStatus(taskId, status) {
 
 function toggleNoteInput(taskId) {
   const el = document.getElementById(`noteInput-${taskId}`);
-  if (el) el.style.display = el.style.display === 'none' ? 'flex' : 'none';
+  if (!el) return;
+  const show = el.style.display === 'none';
+  el.style.display = show ? 'flex' : 'none';
+  if (show) _initQuill(`noteQuill-${taskId}`, 'Add a note…');
 }
 
 function submitTaskNote(taskId) {
-  const wrap = document.getElementById(`noteInput-${taskId}`);
-  const text = wrap?.querySelector('textarea')?.value.trim();
-  if (!text) return;
-  return patchTask(taskId, { Note: text });
+  const val = _quillVal(`noteQuill-${taskId}`);
+  if (!val) return;
+  return patchTask(taskId, { Note: val });
 }
 
 // Writes the change straight to the Tasks sheet, then re-runs whichever
@@ -301,7 +338,7 @@ async function runGlobalSearch(q) {
   try {
     const data = await apiFetch(`/api/search?q=${encodeURIComponent(q)}`);
     const groups = [
-      { key: 'members', label: 'Members' },
+      { key: 'members', label: 'Contacts' },
       { key: 'volunteers', label: 'Volunteers' },
       { key: 'events', label: 'Events' },
       { key: 'documents', label: 'Documents' }
