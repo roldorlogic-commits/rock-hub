@@ -9,7 +9,8 @@ let eventsById = {};
   await Promise.all([
     loadStats(), loadTasks(), loadContacts(), loadFiles(),
     loadMembers(), loadVolunteersFull(), loadAnnouncements(),
-    initNotifications(['All', 'Board']), loadPendingVolunteerBadge()
+    initNotifications(['All', 'Board']), loadPendingVolunteerBadge(),
+    loadNotifSummary()
   ]);
 })();
 
@@ -742,5 +743,73 @@ async function submitCreateEvent() {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Create Event';
+  }
+}
+
+// ── Notification preferences ──────────────────────────────────────────────────
+
+async function loadNotifSummary() {
+  const el = document.getElementById('boardNotifSummary');
+  if (!el) return;
+  try {
+    const prefs = await apiFetch('/api/notification-prefs');
+    const on  = (v) => v !== 'false' ? '✓' : '—';
+    el.innerHTML = `<table style="border-collapse:collapse;font-size:13px;">
+      <tr><th style="text-align:left;padding:2px 12px 2px 0;color:var(--text-dim);">Category</th><th style="padding:2px 8px;color:var(--text-dim);">Email</th><th style="padding:2px 8px;color:var(--text-dim);">SMS</th></tr>
+      <tr><td>Event sign-up confirmations</td><td style="text-align:center;">${on(prefs.EmailEvents)}</td><td style="text-align:center;">${on(prefs.SMSEvents)}</td></tr>
+      <tr><td>Task assignments</td><td style="text-align:center;">${on(prefs.EmailTasks)}</td><td style="text-align:center;">${on(prefs.SMSTasks)}</td></tr>
+      <tr><td>Announcements</td><td style="text-align:center;">${on(prefs.EmailAnnouncements)}</td><td style="text-align:center;">${on(prefs.SMSAnnouncements)}</td></tr>
+    </table>${prefs.Phone ? `<div style="margin-top:8px;">SMS to: ${prefs.Phone}</div>` : ''}`;
+  } catch (_) { el.textContent = 'Could not load notification preferences.'; }
+}
+
+async function openNotifPrefs() {
+  document.getElementById('npError').style.display    = 'none';
+  document.getElementById('npSuccess').style.display  = 'none';
+  document.getElementById('notifOverlay').classList.add('open');
+  document.getElementById('notifModal').classList.add('open');
+  try {
+    const prefs = await apiFetch('/api/notification-prefs');
+    document.getElementById('np_EmailEvents').checked        = prefs.EmailEvents        !== 'false';
+    document.getElementById('np_EmailTasks').checked         = prefs.EmailTasks         !== 'false';
+    document.getElementById('np_EmailAnnouncements').checked = prefs.EmailAnnouncements !== 'false';
+    document.getElementById('np_SMSEvents').checked          = prefs.SMSEvents          === 'true';
+    document.getElementById('np_SMSTasks').checked           = prefs.SMSTasks           === 'true';
+    document.getElementById('np_SMSAnnouncements').checked   = prefs.SMSAnnouncements   === 'true';
+    document.getElementById('np_Phone').value                = prefs.Phone || '';
+  } catch (_) {}
+}
+
+function closeNotifPrefs() {
+  document.getElementById('notifOverlay').classList.remove('open');
+  document.getElementById('notifModal').classList.remove('open');
+}
+
+async function saveNotifPrefs() {
+  const errEl = document.getElementById('npError');
+  const btn   = document.getElementById('npSubmitBtn');
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const res = await fetch('/api/notification-prefs', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        EmailEvents:        document.getElementById('np_EmailEvents').checked,
+        EmailTasks:         document.getElementById('np_EmailTasks').checked,
+        EmailAnnouncements: document.getElementById('np_EmailAnnouncements').checked,
+        SMSEvents:          document.getElementById('np_SMSEvents').checked,
+        SMSTasks:           document.getElementById('np_SMSTasks').checked,
+        SMSAnnouncements:   document.getElementById('np_SMSAnnouncements').checked,
+        Phone:              document.getElementById('np_Phone').value.trim()
+      })
+    });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); errEl.textContent = d.error || 'Save failed.'; errEl.style.display = 'block'; return; }
+    document.getElementById('npSuccess').style.display = 'block';
+    await loadNotifSummary();
+    setTimeout(closeNotifPrefs, 1500);
+  } catch (_) {
+    errEl.textContent = 'Network error — please try again.'; errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Preferences';
   }
 }

@@ -369,6 +369,13 @@
   flex-shrink: 0;
 }
 
+.reg-cat-filter {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
 .reg-actions {
   display: flex;
   align-items: center;
@@ -622,6 +629,7 @@
   flex-wrap: wrap;
 }
 .compose-row select { flex: 1; min-width: 120px; }
+.compose-box .checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 
 .ann-list  { display: flex; flex-direction: column; gap: 2px; }
 .ann-item  { padding: 12px 14px; background: var(--bg-secondary); border: 0.5px solid var(--gold-line); border-radius: var(--radius-sm); }
@@ -660,4 +668,98 @@
   .reg-stat-divider { display: none; }
   .reg-meta { display: none; }
   .reg-row { flex-wrap: wrap; }
+}
+
+/* ── Clickable stepper steps ─────────────────────────────────────────────────── */
+.stepper-clickable {
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity .2s, color .2s;
+}
+.stepper-clickable:hover { opacity: 1; color: var(--gold); }
+.stepper-clickable:hover .stepper-dot { border-color: var(--gold); }
+
+/* ── Event hero photo ────────────────────────────────────────────────────────── */
+.event-hero-photo {
+  width: 100%;
+  height: 140px;
+  background-size: cover;
+  background-position: center;
+  display: none;
+}
+.event-hero-thumb { flex-shrink: 0; margin-right: 2px; }
+.event-hero-thumb-img {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--gold-line);
+}
+
+/* ── Overview photo ──────────────────────────────────────────────────────────── */
+.overview-photo {
+  margin: 0 0 16px;
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 220px;
+}
+.overview-photo img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Photo upload field ──────────────────────────────────────────────────────── */
+.photo-preview-box {
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.photo-preview-box img {
+  max-width: 100%;
+  max-height: 180px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+.photo-upload-btn {
+  cursor: pointer;
+  display: inline-block;
+}
+
+/* ── Itinerary tab ───────────────────────────────────────────────────────────── */
+.itn-list { display: flex; flex-direction: column; }
+.itn-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 13px 8px;
+  border-bottom: 0.5px solid var(--gold-line);
+}
+.itn-row:last-child { border-bottom: none; }
+.itn-row.itn-clickable { cursor: pointer; border-radius: var(--radius-sm); transition: background .15s; }
+.itn-row.itn-clickable:hover { background: var(--gold-faint); }
+.itn-time {
+  flex-shrink: 0;
+  width: 80px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: .03em;
+  padding-top: 2px;
+}
+.itn-body { flex: 1; min-width: 0; }
+.itn-title { font-size: 13px; font-weight: 600; color: var(--text-white); }
+.itn-notes { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+
+/* ── Event card photo thumbnails ─────────────────────────────────────────────── */
+.event-row-photo {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--gold-line);
 }

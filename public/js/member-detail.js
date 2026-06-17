@@ -25,32 +25,8 @@ async function loadMemberDetail() {
     const m = await apiFetch(`/api/members/${encodeURIComponent(id)}`);
     el.innerHTML = renderMemberDetail(m);
   } catch (e) {
-    el.innerHTML = `<div class="card">${emptyState('Could not find that member. They may have been removed from the Members sheet.')}</div>`;
+    el.innerHTML = `<div class="card">${emptyState('Could not find that contact. They may have been removed from the Members sheet.')}</div>`;
   }
-}
-
-function renewalBanner(m) {
-  if (!m.RenewalDate) return '';
-  const renewal = new Date(m.RenewalDate + 'T00:00:00');
-  if (isNaN(renewal)) return '';
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const daysUntil = Math.round((renewal - today) / 86400000);
-
-  if (daysUntil < 0) {
-    return `
-      <div class="renewal-banner overdue">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        Renewal overdue — was due ${fmtDate(m.RenewalDate)}.
-      </div>`;
-  }
-  if (daysUntil <= 30) {
-    return `
-      <div class="renewal-banner due">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        Renewal due ${fmtDate(m.RenewalDate)} (${daysUntil} day${daysUntil === 1 ? '' : 's'} away).
-      </div>`;
-  }
-  return '';
 }
 
 function renderMemberDetail(m) {
@@ -70,7 +46,6 @@ function renderMemberDetail(m) {
     }).join('');
 
   return `
-    ${renewalBanner(m)}
     <div class="card detail-header-card">
       ${avatarHtml(name, null)}
       <div>
@@ -98,7 +73,7 @@ function renderMemberDetail(m) {
 
     ${fields ? `
     <div class="card" style="margin-top:16px;">
-      <div class="card-header"><span class="card-title">Membership Details</span></div>
+      <div class="card-header"><span class="card-title">Contact Details</span></div>
       <div class="detail-field-grid">${fields}</div>
     </div>` : ''}
   `;

@@ -315,6 +315,14 @@
 
         <div class="card" style="margin-top:16px;">
           <div class="card-header">
+            <span class="card-title">Notification Settings</span>
+            <button class="btn btn-gold btn-sm" onclick="openNotifPrefs()">Edit</button>
+          </div>
+          <div id="boardNotifSummary" style="padding:8px 0;color:var(--text-dim);font-size:13px;">Loading…</div>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+          <div class="card-header">
             <span class="card-title">Admin Guide — Linking Documents</span>
           </div>
           <div style="padding:8px 0 4px;color:var(--text-dim);font-size:13px;line-height:1.7;">
@@ -559,6 +567,39 @@
       <button class="btn btn-outline btn-sm" onclick="closeEditDocModal()">Cancel</button>
       <button class="btn btn-gold btn-sm" id="ed_submit" onclick="submitEditDoc()">Save Changes</button>
     </div>
+  </div>
+
+  <!-- Notification Settings Modal -->
+  <div class="modal-overlay" id="notifOverlay" onclick="closeNotifPrefs()"></div>
+  <div class="modal-box" id="notifModal">
+    <button class="icon-btn slide-panel-close" onclick="closeNotifPrefs()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Notification Settings</div>
+    <p class="modal-subtitle" style="margin-bottom:16px;">Choose how you'd like to be notified. SMS requires a valid phone number.</p>
+    <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px 16px;align-items:center;font-size:13px;margin-bottom:16px;">
+      <span style="font-weight:600;color:var(--text-dim);">Category</span>
+      <span style="font-weight:600;color:var(--text-dim);text-align:center;">Email</span>
+      <span style="font-weight:600;color:var(--text-dim);text-align:center;">SMS</span>
+      <span>Event sign-up confirmations</span>
+      <input type="checkbox" id="np_EmailEvents" style="margin:auto;">
+      <input type="checkbox" id="np_SMSEvents" style="margin:auto;">
+      <span>Task assignments</span>
+      <input type="checkbox" id="np_EmailTasks" style="margin:auto;">
+      <input type="checkbox" id="np_SMSTasks" style="margin:auto;">
+      <span>Announcements</span>
+      <input type="checkbox" id="np_EmailAnnouncements" style="margin:auto;">
+      <input type="checkbox" id="np_SMSAnnouncements" style="margin:auto;">
+    </div>
+    <label>Phone number (for SMS)
+      <input type="tel" id="np_Phone" placeholder="(555) 000-0000">
+    </label>
+    <p class="form-error" id="npError" style="display:none;margin-top:8px;"></p>
+    <div class="modal-nav" style="margin-top:16px;">
+      <button class="btn btn-outline" onclick="closeNotifPrefs()">Cancel</button>
+      <button class="btn btn-gold" id="npSubmitBtn" onclick="saveNotifPrefs()">Save Preferences</button>
+    </div>
+    <div class="modal-success" id="npSuccess" style="display:none;text-align:center;padding:16px 0;">Preferences saved!</div>
   </div>
 
   <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>

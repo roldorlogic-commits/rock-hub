@@ -7,6 +7,7 @@ const router  = express.Router();
 const sheets  = require('../lib/sheets');
 const drive   = require('../lib/drive');
 const email   = require('../lib/email');
+const sms     = require('../lib/sms');
 const { requireAuth, requireBoard, requireBoardOrAdmin } = require('../middleware/auth');
 
 router.use(requireAuth);
@@ -177,12 +178,88 @@ router.get('/volunteers/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Notification preferences ─────────────────────────────────────────────────
+const DEFAULT_PREFS = { EmailEvents: 'true', EmailTasks: 'true', EmailAnnouncements: 'true', SMSEvents: 'false', SMSTasks: 'false', SMSAnnouncements: 'false', Phone: '' };
+
+router.get('/notification-prefs', async (req, res) => {
+  try {
+    const rows = await sheets.getNotificationPrefs();
+    const prefs = rows.find(r => r.UserEmail?.toLowerCase() === (req.user.email || '').toLowerCase());
+    res.json(prefs ? { ...DEFAULT_PREFS, ...prefs } : { UserEmail: req.user.email, ...DEFAULT_PREFS });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/notification-prefs', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const boolStr = v => (v === false || v === 'false') ? 'false' : 'true';
+    const fields = {
+      EmailEvents:        boolStr(b.EmailEvents),
+      EmailTasks:         boolStr(b.EmailTasks),
+      EmailAnnouncements: boolStr(b.EmailAnnouncements),
+      SMSEvents:          b.SMSEvents  === true || b.SMSEvents  === 'true' ? 'true' : 'false',
+      SMSTasks:           b.SMSTasks   === true || b.SMSTasks   === 'true' ? 'true' : 'false',
+      SMSAnnouncements:   b.SMSAnnouncements === true || b.SMSAnnouncements === 'true' ? 'true' : 'false',
+      Phone:              b.Phone || ''
+    };
+    const userEmail = req.user.email || '';
+    const rows = await sheets.getNotificationPrefs();
+    const existing = rows.find(r => r.UserEmail?.toLowerCase() === userEmail.toLowerCase());
+    const saved = existing
+      ? await sheets.updateRowFields('NotificationPrefs', 'UserEmail', existing.UserEmail, fields)
+      : await sheets.appendRow('NotificationPrefs', { UserEmail: userEmail, ...fields });
+    res.json(saved);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Tasks: interactive status/notes updates, written straight to the sheet ──
 function canEditTask(task, user) {
   if (user.role === 'Board') return true;
   const assignee = (task.AssignedTo || '').toLowerCase();
   return assignee === (user.email || '').toLowerCase() || assignee === (user.name || '').toLowerCase();
 }
+
+async function notifyTaskAssignment(task, assigneeEmail) {
+  if (!assigneeEmail) return;
+  try {
+    const allPrefs = await sheets.getNotificationPrefs();
+    const prefs    = allPrefs.find(p => p.UserEmail?.toLowerCase() === assigneeEmail.toLowerCase());
+    const emailOk  = !prefs || prefs.EmailTasks !== 'false';
+    const smsOk    = prefs?.SMSTasks === 'true';
+    const phone    = prefs?.Phone || '';
+    const dueStr   = task.DueDate ? ` · Due: ${task.DueDate}` : '';
+    const title    = task.Title || task.Item || task.TaskID;
+    if (emailOk) {
+      await email.send(assigneeEmail, `Task assigned: ${title}`,
+        `You've been assigned a task on ROCK Hub:\n\nTask: ${title}${dueStr}\n${task.Notes ? '\nNotes: ' + task.Notes + '\n' : ''}\nView at hub.gorock.org`
+      ).catch(() => {});
+    }
+    if (smsOk && phone) {
+      await sms.send(phone, `ROCK Hub: Task assigned — ${title}${dueStr}. View at hub.gorock.org`).catch(() => {});
+    }
+  } catch (_) {}
+}
+
+// Board can create tasks directly and notify the assignee.
+router.post('/tasks', requireBoard, async (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!b.Title) return res.status(400).json({ error: 'Title is required.' });
+    const row = await sheets.appendRow('Tasks', {
+      TaskID:       `TSK-${Date.now()}`,
+      Title:        b.Title,
+      AssignedTo:   b.AssignedTo  || '',
+      DueDate:      b.DueDate     || '',
+      Priority:     b.Priority    || 'Medium',
+      Status:       'Pending',
+      Notes:        b.Notes       || '',
+      Category:     b.Category    || '',
+      CreatedAt:    todayStr()
+    });
+    if (b.AssignedTo) setImmediate(() => notifyTaskAssignment(row, b.AssignedTo));
+    res.status(201).json(row);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 router.patch('/tasks/:id', async (req, res) => {
   try {
@@ -200,6 +277,14 @@ router.patch('/tasks/:id', async (req, res) => {
     if (req.body.Note && req.body.Note.trim()) {
       const stamped = `[${todayStr()}] ${req.body.Note.trim()}.`;
       fields.Notes = task.Notes ? `${stamped} | ${task.Notes}` : stamped;
+    }
+    // Board can reassign; notify new assignee when AssignedTo changes.
+    const newAssignee = req.body.AssignedTo;
+    if (newAssignee !== undefined && req.user.role === 'Board') {
+      fields.AssignedTo = newAssignee;
+      if (newAssignee && newAssignee !== task.AssignedTo) {
+        setImmediate(() => notifyTaskAssignment({ ...task, ...fields }, newAssignee));
+      }
     }
     if (!Object.keys(fields).length) return res.status(400).json({ error: 'Nothing to update.' });
 

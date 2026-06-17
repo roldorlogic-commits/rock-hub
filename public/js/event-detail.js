@@ -64,18 +64,42 @@ function renderEventHero(ev) {
     const idx  = STATUS_STEPS.indexOf(ev.Status);
     const next = STATUS_STEPS[idx + 1];
     actionsEl.innerHTML = next
-      ? `<button class="btn btn-gold btn-sm" onclick="advanceStatus()">→ Mark ${next}</button>`
+      ? `<button class="btn btn-gold btn-sm" onclick="setStatus('${next}')">→ Mark ${next}</button>`
       : `<span class="status-pill completed" style="font-size:11px;">Completed</span>`;
   } else {
     actionsEl.innerHTML = '';
   }
 
   const currentIdx = STATUS_STEPS.indexOf(ev.Status);
+  const isBoard = currentUser?.role === 'Board';
   document.getElementById('eventStepper').innerHTML = STATUS_STEPS.map((step, i) => {
     const cls  = i < currentIdx ? 'done' : i === currentIdx ? 'active' : '';
     const line = i < STATUS_STEPS.length - 1 ? `<div class="stepper-line"></div>` : '';
-    return `<div class="stepper-step ${cls}"><div class="stepper-dot"></div><span>${step}</span></div>${line}`;
+    const clickable = isBoard && step !== ev.Status;
+    return `<div class="stepper-step ${cls}${clickable ? ' stepper-clickable' : ''}" title="${clickable ? 'Set to ' + step : ''}"
+                 ${clickable ? `onclick="setStatus('${step}')"` : ''}>
+      <div class="stepper-dot"></div><span>${step}</span>
+    </div>${line}`;
   }).join('');
+
+  const thumbEl = document.getElementById('eventHeroThumb');
+  const photoEl = document.getElementById('eventHeroPhoto');
+  if (thumbEl) {
+    if (ev.PhotoURL) {
+      thumbEl.innerHTML = `<img src="${_esc(ev.PhotoURL)}" alt="" class="event-hero-thumb-img">`;
+      thumbEl.style.display = '';
+    } else {
+      thumbEl.style.display = 'none';
+    }
+  }
+  if (photoEl) {
+    if (ev.PhotoURL) {
+      photoEl.style.backgroundImage = `url('${ev.PhotoURL.replace(/'/g, "\\'")}')`;
+      photoEl.style.display = '';
+    } else {
+      photoEl.style.display = 'none';
+    }
+  }
 
   renderCountdown(ev.StartDate);
   document.getElementById('eventHeroLoading').style.display = 'none';
@@ -118,6 +142,7 @@ function switchTab(tabName, el) {
   if (!_tabLoaded[tabName]) {
     _tabLoaded[tabName] = true;
     const loaders = {
+      itinerary:     loadItinerary,
       registrations: loadRegistrations,
       checklist:     loadChecklist,
       budget:        loadBudget,
@@ -204,6 +229,7 @@ function _renderOverviewReadOnly(el, ev) {
     <div class="overview-grid">
       <div class="card span-full">
         <div class="card-header"><span class="card-title">Event Details</span></div>
+        ${ev.PhotoURL ? `<div class="overview-photo"><img src="${_esc(ev.PhotoURL)}" alt="Event photo"></div>` : ''}
         <div class="detail-field-grid">
           ${_roField('Start Date', fmtDate(ev.StartDate))}
           ${_roField('End Date', ev.EndDate && ev.EndDate !== ev.StartDate ? fmtDate(ev.EndDate) : '')}
@@ -292,11 +318,64 @@ function _renderOverviewEdit(el, ev) {
           <div id="edit_Description" class="quill-field quill-tall"></div></div>
         <div class="edit-field span-full"><label style="margin-bottom:4px;">Registration Info</label>
           <div id="edit_RegistrationInfo" class="quill-field"></div></div>
+        <div class="edit-field span-full">
+          <label style="margin-bottom:6px;">Event Photo</label>
+          <div id="edit_PhotoPreview" class="photo-preview-box">
+            ${ev.PhotoURL ? `<img src="${_esc(ev.PhotoURL)}" alt="Event photo">
+              <button type="button" class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="clearEventPhoto()">Remove Photo</button>` : ''}
+          </div>
+          <label class="btn btn-outline btn-sm photo-upload-btn">
+            ${ev.PhotoURL ? 'Change Photo' : 'Upload Photo'}
+            <input type="file" id="edit_PhotoFile" accept="image/*" style="display:none;" onchange="handlePhotoUpload(this)">
+          </label>
+        </div>
       </div>
     </div>`;
 }
 
 let _overviewSaving = false;
+let _pendingPhotoURL = null; // set by handlePhotoUpload; null = no change, '' = remove
+
+function handlePhotoUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const MAX_W = 600;
+      const scale = img.width > MAX_W ? MAX_W / img.width : 1;
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.70);
+      _pendingPhotoURL = dataUrl;
+      const preview = document.getElementById('edit_PhotoPreview');
+      if (preview) {
+        preview.innerHTML = `<img src="${dataUrl}" alt="Event photo">
+          <button type="button" class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="clearEventPhoto()">Remove Photo</button>`;
+      }
+      const uploadBtn = input.closest('label');
+      if (uploadBtn) uploadBtn.childNodes[0].textContent = 'Change Photo';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearEventPhoto() {
+  _pendingPhotoURL = '';
+  const preview = document.getElementById('edit_PhotoPreview');
+  if (preview) preview.innerHTML = '';
+  const fileInput = document.getElementById('edit_PhotoFile');
+  if (fileInput) {
+    fileInput.value = '';
+    const uploadLabel = fileInput.closest('label');
+    if (uploadLabel) uploadLabel.childNodes[0].textContent = 'Upload Photo';
+  }
+}
 
 async function saveOverview() {
   if (_overviewSaving || !currentEvent) return;
@@ -314,6 +393,10 @@ async function saveOverview() {
     Description: _quillVal('edit_Description'),
     RegistrationInfo: _quillVal('edit_RegistrationInfo'),
   };
+  if (_pendingPhotoURL !== null) {
+    fields.PhotoURL = _pendingPhotoURL;
+    _pendingPhotoURL = null;
+  }
   if (!fields.EventName) {
     _setStatus(statusEl, 'Event name is required.', 'error');
     _overviewSaving = false; return;
@@ -345,6 +428,8 @@ async function loadRegistrations() {
   });
 }
 
+let _regCategoryFilter = 'All';
+
 function renderRegistrationsTab(regs, el) {
   el = el || document.getElementById('registrationsContent');
   const isBoard = currentUser?.role === 'Board';
@@ -355,6 +440,8 @@ function renderRegistrationsTab(regs, el) {
   const waitlisted = regs.filter(r => r.Status === 'Waitlisted').length;
   const checkedIn  = regs.filter(r => r.CheckedIn === 'TRUE' || r.CheckedIn === 'true').length;
   const capPct     = cap > 0 ? Math.min(100, Math.round(((confirmed + pending) / cap) * 100)) : 0;
+  const volunteers = regs.filter(r => r.Category === 'Volunteer' || (r.Category === '' && r.Role)).length;
+  const attendees  = total - volunteers;
 
   const stats = `<div class="reg-stats-bar">
     <div class="reg-stat"><span class="reg-stat-num">${total}</span><span class="reg-stat-label">Total</span></div>
@@ -372,24 +459,46 @@ function renderRegistrationsTab(regs, el) {
     </div>` : ''}
   </div>`;
 
+  const catFilter = `<div class="reg-cat-filter">
+    ${[['All', total], ['Attendees', attendees], ['Volunteers', volunteers]].map(([lbl, cnt]) =>
+      `<button class="btn btn-sm ${_regCategoryFilter === lbl ? 'btn-gold' : 'btn-outline'}"
+               onclick="setRegCatFilter('${lbl}')">${lbl} (${cnt})</button>`
+    ).join('')}
+  </div>`;
+
   const boardActions = isBoard ? `<div class="reg-actions">
     ${pending > 0 ? `<button class="btn btn-outline btn-sm" onclick="confirmAllPending()">✓ Confirm All Pending (${pending})</button>` : ''}
     <button class="btn btn-gold btn-sm" onclick="openAddRegModal()">+ Add Registrant</button>
   </div>` : '';
 
-  const sorted = [...regs].sort((a, b) => {
+  let filtered = [...regs];
+  if (_regCategoryFilter === 'Volunteers') {
+    filtered = regs.filter(r => r.Category === 'Volunteer' || (r.Category === '' && r.Role));
+  } else if (_regCategoryFilter === 'Attendees') {
+    filtered = regs.filter(r => r.Category === 'Attendee' || (r.Category === '' && !r.Role));
+  }
+  const sorted = filtered.sort((a, b) => {
     const ord = { Confirmed: 0, Pending: 1, Waitlisted: 2, Cancelled: 3 };
     return (ord[a.Status] ?? 9) - (ord[b.Status] ?? 9);
   });
 
-  el.innerHTML = stats + boardActions + `<div class="reg-list">${
-    sorted.length ? sorted.map(r => _regRow(r, isBoard)).join('') : emptyState('No registrations yet.')
+  el.innerHTML = stats + catFilter + boardActions + `<div class="reg-list">${
+    sorted.length ? sorted.map(r => _regRow(r, isBoard)).join('') : emptyState('No registrations match this filter.')
   }</div>`;
+}
+
+function setRegCatFilter(filter) {
+  _regCategoryFilter = filter;
+  loadRegistrations();
 }
 
 function _regRow(r, isBoard) {
   const name = [r.FirstName, r.LastName].filter(Boolean).join(' ') || r.Email || '—';
   const ci   = r.CheckedIn === 'TRUE' || r.CheckedIn === 'true';
+  const isVol = r.Category === 'Volunteer' || (r.Category === '' && r.Role);
+  const catBadge = isVol
+    ? `<span class="status-pill active" style="font-size:10px;padding:1px 6px;margin-left:4px;">Volunteer</span>`
+    : `<span class="status-pill" style="font-size:10px;padding:1px 6px;margin-left:4px;opacity:0.6;">Attendee</span>`;
   const statusCell = isBoard
     ? `<select class="reg-status-sel status-${(r.Status || '').toLowerCase()}"
                onchange="updateRegStatus('${r.RegistrationID}', this.value, this)">
@@ -409,7 +518,7 @@ function _regRow(r, isBoard) {
     <div class="reg-person">
       <div class="avatar-initials" style="width:30px;height:30px;font-size:10px;flex-shrink:0;">${initials(name)}</div>
       <div style="min-width:0;">
-        <div class="reg-person-name">${_esc(name)}</div>
+        <div class="reg-person-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:2px;">${_esc(name)}${catBadge}</div>
         <div class="reg-person-sub">${_esc(r.Email || '')}${r.Role ? ` · ${_esc(r.Role)}` : ''}</div>
       </div>
     </div>
@@ -477,7 +586,8 @@ async function submitAddReg() {
     const res  = await fetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/registrations`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ FirstName: first, LastName: g('addReg_LastName'), Email: email_,
-        Phone: g('addReg_Phone'), Role: g('addReg_Role'), Notes: g('addReg_Notes') })
+        Phone: g('addReg_Phone'), Role: g('addReg_Role'), Notes: g('addReg_Notes'),
+        Category: g('addReg_Category') || 'Attendee' })
     });
     const data = await res.json();
     if (!res.ok) { _modalError('addRegError', data.error || 'Failed.'); return; }
@@ -868,9 +978,11 @@ function renderAnnouncementsTab(items, el) {
       <input type="text" id="ann_Subject" placeholder="Subject *">
       <div id="ann_Body" class="quill-field" style="margin-bottom:2px;"></div>
       <div class="compose-row">
-        <select id="ann_Recipients" style="flex:1;">
+        <select id="ann_Recipients" style="flex:1;" onchange="onAnnRecipientsChange(this)">
           <option value="All Registrants">All Registrants</option>
           <option value="Confirmed Only">Confirmed Only</option>
+          <option value="Volunteers Only">Volunteers Only</option>
+          <option value="Role:">By Volunteer Role…</option>
         </select>
         <select id="ann_Channel">
           <option value="Email">via Email</option>
@@ -878,6 +990,12 @@ function renderAnnouncementsTab(items, el) {
         </select>
         <button class="btn btn-gold btn-sm" onclick="submitAnnouncement()">Send</button>
       </div>
+      <div id="ann_RoleRow" style="display:none;margin-top:6px;">
+        <input type="text" id="ann_Role" placeholder="Volunteer role (e.g. Setup Crew)" style="width:100%;">
+      </div>
+      <label class="checkbox-label" style="margin-top:6px;font-size:13px;">
+        <input type="checkbox" id="ann_SendSMS"> Also send via SMS (to opted-in registrants)
+      </label>
       <p class="form-error" id="annError" style="display:none;"></p>
     </div>` : '';
 
@@ -898,6 +1016,11 @@ function _annRow(a) {
   </div>`;
 }
 
+function onAnnRecipientsChange(sel) {
+  const roleRow = document.getElementById('ann_RoleRow');
+  if (roleRow) roleRow.style.display = sel.value === 'Role:' ? 'block' : 'none';
+}
+
 async function submitAnnouncement() {
   const g       = id => (document.getElementById(id)?.value ?? '').trim();
   const subject = g('ann_Subject');
@@ -910,15 +1033,23 @@ async function submitAnnouncement() {
   errEl.style.display = 'none';
   const btn = document.querySelector('.compose-box .btn-gold');
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+
+  let recipients = g('ann_Recipients');
+  if (recipients === 'Role:') {
+    const role = g('ann_Role');
+    if (!role) { errEl.textContent = 'Enter a volunteer role to filter by.'; errEl.style.display = 'block'; if (btn) { btn.disabled = false; btn.textContent = 'Send'; } return; }
+    recipients = `Role:${role}`;
+  }
+  const sendSMS = document.getElementById('ann_SendSMS')?.checked ?? false;
+
   try {
     const res  = await fetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/announcements`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ Subject: subject, Body: body,
-        Recipients: g('ann_Recipients'), Channel: g('ann_Channel') })
+        Recipients: recipients, Channel: g('ann_Channel'), SendSMS: sendSMS })
     });
     const data = await res.json();
     if (!res.ok) { errEl.textContent = data.error || 'Could not send.'; errEl.style.display = 'block'; return; }
-    // Clear compose form and reload list (reload re-initialises Quill)
     document.getElementById('ann_Subject').value = '';
     errEl.style.display = 'none';
     _tabLoaded.announcements = false;
@@ -1036,26 +1167,154 @@ async function submitWalkin() {
   }
 }
 
-// ── Advance status ────────────────────────────────────────────────────────────
+// ── Status (set to any step, forward or backward) ────────────────────────────
 
-async function advanceStatus() {
+async function setStatus(status) {
   if (!currentEvent) return;
-  const idx  = STATUS_STEPS.indexOf(currentEvent.Status);
-  const next = STATUS_STEPS[idx + 1];
-  if (!next) return;
+  document.querySelectorAll('.stepper-clickable').forEach(el => el.style.pointerEvents = 'none');
   const btn = document.querySelector('#eventHeroActions .btn');
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
   try {
     const res  = await fetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/advance-status`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: next })
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status })
     });
     const data = await res.json();
     if (!res.ok) { alert(data.error || 'Could not update status.'); return; }
-    currentEvent.Status = data.Status || next;
+    currentEvent.Status = data.Status || status;
     renderEventHero(currentEvent);
+    if (_tabLoaded.overview) renderOverview(currentEvent);
   } catch (err) {
     alert('Network error — could not update status. Please try again.');
   } finally {
+    document.querySelectorAll('.stepper-clickable').forEach(el => el.style.pointerEvents = '');
     if (btn) btn.disabled = false;
   }
+}
+
+// ── Itinerary tab ─────────────────────────────────────────────────────────────
+
+let _itnItemCache = {};
+
+async function loadItinerary() {
+  _tabLoad('itineraryContent', async (el) => {
+    const items = await apiFetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/itinerary`);
+    renderItineraryTab(items, el);
+  });
+}
+
+function fmtTime(t) {
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  if (isNaN(h)) return t;
+  const ampm = h < 12 ? 'AM' : 'PM';
+  const hr = h % 12 || 12;
+  return `${hr}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+function renderItineraryTab(items, el) {
+  el = el || document.getElementById('itineraryContent');
+  const isBoard = currentUser?.role === 'Board';
+  const header = `<div class="tab-inner-header">
+    <div></div>
+    ${isBoard ? `<button class="btn btn-gold btn-sm" onclick="openAddItnModal()">+ Add Item</button>` : ''}
+  </div>`;
+
+  _itnItemCache = {};
+  for (const item of items) _itnItemCache[item.ItineraryID] = item;
+
+  if (!items.length) { el.innerHTML = header + emptyState('No itinerary items yet.'); return; }
+
+  const rows = items.map(item => _itnRow(item, isBoard)).join('');
+  el.innerHTML = header + `<div class="itn-list">${rows}</div>`;
+}
+
+function _itnRow(item, isBoard) {
+  const timeDisplay = item.Time ? fmtTime(item.Time) : '';
+  const trashIco = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+  return `<div class="itn-row${isBoard ? ' itn-clickable' : ''}"
+               ${isBoard ? `onclick="openEditItnModal('${_esc(item.ItineraryID)}')"` : ''}>
+    <div class="itn-time">${_esc(timeDisplay)}</div>
+    <div class="itn-body">
+      <div class="itn-title">${_esc(item.Title)}</div>
+      ${item.Notes ? `<div class="itn-notes">${_esc(item.Notes)}</div>` : ''}
+    </div>
+    ${isBoard ? `<button class="icon-btn" title="Delete" style="flex-shrink:0;"
+                         onclick="event.stopPropagation(); deleteItnItem('${_esc(item.ItineraryID)}')">${trashIco}</button>` : ''}
+  </div>`;
+}
+
+function openAddItnModal() {
+  document.getElementById('addItnForm')?.reset();
+  _modalError('addItnError', '');
+  _openModal('addItnOverlay', 'addItnModal');
+}
+function closeAddItnModal() { _closeModal('addItnOverlay', 'addItnModal'); }
+
+async function submitAddItn() {
+  const g = id => (document.getElementById(id)?.value ?? '').trim();
+  const title = g('addItn_Title');
+  if (!title) { _modalError('addItnError', 'Title is required.'); return; }
+  _modalError('addItnError', '');
+  _btnLoading('addItnSubmitBtn', true, 'Add Item');
+  try {
+    const res = await fetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/itinerary`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ Time: g('addItn_Time'), Title: title, Notes: g('addItn_Notes') })
+    });
+    const data = await res.json();
+    if (!res.ok) { _modalError('addItnError', data.error || 'Failed.'); return; }
+    closeAddItnModal();
+    _tabLoaded.itinerary = false;
+    await loadItinerary();
+  } catch (err) {
+    _modalError('addItnError', 'Network error — please try again.');
+  } finally {
+    _btnLoading('addItnSubmitBtn', false, 'Add Item');
+  }
+}
+
+function openEditItnModal(id) {
+  const item = _itnItemCache[id];
+  if (!item) return;
+  document.getElementById('editItn_ID').value    = id;
+  document.getElementById('editItn_Time').value  = item.Time  || '';
+  document.getElementById('editItn_Title').value = item.Title || '';
+  document.getElementById('editItn_Notes').value = item.Notes || '';
+  _modalError('editItnError', '');
+  _openModal('editItnOverlay', 'editItnModal');
+}
+function closeEditItnModal() { _closeModal('editItnOverlay', 'editItnModal'); }
+
+async function submitEditItn() {
+  const g = id => (document.getElementById(id)?.value ?? '').trim();
+  const id = document.getElementById('editItn_ID')?.value;
+  const title = g('editItn_Title');
+  if (!title) { _modalError('editItnError', 'Title is required.'); return; }
+  _modalError('editItnError', '');
+  _btnLoading('editItnSubmitBtn', true, 'Save Changes');
+  try {
+    const res = await fetch(`/api/itinerary/${encodeURIComponent(id)}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ Time: g('editItn_Time'), Title: title, Notes: g('editItn_Notes') })
+    });
+    const data = await res.json();
+    if (!res.ok) { _modalError('editItnError', data.error || 'Failed.'); return; }
+    closeEditItnModal();
+    _tabLoaded.itinerary = false;
+    await loadItinerary();
+  } catch (err) {
+    _modalError('editItnError', 'Network error — please try again.');
+  } finally {
+    _btnLoading('editItnSubmitBtn', false, 'Save Changes');
+  }
+}
+
+async function deleteItnItem(id) {
+  if (!confirm('Delete this itinerary item?')) return;
+  try {
+    const res = await fetch(`/api/itinerary/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'Could not delete.'); return; }
+    _tabLoaded.itinerary = false;
+    await loadItinerary();
+  } catch (e) { alert('Network error.'); }
 }

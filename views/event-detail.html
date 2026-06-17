@@ -46,6 +46,7 @@
 
   <!-- Sticky Event Hero: title · meta · stepper · countdown -->
   <div class="event-hero" id="eventHero">
+    <div class="event-hero-photo" id="eventHeroPhoto" style="display:none;"></div>
     <div class="event-hero-inner">
       <div class="event-hero-loading" id="eventHeroLoading">
         <div class="spinner"></div>
@@ -53,6 +54,7 @@
 
       <div id="eventHeroContent" style="display:none;">
         <div class="event-hero-title-row">
+          <div class="event-hero-thumb" id="eventHeroThumb" style="display:none;"></div>
           <div class="event-hero-title-wrap">
             <h1 class="event-hero-title" id="eventTitle">—</h1>
             <div class="event-hero-meta" id="eventMeta"></div>
@@ -71,6 +73,7 @@
   <div class="event-tabs-bar" id="eventTabsBar">
     <div class="event-tabs-inner">
       <button class="event-tab active" data-tab="overview"      onclick="switchTab('overview',this)">Overview</button>
+      <button class="event-tab"        data-tab="itinerary"     onclick="switchTab('itinerary',this)">Itinerary</button>
       <button class="event-tab"        data-tab="registrations" onclick="switchTab('registrations',this)">Registrations</button>
       <button class="event-tab"        data-tab="checklist"     onclick="switchTab('checklist',this)">Checklist</button>
       <button class="event-tab"        data-tab="budget"        onclick="switchTab('budget',this)">Budget</button>
@@ -85,6 +88,13 @@
 
     <div id="tab-overview" class="tab-pane active">
       <div id="overviewContent"><div class="loading-row"><div class="spinner"></div></div></div>
+    </div>
+
+    <div id="tab-itinerary" class="tab-pane">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Itinerary</span></div>
+        <div id="itineraryContent"><div class="loading-row"><div class="spinner"></div></div></div>
+      </div>
     </div>
 
     <div id="tab-registrations" class="tab-pane">
@@ -158,6 +168,14 @@
         </label>
         <label>Role
           <input type="text" id="addReg_Role" placeholder="e.g. Setup Crew">
+        </label>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label>Category
+          <select id="addReg_Category">
+            <option value="Attendee">Attendee</option>
+            <option value="Volunteer">Volunteer</option>
+          </select>
         </label>
       </div>
       <label>Notes
@@ -359,6 +377,61 @@
       <div class="modal-nav">
         <button type="button" class="btn btn-outline" onclick="closeEditChkModal()">Cancel</button>
         <button type="submit" class="btn btn-gold" id="editChkSubmitBtn">Save Changes</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── Add Itinerary Item Modal ──────────────────────────────────────────── -->
+  <div class="modal-overlay" id="addItnOverlay" onclick="closeAddItnModal()"></div>
+  <div class="modal-box" id="addItnModal">
+    <button class="icon-btn slide-panel-close" onclick="closeAddItnModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Add Itinerary Item</div>
+    <form id="addItnForm" onsubmit="event.preventDefault(); submitAddItn();">
+      <div style="display:grid;grid-template-columns:120px 1fr;gap:12px;">
+        <label>Time
+          <input type="time" id="addItn_Time">
+        </label>
+        <label>Title <span style="color:var(--gold);">*</span>
+          <input type="text" id="addItn_Title" placeholder="e.g. Opening Worship">
+        </label>
+      </div>
+      <label>Notes
+        <textarea id="addItn_Notes" rows="2" placeholder="Optional details…"></textarea>
+      </label>
+      <p class="form-error" id="addItnError" style="display:none;"></p>
+      <div class="modal-nav">
+        <button type="button" class="btn btn-outline" onclick="closeAddItnModal()">Cancel</button>
+        <button type="submit" class="btn btn-gold" id="addItnSubmitBtn">Add Item</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── Edit Itinerary Item Modal ─────────────────────────────────────────── -->
+  <div class="modal-overlay" id="editItnOverlay" onclick="closeEditItnModal()"></div>
+  <div class="modal-box" id="editItnModal">
+    <button class="icon-btn slide-panel-close" onclick="closeEditItnModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Edit Itinerary Item</div>
+    <form id="editItnForm" onsubmit="event.preventDefault(); submitEditItn();">
+      <input type="hidden" id="editItn_ID">
+      <div style="display:grid;grid-template-columns:120px 1fr;gap:12px;">
+        <label>Time
+          <input type="time" id="editItn_Time">
+        </label>
+        <label>Title <span style="color:var(--gold);">*</span>
+          <input type="text" id="editItn_Title" placeholder="e.g. Opening Worship">
+        </label>
+      </div>
+      <label>Notes
+        <textarea id="editItn_Notes" rows="2" placeholder="Optional details…"></textarea>
+      </label>
+      <p class="form-error" id="editItnError" style="display:none;"></p>
+      <div class="modal-nav">
+        <button type="button" class="btn btn-outline" onclick="closeEditItnModal()">Cancel</button>
+        <button type="submit" class="btn btn-gold" id="editItnSubmitBtn">Save Changes</button>
       </div>
     </form>
   </div>

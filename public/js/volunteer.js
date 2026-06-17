@@ -131,6 +131,7 @@ function vEventRow(ev, withSignup = false) {
 
   return `
     <div ${row}>
+      ${ev.PhotoURL ? `<img src="${ev.PhotoURL}" alt="" class="event-row-photo">` : ''}
       <div class="date-block">
         <span class="month">${db.month}</span>
         <span class="day">${db.day}</span>
@@ -164,6 +165,15 @@ function renderVEventsFull(events) {
 function signUp(eventId) {
   const ev = eventsById[eventId];
   document.getElementById('signupEventName').textContent = ev ? `${ev.EventName} · ${fmtDate(ev.StartDate)}${ev.Location ? ' · ' + ev.Location : ''}` : '';
+  const photoEl = document.getElementById('signupEventPhoto');
+  if (photoEl) {
+    if (ev?.PhotoURL) {
+      photoEl.src = ev.PhotoURL;
+      photoEl.style.display = '';
+    } else {
+      photoEl.style.display = 'none';
+    }
+  }
   document.getElementById('signupForm').dataset.eventId = eventId;
   document.getElementById('signupName').value  = currentUser?.name  || '';
   document.getElementById('signupEmail').value = currentUser?.email || '';
@@ -461,5 +471,57 @@ async function submitLogHours(e) {
     alert('Network error — could not log hours. Please try again.');
   } finally {
     btn.disabled = false;
+  }
+}
+
+// ── Notification preferences ──────────────────────────────────────────────────
+
+async function openNotifPrefs() {
+  document.getElementById('npError').style.display    = 'none';
+  document.getElementById('npSuccess').style.display  = 'none';
+  document.getElementById('notifOverlay').classList.add('open');
+  document.getElementById('notifModal').classList.add('open');
+  try {
+    const prefs = await apiFetch('/api/notification-prefs');
+    document.getElementById('np_EmailEvents').checked        = prefs.EmailEvents        !== 'false';
+    document.getElementById('np_EmailTasks').checked         = prefs.EmailTasks         !== 'false';
+    document.getElementById('np_EmailAnnouncements').checked = prefs.EmailAnnouncements !== 'false';
+    document.getElementById('np_SMSEvents').checked          = prefs.SMSEvents          === 'true';
+    document.getElementById('np_SMSTasks').checked           = prefs.SMSTasks           === 'true';
+    document.getElementById('np_SMSAnnouncements').checked   = prefs.SMSAnnouncements   === 'true';
+    document.getElementById('np_Phone').value                = prefs.Phone || '';
+  } catch (_) {}
+}
+
+function closeNotifPrefs() {
+  document.getElementById('notifOverlay').classList.remove('open');
+  document.getElementById('notifModal').classList.remove('open');
+}
+
+async function saveNotifPrefs() {
+  const errEl = document.getElementById('npError');
+  const btn   = document.getElementById('npSubmitBtn');
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const res = await fetch('/api/notification-prefs', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        EmailEvents:        document.getElementById('np_EmailEvents').checked,
+        EmailTasks:         document.getElementById('np_EmailTasks').checked,
+        EmailAnnouncements: document.getElementById('np_EmailAnnouncements').checked,
+        SMSEvents:          document.getElementById('np_SMSEvents').checked,
+        SMSTasks:           document.getElementById('np_SMSTasks').checked,
+        SMSAnnouncements:   document.getElementById('np_SMSAnnouncements').checked,
+        Phone:              document.getElementById('np_Phone').value.trim()
+      })
+    });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); errEl.textContent = d.error || 'Save failed.'; errEl.style.display = 'block'; return; }
+    document.getElementById('npSuccess').style.display = 'block';
+    setTimeout(closeNotifPrefs, 1500);
+  } catch (_) {
+    errEl.textContent = 'Network error — please try again.'; errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Preferences';
   }
 }

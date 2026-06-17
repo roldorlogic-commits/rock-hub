@@ -8,6 +8,7 @@ const express = require('express');
 const router  = express.Router();
 const sheets  = require('../lib/sheets');
 const email   = require('../lib/email');
+const sms     = require('../lib/sms');
 const { requireAuth, requireBoard } = require('../middleware/auth');
 
 router.use(requireAuth);
@@ -251,7 +252,8 @@ router.post('/events/:id/registrations', requireBoard, async (req, res) => {
     if (!b.FirstName || !b.Email) return res.status(400).json({ error: 'Name and email are required.' });
     const { row, waitlisted } = await addRegistration(req.params.id, {
       FirstName: b.FirstName, LastName: b.LastName || '', Email: b.Email,
-      Phone: b.Phone || '', Role: b.Role || '', Notes: b.Notes || ''
+      Phone: b.Phone || '', Role: b.Role || '', Notes: b.Notes || '',
+      Category: b.Category || (b.Role ? 'Volunteer' : 'Attendee')
     }, 'Confirmed');
     res.json({ ok: true, registration: row, waitlisted });
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
@@ -315,9 +317,45 @@ router.post('/events/:id/signup', async (req, res) => {
     const [first, ...rest] = (req.user.name || b.FirstName || '').split(/\s+/);
     const { row, waitlisted } = await addRegistration(req.params.id, {
       FirstName: b.FirstName || first || '', LastName: b.LastName || rest.join(' '),
-      Email: email_, Phone: b.Phone || '', Role: b.Role || '', Notes: b.Notes || ''
+      Email: email_, Phone: b.Phone || '', Role: b.Role || '', Notes: b.Notes || '',
+      Category: 'Volunteer'
     }, 'Pending');
     res.json({ ok: true, registration: row, waitlisted, message: "You're signed up! We'll be in touch with more details." });
+
+    // Fire-and-forget enrollment notifications — don't fail the signup on error.
+    setImmediate(async () => {
+      try {
+        const [ev, allPrefs] = await Promise.all([
+          sheets.getEventById(req.params.id),
+          sheets.getNotificationPrefs()
+        ]);
+        if (!ev) return;
+
+        const volPrefs     = allPrefs.find(p => p.UserEmail?.toLowerCase() === (email_ || '').toLowerCase());
+        const emailEnabled = !volPrefs || volPrefs.EmailEvents !== 'false';
+        const smsEnabled   = volPrefs?.SMSEvents === 'true';
+        const phone        = b.Phone || volPrefs?.Phone || '';
+        const volName      = [row.FirstName, row.LastName].filter(Boolean).join(' ') || email_;
+        const dateStr      = ev.StartDate ? ` on ${ev.StartDate}` : '';
+
+        if (emailEnabled && email_) {
+          await email.send(email_, `You're signed up: ${ev.EventName}`,
+            `Hi ${row.FirstName || 'there'},\n\nYou're registered for ${ev.EventName}${dateStr}!\n\nThank you for serving. We'll be in touch with more details.\n\n— The ROCK Team`
+          ).catch(() => {});
+        }
+        if (smsEnabled && phone) {
+          await sms.send(phone, `ROCK Hub: You're signed up for ${ev.EventName}${dateStr}. Thank you for serving!`).catch(() => {});
+        }
+
+        // Alert board regardless of preferences.
+        await email.send('info@gorock.org,vicepresident@gorock.org',
+          `New volunteer sign-up: ${ev.EventName}`,
+          `New volunteer registration:\n\nName:  ${volName}\nEmail: ${email_}\nPhone: ${b.Phone || 'not provided'}\nRole:  ${b.Role || 'not specified'}\nEvent: ${ev.EventName}${dateStr}\nStatus: ${waitlisted ? 'Waitlisted' : 'Pending'}\n\nView at hub.gorock.org`
+        ).catch(() => {});
+      } catch (notifErr) {
+        console.error('Signup notification error:', notifErr.message);
+      }
+    });
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
@@ -466,24 +504,52 @@ router.post('/events/:id/announcements', requireBoard, async (req, res) => {
 
     const eventRegs = regs.filter(r => r.EventID === req.params.id);
     const recipientsFilter = b.Recipients || 'All Registrants';
-    const targets = recipientsFilter === 'Confirmed Only' ? eventRegs.filter(r => r.Status === 'Confirmed')
-      : recipientsFilter === 'Volunteers Only' ? eventRegs.filter(r => r.Role)
-      : eventRegs;
 
-    const channel = b.Channel || 'Email';
-    if (channel === 'Email') {
+    let targets;
+    if (recipientsFilter === 'Confirmed Only') {
+      targets = eventRegs.filter(r => r.Status === 'Confirmed');
+    } else if (recipientsFilter === 'Volunteers Only') {
+      targets = eventRegs.filter(r => r.Category === 'Volunteer' || r.Role);
+    } else if (recipientsFilter.startsWith('Role:')) {
+      const role = recipientsFilter.slice(5).trim().toLowerCase();
+      targets = eventRegs.filter(r => r.Role?.toLowerCase() === role);
+    } else {
+      targets = eventRegs;
+    }
+
+    const channel    = b.Channel || 'Email';
+    const sendSMS_   = b.SendSMS === true;
+    let smsSentCount = 0;
+
+    if (channel !== 'In-App') {
       for (const r of targets) {
-        if (r.Email) await email.send(r.Email, b.Subject, b.Body);
+        if (r.Email) await email.send(r.Email, b.Subject, b.Body).catch(() => {});
       }
     }
 
+    if (sendSMS_) {
+      const allPrefs = await sheets.getNotificationPrefs().catch(() => []);
+      const snippet  = b.Body.replace(/<[^>]+>/g, '').slice(0, 120);
+      const smsBody  = `${ev.EventName}: ${b.Subject}\n\n${snippet}${b.Body.length > 120 ? '…' : ''}`;
+      for (const r of targets) {
+        const rPrefs    = allPrefs.find(p => p.UserEmail?.toLowerCase() === r.Email?.toLowerCase());
+        const smsOptIn  = rPrefs?.SMSAnnouncements === 'true';
+        const phone     = r.Phone || rPrefs?.Phone;
+        if (smsOptIn && phone) {
+          await sms.send(phone, smsBody).catch(() => {});
+          smsSentCount++;
+        }
+      }
+    }
+
+    const channelLabel = sendSMS_ ? `${channel} + SMS` : channel;
     await sheets.appendRow('EventAnnouncements', {
       AnnouncementID: `EAN${Date.now()}`, EventID: req.params.id, Subject: b.Subject, Body: b.Body,
       SentBy: req.user.name || req.user.email, SentAt: nowStr(),
-      Recipients: `${recipientsFilter} (${targets.length})`, Channel: channel
+      Recipients: `${recipientsFilter} (${targets.length})`, Channel: channelLabel
     });
 
-    // Per spec: also mirror into the main Announcements feed for Volunteers.
+    // Mirror into the main Announcements feed for Volunteers.
     await sheets.appendRow('Announcements', {
       AnnouncementID: `ANN${Date.now()}`, Title: `${ev.EventName}: ${b.Subject}`, Body: b.Body,
       Category: 'Event', Priority: 'Medium', PublishedBy: req.user.name || req.user.email,
@@ -491,7 +557,7 @@ router.post('/events/:id/announcements', requireBoard, async (req, res) => {
       CreatedAt: todayStr(), UpdatedAt: todayStr()
     });
 
-    res.json({ ok: true, sentTo: targets.length, mocked: !email.isConfigured() });
+    res.json({ ok: true, sentTo: targets.length, smsSentTo: smsSentCount, mocked: !email.isConfigured() });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -504,9 +570,57 @@ router.post('/events/:id/walkin', requireBoard, async (req, res) => {
       RegistrationID: `REG${Date.now()}`, EventID: req.params.id,
       FirstName: b.FirstName, LastName: b.LastName || '', Email: b.Email,
       Status: 'Confirmed', SignUpDate: todayStr(), ConfirmedDate: todayStr(),
-      CheckedIn: 'TRUE', CheckInTime: nowStr(), Notes: 'Walk-in', CreatedAt: todayStr()
+      CheckedIn: 'TRUE', CheckInTime: nowStr(), Notes: 'Walk-in', CreatedAt: todayStr(),
+      Category: 'Attendee'
     });
     res.json(row);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Itinerary ────────────────────────────────────────────────────────────────
+router.get('/events/:id/itinerary', async (req, res) => {
+  try {
+    const items = await sheets.getEventItinerary();
+    const filtered = items
+      .filter(i => i.EventID === req.params.id)
+      .sort((a, b) => (a.Time || '').localeCompare(b.Time || ''));
+    res.json(filtered);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/events/:id/itinerary', requireBoard, async (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!(b.Title || '').trim()) return res.status(400).json({ error: 'Title is required.' });
+    const row = await sheets.appendRow('EventItinerary', {
+      ItineraryID: `ITN${Date.now()}`,
+      EventID: req.params.id,
+      Time: b.Time || '',
+      Title: b.Title.trim(),
+      Notes: (b.Notes || '').trim(),
+      CreatedBy: req.user.name || req.user.email
+    });
+    res.json(row);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.patch('/itinerary/:id', requireBoard, async (req, res) => {
+  try {
+    const fields = {};
+    if (req.body.Time  !== undefined) fields.Time  = req.body.Time;
+    if (req.body.Title !== undefined) fields.Title = req.body.Title;
+    if (req.body.Notes !== undefined) fields.Notes = req.body.Notes;
+    const updated = await sheets.updateRowFields('EventItinerary', 'ItineraryID', req.params.id, fields);
+    if (!updated) return res.status(404).json({ error: 'Itinerary item not found.' });
+    res.json(updated);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/itinerary/:id', requireBoard, async (req, res) => {
+  try {
+    const ok = await sheets.deleteRow('EventItinerary', 'ItineraryID', req.params.id);
+    if (!ok) return res.status(404).json({ error: 'Itinerary item not found.' });
+    res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
