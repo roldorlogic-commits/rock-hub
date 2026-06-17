@@ -57,7 +57,7 @@ passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((user, done) => done(null, user));
 
 // ── Middleware ───────────────────────────────────────────────────────────────
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false }));
 app.use(session({
   secret:            process.env.SESSION_SECRET,
@@ -116,3 +116,12 @@ sheetsLib.ensureAllAppSheets()
       console.log(`\n  ROCK Hub  →  http://0.0.0.0:${PORT}\n`);
     });
   });
+
+sheetsLib.ensureColumns('Events', ['PhotoURL'])
+  .catch(err => console.error('Could not add PhotoURL column to Events:', err.message));
+
+sheetsLib.ensureColumns('Members', ['Tags'])
+  .catch(err => console.error('Could not add Tags column to Members:', err.message));
+
+sheetsLib.ensureColumns('Documents', ['DocumentID', 'UploadedBy'])
+  .catch(err => console.error('Could not add columns to Documents:', err.message));

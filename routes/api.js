@@ -5,6 +5,7 @@ const fs      = require('fs');
 const path    = require('path');
 const router  = express.Router();
 const sheets  = require('../lib/sheets');
+const drive   = require('../lib/drive');
 const email   = require('../lib/email');
 const { requireAuth, requireBoard, requireBoardOrAdmin } = require('../middleware/auth');
 
@@ -62,6 +63,40 @@ function filterMemberForRole(member, role) {
   if (!member || role === 'Board') return member;
   return Object.fromEntries(MEMBER_PUBLIC_FIELDS.map(k => [k, member[k] ?? '']));
 }
+
+// ── Member create / edit (Board only) ───────────────────────────────────────
+router.post('/members', requireBoard, async (req, res) => {
+  try {
+    const { FirstName, LastName, Email, Phone, Tags, MembershipType, MembershipStatus, Notes } = req.body;
+    if (!FirstName && !LastName && !Email) {
+      return res.status(400).json({ error: 'At least one of First Name, Last Name, or Email is required.' });
+    }
+    const id = `M-${Date.now()}`;
+    const row = await sheets.appendRow('Members', {
+      MemberID: id,
+      FirstName: FirstName || '', LastName: LastName || '',
+      Email: Email || '', Phone: Phone || '',
+      Tags: Tags || '', MembershipType: MembershipType || '',
+      MembershipStatus: MembershipStatus || 'Active',
+      JoinDate: todayStr(), Notes: Notes || ''
+    });
+    res.json(row);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.patch('/members/:id', requireBoard, async (req, res) => {
+  try {
+    const allowed = ['FirstName', 'LastName', 'Email', 'Phone', 'Tags', 'MembershipType', 'MembershipStatus', 'Notes'];
+    const fields = {};
+    for (const k of allowed) {
+      if (req.body[k] !== undefined) fields[k] = req.body[k];
+    }
+    if (!Object.keys(fields).length) return res.status(400).json({ error: 'Nothing to update.' });
+    const updated = await sheets.updateRowFields('Members', 'MemberID', req.params.id, fields);
+    if (!updated) return res.status(404).json({ error: 'Member not found.' });
+    res.json(updated);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 router.get('/members/:id', async (req, res) => {
   try {
@@ -212,6 +247,49 @@ router.get('/search', async (req, res) => {
           href: d.FileURL || (d.DriveFileID ? `https://drive.google.com/file/d/${d.DriveFileID}/view` : null)
         }))
     });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Document upload (Board only) ────────────────────────────────────────────
+// Client sends base64-encoded file content as JSON; server uploads to Drive
+// and writes metadata to the Documents sheet. Drive API must be enabled in the
+// Google Cloud project linked to the service account.
+router.post('/documents/upload', requireBoard, async (req, res) => {
+  try {
+    const { name, base64, mimeType, accessLevel, category } = req.body;
+    if (!name || !base64 || !mimeType) {
+      return res.status(400).json({ error: 'name, base64, and mimeType are required.' });
+    }
+    const buffer = Buffer.from(base64, 'base64');
+    const { fileId, url } = await drive.uploadFile(name, mimeType, buffer);
+    const docId = `DOC-${Date.now()}`;
+    await sheets.appendRow('Documents', {
+      DocumentID: docId,
+      Title: name,
+      Category: category || 'General',
+      FileType: (mimeType.split('/').pop() || 'file').toUpperCase(),
+      AccessLevel: accessLevel || 'Board Only',
+      FileURL: url,
+      DriveFileID: fileId,
+      UploadDate: todayStr(),
+      UploadedBy: req.user.name || req.user.email,
+      Status: 'Active'
+    });
+    res.json({ ok: true, DocumentID: docId, url });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Document metadata edit (Board only) ─────────────────────────────────────
+router.patch('/documents/:id', requireBoard, async (req, res) => {
+  try {
+    const fields = {};
+    if (req.body.Title)       fields.Title       = req.body.Title;
+    if (req.body.AccessLevel) fields.AccessLevel = req.body.AccessLevel;
+    if (req.body.Category)    fields.Category    = req.body.Category;
+    if (!Object.keys(fields).length) return res.status(400).json({ error: 'Nothing to update.' });
+    const updated = await sheets.updateRowFields('Documents', 'DocumentID', req.params.id, fields);
+    if (!updated) return res.status(404).json({ error: 'Document not found.' });
+    res.json(updated);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

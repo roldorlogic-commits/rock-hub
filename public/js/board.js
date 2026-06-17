@@ -44,6 +44,7 @@ function eventRow(ev) {
     : `class="event-row"`;
   return `
     <div ${row}>
+      ${ev.PhotoURL ? `<img src="${ev.PhotoURL}" alt="" class="event-row-photo">` : ''}
       <div class="date-block">
         <span class="month">${db.month}</span>
         <span class="day">${db.day}</span>
@@ -79,6 +80,7 @@ function renderEventsFull(events) {
           : `class="event-row"`;
         return `
           <div ${row}>
+            ${ev.PhotoURL ? `<img src="${ev.PhotoURL}" alt="" class="event-row-photo">` : ''}
             <div class="date-block">
               <span class="month">${fmtDateBlock(ev.StartDate).month}</span>
               <span class="day">${fmtDateBlock(ev.StartDate).day}</span>
@@ -235,9 +237,12 @@ function closeContactPanel() {
 }
 
 // ── Files ─────────────────────────────────────────────────────────────────────
+let _docsCache = [];
+
 async function loadFiles() {
   try {
     const docs = await apiFetch('/api/documents');
+    _docsCache = docs;
     renderFilesPreview(docs);
     renderFilesFull(docs);
     renderMinutes(docs);
@@ -253,38 +258,230 @@ function renderFilesPreview(docs) {
   el.innerHTML = recent.length ? recent.map(documentRow).join('') : emptyState('No documents yet — add your first document to the Documents sheet.');
 }
 
+// Board-only document row with an Edit button. Uses _docsCache index to look
+// up the document when the edit modal is opened.
+function boardDocumentRow(d) {
+  const idx = _docsCache.indexOf(d);
+  const { href } = docLinkInfo(d);
+  const isBoardOnly = (d.AccessLevel || '').toLowerCase().includes('board');
+  const rowAttrs = href
+    ? ` class="list-item clickable" role="button" tabindex="0" onclick="window.open('${href}','_blank','noopener')" onkeydown="if(event.key==='Enter')window.open('${href}','_blank','noopener')"`
+    : ` class="list-item" title="No link available — update in the Database sheet" style="cursor:help;"`;
+  return `
+    <div${rowAttrs}>
+      <div class="file-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      </div>
+      <div class="item-info">
+        <div class="item-title">${d.Title || '—'}${isBoardOnly ? ' <span title="Board only — restricted access" style="font-size:11px;opacity:.8;">🔒</span>' : ''}</div>
+        <div class="item-sub">${d.Category || d.FileType || '—'} · ${fmtDate(d.UploadDate)}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0;">
+        ${statusPill(d.Status)}
+        ${d.DocumentID ? `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openEditDocModal(${idx})" title="Edit document">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:11px;height:11px;margin-right:2px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit</button>` : ''}
+      </div>
+    </div>`;
+}
+
 function renderFilesFull(docs) {
   const el = document.getElementById('filesFull');
-  el.innerHTML = docs.length ? docs.map(documentRow).join('') : emptyState('No documents yet — add your first document to the Documents sheet.');
+  el.innerHTML = docs.length ? docs.map(boardDocumentRow).join('') : emptyState('No documents yet — use "Upload Document" to add your first file.');
 }
 
 function renderMinutes(docs) {
   const el = document.getElementById('minutesFull');
   const mins = docs.filter(d => d.Category?.toLowerCase().includes('minute'));
-  el.innerHTML = mins.length ? mins.map(documentRow).join('') : emptyState('No meeting minutes yet. Tag documents with Category "Minutes".');
+  el.innerHTML = mins.length ? mins.map(boardDocumentRow).join('') : emptyState('No meeting minutes yet. Tag documents with Category "Minutes".');
 }
 
 function renderReports(docs) {
   const el = document.getElementById('reportsFull');
   const rpts = docs.filter(d => d.Category?.toLowerCase().includes('report'));
-  el.innerHTML = rpts.length ? rpts.map(documentRow).join('') : emptyState('No reports yet. Tag documents with Category "Report".');
+  el.innerHTML = rpts.length ? rpts.map(boardDocumentRow).join('') : emptyState('No reports yet. Tag documents with Category "Report".');
 }
 
-// ── Members ──────────────────────────────────────────────────────────────────
+// ── Document upload modal ────────────────────────────────────────────────────
+function openUploadDocModal() {
+  document.getElementById('ud_file').value      = '';
+  document.getElementById('ud_name').value      = '';
+  document.getElementById('ud_category').value  = 'General';
+  document.getElementById('ud_access').value    = 'Board Only';
+  document.getElementById('ud_progress').style.display  = 'none';
+  document.getElementById('uploadDocSuccess').style.display = 'none';
+  document.getElementById('uploadDocNav').style.display = 'flex';
+  document.getElementById('ud_submit').disabled = false;
+  document.getElementById('ud_submit').textContent = 'Upload';
+  document.getElementById('uploadDocOverlay').classList.add('open');
+  document.getElementById('uploadDocModal').classList.add('open');
+}
+
+function closeUploadDocModal() {
+  document.getElementById('uploadDocOverlay')?.classList.remove('open');
+  document.getElementById('uploadDocModal')?.classList.remove('open');
+}
+
+function onUploadFileChange(input) {
+  if (input.files[0] && !document.getElementById('ud_name').value.trim()) {
+    document.getElementById('ud_name').value = input.files[0].name.replace(/\.[^.]+$/, '');
+  }
+}
+
+async function submitDocUpload() {
+  const file        = document.getElementById('ud_file').files[0];
+  const name        = document.getElementById('ud_name').value.trim();
+  const category    = document.getElementById('ud_category').value;
+  const accessLevel = document.getElementById('ud_access').value;
+  if (!file) { alert('Please select a file to upload.'); return; }
+  if (!name) { alert('Please enter a document name.'); return; }
+
+  const MAX_BYTES = 7 * 1024 * 1024;
+  if (file.size > MAX_BYTES) {
+    alert('File is too large. Maximum size is 7 MB.');
+    return;
+  }
+
+  const btn = document.getElementById('ud_submit');
+  btn.disabled = true;
+  btn.textContent = 'Uploading…';
+  document.getElementById('ud_progress').style.display = 'block';
+  document.getElementById('ud_status').textContent = 'Reading file…';
+  document.getElementById('ud_bar').style.width = '20%';
+
+  try {
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = e => resolve(e.target.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById('ud_status').textContent = 'Uploading to Google Drive…';
+    document.getElementById('ud_bar').style.width = '55%';
+
+    const res  = await fetch('/api/documents/upload', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ name, base64, mimeType: file.type || 'application/octet-stream', category, accessLevel })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Upload failed. Please try again.'); return; }
+
+    document.getElementById('ud_bar').style.width = '100%';
+    document.getElementById('ud_status').textContent = 'Done!';
+    document.getElementById('uploadDocNav').style.display = 'none';
+    document.getElementById('uploadDocSuccess').style.display = 'block';
+    document.getElementById('uploadDocSuccess').textContent = `"${name}" uploaded successfully.`;
+
+    await loadFiles();
+    setTimeout(() => closeUploadDocModal(), 1500);
+  } catch (err) {
+    alert('Upload failed. Please try again.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Upload';
+  }
+}
+
+// ── Edit Document modal ──────────────────────────────────────────────────────
+function openEditDocModal(idx) {
+  const d = _docsCache[idx];
+  if (!d) return;
+  document.getElementById('ed_docId').value    = d.DocumentID  || '';
+  document.getElementById('ed_name').value     = d.Title       || '';
+  document.getElementById('ed_category').value = d.Category    || 'General';
+  document.getElementById('ed_access').value   = d.AccessLevel || 'Board Only';
+  document.getElementById('ed_submit').disabled = false;
+  document.getElementById('ed_submit').textContent = 'Save Changes';
+  document.getElementById('editDocOverlay').classList.add('open');
+  document.getElementById('editDocModal').classList.add('open');
+  setTimeout(() => document.getElementById('ed_name').focus(), 80);
+}
+
+function closeEditDocModal() {
+  document.getElementById('editDocOverlay')?.classList.remove('open');
+  document.getElementById('editDocModal')?.classList.remove('open');
+}
+
+async function submitEditDoc() {
+  const docId       = document.getElementById('ed_docId').value;
+  const title       = document.getElementById('ed_name').value.trim();
+  const category    = document.getElementById('ed_category').value;
+  const accessLevel = document.getElementById('ed_access').value;
+  if (!title) { alert('Document name is required.'); return; }
+
+  const btn = document.getElementById('ed_submit');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    const res  = await fetch(`/api/documents/${encodeURIComponent(docId)}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ Title: title, Category: category, AccessLevel: accessLevel })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not update document.'); return; }
+    closeEditDocModal();
+    await loadFiles();
+  } catch (err) {
+    alert('Network error — could not update document.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Changes';
+  }
+}
+
+// ── Contacts (formerly Members) ───────────────────────────────────────────────
+let _activeMemberTag = null;
+let _allMembersCache = [];
+
 async function loadMembers() {
   try {
     const members = await apiFetch('/api/members');
+    _allMembersCache = members;
+    _activeMemberTag = null;
     renderMembersFull(members);
   } catch (e) {
-    document.getElementById('membersFull').innerHTML = emptyState('Could not load members.');
+    document.getElementById('membersFull').innerHTML = emptyState('Could not load contacts.');
   }
+}
+
+function filterMembersByTag(tag) {
+  _activeMemberTag = (_activeMemberTag === tag) ? null : tag;
+  renderMembersFull(_allMembersCache);
 }
 
 function renderMembersFull(members) {
   const el = document.getElementById('membersFull');
-  el.innerHTML = members.length
-    ? members.map(m => {
+  if (!members.length) {
+    el.innerHTML = emptyState('No contacts yet — use "+ Add Contact" to create your first contact.');
+    return;
+  }
+
+  const allTags = new Set();
+  members.forEach(m => {
+    if (m.Tags) m.Tags.split(',').map(t => t.trim()).filter(Boolean).forEach(t => allTags.add(t));
+  });
+
+  const tagBar = allTags.size > 0 ? `
+    <div class="tag-filter-bar">
+      <span class="tag-filter-label">Filter:</span>
+      ${[...allTags].sort().map(tag => `
+        <button class="tag-chip${_activeMemberTag === tag ? ' active' : ''}" onclick="filterMembersByTag('${tag.replace(/'/g,"\\'")}')">
+          ${tag}
+        </button>`).join('')}
+      ${_activeMemberTag ? `<button class="tag-chip clear" onclick="filterMembersByTag(null)">✕ Clear</button>` : ''}
+    </div>` : '';
+
+  const filtered = _activeMemberTag
+    ? members.filter(m => m.Tags && m.Tags.split(',').map(t => t.trim()).includes(_activeMemberTag))
+    : members;
+
+  const rows = filtered.length
+    ? filtered.map(m => {
+        const cacheIdx = _allMembersCache.indexOf(m);
         const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || m.Email || '—';
+        const tags = m.Tags ? m.Tags.split(',').map(t => t.trim()).filter(Boolean) : [];
         return `
           <div class="contact-row clickable" role="button" tabindex="0"
                onclick="location.href='/members/${encodeURIComponent(m.MemberID)}'"
@@ -293,11 +490,97 @@ function renderMembersFull(members) {
             <div class="contact-info">
               <div class="contact-name">${name}</div>
               <div class="contact-email">${m.Email || '—'}</div>
+              ${tags.length ? `<div class="contact-tags">${tags.map(t => `<span class="tag-chip-sm">${t}</span>`).join('')}</div>` : ''}
             </div>
-            <span class="status-pill ${m.MembershipStatus?.toLowerCase() === 'active' ? 'active' : 'inactive'}">${m.MembershipStatus || '—'}</span>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+              <span class="status-pill ${m.MembershipStatus?.toLowerCase() === 'active' ? 'active' : 'inactive'}">${m.MembershipStatus || '—'}</span>
+              <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openContactModal(_allMembersCache[${cacheIdx}])" title="Edit contact">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:11px;height:11px;margin-right:2px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit
+              </button>
+            </div>
           </div>`;
       }).join('')
-    : emptyState('No members yet — add your first member to the Members sheet to see them here.');
+    : emptyState('No contacts match the selected tag.');
+
+  el.innerHTML = tagBar + rows;
+}
+
+// ── Contact create / edit modal ──────────────────────────────────────────────
+let _contactModalMember = null;
+
+function openContactModal(m) {
+  _contactModalMember = m || null;
+  const isEdit = !!m;
+  document.getElementById('contactModalTitle').textContent     = isEdit ? 'Edit Contact' : 'Add Contact';
+  document.getElementById('contactModalSubmit').textContent    = isEdit ? 'Save Changes' : 'Add Contact';
+  document.getElementById('cm_first').value   = m?.FirstName         || '';
+  document.getElementById('cm_last').value    = m?.LastName          || '';
+  document.getElementById('cm_email').value   = m?.Email             || '';
+  document.getElementById('cm_phone').value   = m?.Phone             || '';
+  document.getElementById('cm_tags').value    = m?.Tags              || '';
+  document.getElementById('cm_type').value    = m?.MembershipType    || '';
+  document.getElementById('cm_status').value  = m?.MembershipStatus  || 'Active';
+  document.getElementById('cm_notes').value   = m?.Notes             || '';
+  document.getElementById('contactModalSuccess').style.display = 'none';
+  document.getElementById('contactModalNav').style.display    = 'flex';
+  document.getElementById('contactModalOverlay').classList.add('open');
+  document.getElementById('contactModal').classList.add('open');
+  setTimeout(() => document.getElementById('cm_first').focus(), 80);
+}
+
+function closeContactModal() {
+  document.getElementById('contactModalOverlay')?.classList.remove('open');
+  document.getElementById('contactModal')?.classList.remove('open');
+}
+
+async function submitContactForm() {
+  const firstName = document.getElementById('cm_first').value.trim();
+  const lastName  = document.getElementById('cm_last').value.trim();
+  const email     = document.getElementById('cm_email').value.trim();
+  if (!firstName && !lastName && !email) {
+    alert('Please fill in at least a name or email.');
+    return;
+  }
+
+  const btn = document.getElementById('contactModalSubmit');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    const body = {
+      FirstName:        firstName,
+      LastName:         lastName,
+      Email:            email,
+      Phone:            document.getElementById('cm_phone').value.trim(),
+      Tags:             document.getElementById('cm_tags').value.trim(),
+      MembershipType:   document.getElementById('cm_type').value,
+      MembershipStatus: document.getElementById('cm_status').value,
+      Notes:            document.getElementById('cm_notes').value.trim()
+    };
+    const isEdit = !!_contactModalMember;
+    const url    = isEdit ? `/api/members/${encodeURIComponent(_contactModalMember.MemberID)}` : '/api/members';
+    const res    = await fetch(url, {
+      method:  isEdit ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not save contact.'); return; }
+
+    const ok = document.getElementById('contactModalSuccess');
+    ok.style.display = 'block';
+    ok.textContent   = isEdit ? 'Contact updated.' : 'Contact added.';
+    document.getElementById('contactModalNav').style.display = 'none';
+    await loadMembers();
+    setTimeout(() => closeContactModal(), 1200);
+  } catch (err) {
+    alert('Network error — could not save contact.');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = _contactModalMember ? 'Save Changes' : 'Add Contact';
+    if (document.getElementById('contactModalSuccess').style.display === 'none') {
+      document.getElementById('contactModalNav').style.display = 'flex';
+    }
+  }
 }
 
 // ── Volunteers (full list) ──────────────────────────────────────────────────

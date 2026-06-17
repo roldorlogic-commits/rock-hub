@@ -235,6 +235,7 @@
           <div class="card-header">
             <span class="card-title">Contacts</span>
             <div style="display:flex;align-items:center;gap:10px;">
+              <button class="btn btn-gold btn-sm" onclick="openContactModal()">+ Add Contact</button>
               <a class="btn btn-outline btn-sm" href="/api/export/members" download>Export CSV</a>
               <span class="role-badge">Board View</span>
             </div>
@@ -272,6 +273,7 @@
         <div class="card">
           <div class="card-header">
             <span class="card-title">Files &amp; Documents</span>
+            <button class="btn btn-gold btn-sm" onclick="openUploadDocModal()">Upload Document</button>
           </div>
           <div id="filesFull"><div class="loading-row"><div class="spinner"></div></div></div>
         </div>
@@ -437,6 +439,126 @@
     </div>
 
     <div class="modal-success" id="createEventSuccess" style="display:none;"></div>
+  </div>
+
+  <!-- ── Contact create / edit modal ────────────────────────────────────────── -->
+  <div class="modal-overlay" id="contactModalOverlay" onclick="closeContactModal()"></div>
+  <div class="modal-box" id="contactModal" style="width:500px;">
+    <button class="icon-btn slide-panel-close" onclick="closeContactModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title" id="contactModalTitle">Add Contact</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px;" id="contactModalForm">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label>First Name <span style="color:var(--gold);">*</span><input type="text" id="cm_first" placeholder="Jane"></label>
+        <label>Last Name<input type="text" id="cm_last" placeholder="Smith"></label>
+      </div>
+      <label>Email<input type="email" id="cm_email" placeholder="jane@example.com"></label>
+      <label>Phone<input type="tel" id="cm_phone" placeholder="(555) 000-0000"></label>
+      <label>Tags <span style="color:var(--text-muted);font-weight:400;">(comma-separated)</span><input type="text" id="cm_tags" placeholder="e.g. Donor, Parent, Alumni"></label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label>Membership Type
+          <select id="cm_type">
+            <option value="">— Select —</option>
+            <option>Individual</option>
+            <option>Family</option>
+            <option>Organization</option>
+            <option>Other</option>
+          </select>
+        </label>
+        <label>Status
+          <select id="cm_status">
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+        </label>
+      </div>
+      <label>Notes<textarea id="cm_notes" rows="2" placeholder="Any additional notes…"></textarea></label>
+    </div>
+    <div class="modal-nav" id="contactModalNav">
+      <button class="btn btn-outline btn-sm" onclick="closeContactModal()">Cancel</button>
+      <button class="btn btn-gold btn-sm" id="contactModalSubmit" onclick="submitContactForm()">Add Contact</button>
+    </div>
+    <div class="modal-success" id="contactModalSuccess" style="display:none;"></div>
+  </div>
+
+  <!-- ── Upload Document modal ──────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="uploadDocOverlay" onclick="closeUploadDocModal()"></div>
+  <div class="modal-box" id="uploadDocModal" style="width:480px;">
+    <button class="icon-btn slide-panel-close" onclick="closeUploadDocModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Upload Document</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px;">
+      <label>File <span style="color:var(--gold);">*</span>
+        <input type="file" id="ud_file" onchange="onUploadFileChange(this)">
+      </label>
+      <label>Document Name <span style="color:var(--gold);">*</span>
+        <input type="text" id="ud_name" placeholder="e.g. Q1 2026 Budget Report">
+      </label>
+      <label>Category
+        <select id="ud_category">
+          <option value="General">General</option>
+          <option value="Minutes">Meeting Minutes</option>
+          <option value="Report">Reports</option>
+          <option value="Policy">Policy</option>
+          <option value="Financial">Financial</option>
+          <option value="Other">Other</option>
+        </select>
+      </label>
+      <label>Access Level
+        <select id="ud_access">
+          <option value="Board Only">Board Only</option>
+          <option value="Board + Volunteers">Board + Volunteers</option>
+          <option value="All">All</option>
+        </select>
+      </label>
+      <div id="ud_progress" style="display:none;margin-top:4px;">
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;" id="ud_status">Uploading…</div>
+        <div style="height:4px;background:var(--gold-line);border-radius:2px;overflow:hidden;">
+          <div id="ud_bar" style="height:100%;width:0%;background:var(--gold);transition:width .4s ease;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-nav" id="uploadDocNav">
+      <button class="btn btn-outline btn-sm" onclick="closeUploadDocModal()">Cancel</button>
+      <button class="btn btn-gold btn-sm" id="ud_submit" onclick="submitDocUpload()">Upload</button>
+    </div>
+    <div class="modal-success" id="uploadDocSuccess" style="display:none;"></div>
+  </div>
+
+  <!-- ── Edit Document modal ────────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="editDocOverlay" onclick="closeEditDocModal()"></div>
+  <div class="modal-box" id="editDocModal" style="width:440px;">
+    <button class="icon-btn slide-panel-close" onclick="closeEditDocModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Edit Document</div>
+    <input type="hidden" id="ed_docId">
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px;">
+      <label>Document Name<input type="text" id="ed_name"></label>
+      <label>Category
+        <select id="ed_category">
+          <option value="General">General</option>
+          <option value="Minutes">Meeting Minutes</option>
+          <option value="Report">Reports</option>
+          <option value="Policy">Policy</option>
+          <option value="Financial">Financial</option>
+          <option value="Other">Other</option>
+        </select>
+      </label>
+      <label>Access Level
+        <select id="ed_access">
+          <option value="Board Only">Board Only</option>
+          <option value="Board + Volunteers">Board + Volunteers</option>
+          <option value="All">All</option>
+        </select>
+      </label>
+    </div>
+    <div class="modal-nav">
+      <button class="btn btn-outline btn-sm" onclick="closeEditDocModal()">Cancel</button>
+      <button class="btn btn-gold btn-sm" id="ed_submit" onclick="submitEditDoc()">Save Changes</button>
+    </div>
   </div>
 
   <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
