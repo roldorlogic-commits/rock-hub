@@ -401,4 +401,18 @@ router.get('/export/:type', requireBoard, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Notification test route (Board only) ────────────────────────────────────
+router.get('/test-notification', requireBoard, async (req, res) => {
+  const [smsResult, emailResult] = await Promise.all([
+    sms.send('+14078798972', 'ROCK Hub test SMS — notification system check.'),
+    email.send('vicepresident@gorock.org', 'ROCK Hub test email', 'This is a test from ROCK Hub. If you received this, the email notification system is working.')
+  ]);
+  res.json({
+    smsConfigured:   sms.isConfigured(),
+    emailConfigured: email.isConfigured(),
+    sms:   smsResult,
+    email: emailResult
+  });
+});
+
 module.exports = router;
