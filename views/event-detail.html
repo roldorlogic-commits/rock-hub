@@ -191,7 +191,7 @@
 
   <!-- ── Add Checklist Item Modal ──────────────────────────────────────────────── -->
   <div class="modal-overlay" id="addChkOverlay" onclick="closeAddChecklistModal()"></div>
-  <div class="modal-box" id="addChkModal">
+  <div class="modal-box" id="addChkModal" style="width:680px;">
     <button class="icon-btn slide-panel-close" onclick="closeAddChecklistModal()" aria-label="Close">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
@@ -283,19 +283,35 @@
 
   <!-- ── Attach Document Modal ──────────────────────────────────────────────────── -->
   <div class="modal-overlay" id="addDocOverlay" onclick="closeAddDocModal()"></div>
-  <div class="modal-box" id="addDocModal">
+  <div class="modal-box" id="addDocModal" style="width:500px;">
     <button class="icon-btn slide-panel-close" onclick="closeAddDocModal()" aria-label="Close">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
     <div class="modal-title">Attach Document</div>
-    <p class="modal-subtitle">Link a file or resource to this event.</p>
+    <div style="display:flex;gap:0;border:1px solid var(--gold-line);border-radius:var(--radius-sm);overflow:hidden;margin:12px 0 16px;">
+      <button type="button" id="addDocTab_url"  class="btn btn-ghost btn-sm" style="flex:1;border-radius:0;border:none;font-size:12px;" onclick="switchAddDocTab('url')">Paste Drive Link</button>
+      <button type="button" id="addDocTab_file" class="btn btn-ghost btn-sm" style="flex:1;border-radius:0;border:none;border-left:1px solid var(--gold-line);font-size:12px;" onclick="switchAddDocTab('file')">Upload File</button>
+    </div>
     <form id="addDocForm" onsubmit="event.preventDefault(); submitAddDoc();">
       <label>Title <span style="color:var(--gold);">*</span>
         <input type="text" id="addDoc_Title" placeholder="e.g. Event Flyer">
       </label>
-      <label>URL <span style="color:var(--gold);">*</span>
-        <input type="url" id="addDoc_URL" placeholder="https://drive.google.com/…">
-      </label>
+      <div id="addDocPane_url">
+        <label>Drive URL <span style="color:var(--gold);">*</span>
+          <input type="url" id="addDoc_URL" placeholder="https://drive.google.com/…">
+        </label>
+      </div>
+      <div id="addDocPane_file" style="display:none;">
+        <label>File <span style="color:var(--gold);">*</span>
+          <input type="file" id="addDoc_File" onchange="onAddDocFileChange(this)">
+        </label>
+        <div id="addDoc_UploadProgress" style="display:none;margin-top:4px;">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;" id="addDoc_UploadStatus">Uploading…</div>
+          <div style="height:4px;background:var(--gold-line);border-radius:2px;overflow:hidden;">
+            <div id="addDoc_UploadBar" style="height:100%;width:0%;background:var(--gold);transition:width .4s ease;"></div>
+          </div>
+        </div>
+      </div>
       <label>Access Level
         <select id="addDoc_Access">
           <option value="All">All — visible to volunteers</option>
@@ -340,7 +356,7 @@
 
   <!-- ── Edit Checklist Item Modal ─────────────────────────────────────────────── -->
   <div class="modal-overlay" id="editChkOverlay" onclick="closeEditChkModal()"></div>
-  <div class="modal-box" id="editChkModal">
+  <div class="modal-box" id="editChkModal" style="width:680px;">
     <button class="icon-btn slide-panel-close" onclick="closeEditChkModal()" aria-label="Close">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>

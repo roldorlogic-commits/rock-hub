@@ -244,6 +244,13 @@
               <span class="role-badge">Board View</span>
             </div>
           </div>
+          <div id="membersBulkBar" style="display:none;padding:8px 20px;background:var(--gold-faint);border-bottom:1px solid var(--gold-line);display:none;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span id="membersBulkCount" style="font-size:12px;color:var(--text-dim);flex:1;min-width:80px;"></span>
+            <button class="btn btn-sm btn-ghost" onclick="openBulkAction('tag')">Apply Tag</button>
+            <button class="btn btn-sm btn-ghost" onclick="openBulkAction('notify')">Send Email</button>
+            <button class="btn btn-sm" style="color:#ff6363;border-color:#ff636344;" onclick="openBulkAction('delete')">Delete</button>
+            <button class="btn btn-sm btn-ghost" onclick="clearBulkSelection()">✕ Clear</button>
+          </div>
           <div id="membersFull"><div class="loading-row"><div class="spinner"></div></div></div>
         </div>
       </section>
@@ -496,18 +503,29 @@
 
   <!-- ── Upload Document modal ──────────────────────────────────────────────── -->
   <div class="modal-overlay" id="uploadDocOverlay" onclick="closeUploadDocModal()"></div>
-  <div class="modal-box" id="uploadDocModal" style="width:480px;">
+  <div class="modal-box" id="uploadDocModal" style="width:500px;">
     <button class="icon-btn slide-panel-close" onclick="closeUploadDocModal()" aria-label="Close">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
-    <div class="modal-title">Upload Document</div>
-    <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px;">
-      <label>File <span style="color:var(--gold);">*</span>
-        <input type="file" id="ud_file" onchange="onUploadFileChange(this)">
-      </label>
+    <div class="modal-title">Add Document</div>
+    <div style="display:flex;gap:0;border:1px solid var(--gold-line);border-radius:var(--radius-sm);overflow:hidden;margin:12px 0 16px;">
+      <button type="button" id="ud_tab_upload" class="btn btn-ghost btn-sm" style="flex:1;border-radius:0;border:none;font-size:12px;" onclick="switchDocTab('upload')">Upload File</button>
+      <button type="button" id="ud_tab_link"   class="btn btn-ghost btn-sm" style="flex:1;border-radius:0;border:none;border-left:1px solid var(--gold-line);font-size:12px;" onclick="switchDocTab('link')">Paste Drive Link</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;">
       <label>Document Name <span style="color:var(--gold);">*</span>
         <input type="text" id="ud_name" placeholder="e.g. Q1 2026 Budget Report">
       </label>
+      <div id="ud_pane_upload">
+        <label style="margin-bottom:0;">File <span style="color:var(--gold);">*</span>
+          <input type="file" id="ud_file" onchange="onUploadFileChange(this)">
+        </label>
+      </div>
+      <div id="ud_pane_link" style="display:none;">
+        <label style="margin-bottom:0;">Drive URL <span style="color:var(--gold);">*</span>
+          <input type="url" id="ud_link_url" placeholder="https://drive.google.com/…">
+        </label>
+      </div>
       <label>Category
         <select id="ud_category">
           <option value="General">General</option>
@@ -537,6 +555,63 @@
       <button class="btn btn-gold btn-sm" id="ud_submit" onclick="submitDocUpload()">Upload</button>
     </div>
     <div class="modal-success" id="uploadDocSuccess" style="display:none;"></div>
+  </div>
+
+  <!-- ── Volunteer edit modal ──────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="volEditOverlay" onclick="closeVolEditModal()"></div>
+  <div class="modal-box" id="volEditModal" style="width:500px;">
+    <button class="icon-btn slide-panel-close" onclick="closeVolEditModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <input type="hidden" id="vol_id">
+    <div class="modal-title">Edit Volunteer</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label>First Name<input type="text" id="vol_first"></label>
+        <label>Last Name<input type="text" id="vol_last"></label>
+      </div>
+      <label>Email<input type="email" id="vol_email"></label>
+      <label>Phone<input type="tel" id="vol_phone"></label>
+      <label>Preferred Role<input type="text" id="vol_role" placeholder="e.g. Worship, Setup"></label>
+      <label>Availability<input type="text" id="vol_avail" placeholder="e.g. Weekends, Fridays"></label>
+      <label>Status
+        <select id="vol_status">
+          <option value="Active">Active</option>
+          <option value="Inactive">Inactive</option>
+          <option value="Pending">Pending</option>
+        </select>
+      </label>
+      <label>Notes<textarea id="vol_notes" rows="2" placeholder="Optional notes…" style="resize:vertical;"></textarea></label>
+    </div>
+    <div class="modal-nav" id="volEditNav">
+      <button class="btn btn-outline btn-sm" onclick="closeVolEditModal()">Cancel</button>
+      <button class="btn btn-gold btn-sm" id="vol_submit" onclick="submitVolEdit()">Save Changes</button>
+    </div>
+    <div class="modal-success" id="volEditSuccess" style="display:none;"></div>
+  </div>
+
+  <!-- ── Bulk action confirm modal ─────────────────────────────────────────── -->
+  <div class="modal-overlay" id="bulkConfirmOverlay" onclick="closeBulkConfirm()"></div>
+  <div class="modal-box" id="bulkConfirmModal" style="width:440px;">
+    <button class="icon-btn slide-panel-close" onclick="closeBulkConfirm()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title" id="bulkConfirmTitle">Confirm Action</div>
+    <p id="bulkConfirmMsg" style="color:var(--text-dim);font-size:13px;margin:12px 0 0;"></p>
+    <div id="bulkNotifyFields" style="display:none;margin-top:14px;">
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <label>Subject <span style="color:var(--gold);">*</span><input type="text" id="bulk_Subject" placeholder="Email subject"></label>
+        <label>Message <span style="color:var(--gold);">*</span><textarea id="bulk_Body" rows="4" placeholder="Email body…" style="resize:vertical;"></textarea></label>
+      </div>
+    </div>
+    <div id="bulkTagFields" style="display:none;margin-top:14px;">
+      <label>Tag to apply <span style="color:var(--gold);">*</span><input type="text" id="bulk_Tag" placeholder="e.g. Donor, Volunteer"></label>
+    </div>
+    <p class="form-error" id="bulkConfirmError" style="display:none;margin-top:10px;"></p>
+    <div class="modal-nav" style="margin-top:16px;">
+      <button class="btn btn-outline btn-sm" onclick="closeBulkConfirm()">Cancel</button>
+      <button class="btn btn-gold btn-sm" id="bulkConfirmBtn" onclick="executeBulkAction()">Confirm</button>
+    </div>
   </div>
 
   <!-- ── Edit Document modal ────────────────────────────────────────────────── -->

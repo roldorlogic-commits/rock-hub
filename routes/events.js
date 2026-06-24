@@ -7,6 +7,7 @@
 const express = require('express');
 const router  = express.Router();
 const sheets  = require('../lib/sheets');
+const drive   = require('../lib/drive');
 const email   = require('../lib/email');
 const sms     = require('../lib/sms');
 const { requireAuth, requireBoard } = require('../middleware/auth');
@@ -467,7 +468,6 @@ router.post('/events/:id/documents', requireBoard, async (req, res) => {
       return res.status(400).json({ error: 'Provide a title and either a Drive link or an existing document to attach.' });
     }
     if (b.DocumentID) {
-      // Attach an existing doc by appending the EventID to its Tags.
       const docs = await sheets.getDocuments();
       const doc = docs.find(d => d.DocumentID === b.DocumentID);
       if (!doc) return res.status(404).json({ error: 'Document not found.' });
@@ -480,9 +480,54 @@ router.post('/events/:id/documents', requireBoard, async (req, res) => {
       DocumentID: `DOC${Date.now()}`, Title: b.Title, Category: 'Events',
       FileURL: b.FileURL || '', FileType: 'Link', UploadDate: todayStr(),
       Status: 'Active', AccessLevel: b.AccessLevel || 'All',
-      Tags: `events,${req.params.id}${ev ? ',' + ev.EventName : ''}`
+      Tags: `events,${req.params.id}${ev ? ',' + ev.EventName : ''}`,
+      UploadedBy: req.user.name || req.user.email,
+      Source: 'drive'
     });
     res.json(row);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Upload a file and attach it as a document to this event.
+router.post('/events/:id/documents/upload', requireBoard, async (req, res) => {
+  try {
+    const { name, base64, mimeType, accessLevel } = req.body || {};
+    if (!name || !base64 || !mimeType) {
+      return res.status(400).json({ error: 'name, base64, and mimeType are required.' });
+    }
+    const buffer = Buffer.from(base64, 'base64');
+    const folderId = process.env.DOCUMENTS_FOLDER_ID || null;
+    const { fileId, url } = await drive.uploadFile(name, mimeType, buffer, folderId);
+    const ev = await sheets.getEventById(req.params.id);
+    const row = await sheets.appendRow('Documents', {
+      DocumentID: `DOC${Date.now()}`, Title: name, Category: 'Events',
+      FileType: (mimeType.split('/').pop() || 'file').toUpperCase(),
+      FileURL: url, DriveFileID: fileId, UploadDate: todayStr(),
+      Status: 'Active', AccessLevel: accessLevel || 'All',
+      Tags: `events,${req.params.id}${ev ? ',' + ev.EventName : ''}`,
+      UploadedBy: req.user.name || req.user.email,
+      Source: 'upload'
+    });
+    res.json({ ok: true, doc: row, url });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Upload event flyer/photo to Drive, return URL (never store bytes in the sheet).
+router.post('/events/:id/photo', requireBoard, async (req, res) => {
+  try {
+    const { base64, mimeType } = req.body || {};
+    if (!base64 || !mimeType) return res.status(400).json({ error: 'base64 and mimeType are required.' });
+    const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!ALLOWED.includes(mimeType)) return res.status(400).json({ error: 'File must be a JPEG, PNG, WebP, or GIF image.' });
+    const buffer = Buffer.from(base64, 'base64');
+    const MAX_BYTES = 5 * 1024 * 1024;
+    if (buffer.length > MAX_BYTES) return res.status(400).json({ error: 'Image must be under 5 MB.' });
+    const ext = mimeType.split('/')[1] || 'jpg';
+    const folderId = process.env.EVENT_PHOTOS_FOLDER_ID || null;
+    const { url } = await drive.uploadFile(`event-${req.params.id}-${Date.now()}.${ext}`, mimeType, buffer, folderId);
+    const updated = await sheets.updateRowFields('Events', 'EventID', req.params.id, { PhotoURL: url, UpdatedAt: todayStr() });
+    if (!updated) return res.status(404).json({ error: 'Event not found.' });
+    res.json({ ok: true, url });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

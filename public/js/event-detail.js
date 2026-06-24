@@ -334,31 +334,64 @@ function _renderOverviewEdit(el, ev) {
 }
 
 let _overviewSaving = false;
-let _pendingPhotoURL = null; // set by handlePhotoUpload; null = no change, '' = remove
+let _pendingPhotoURL = null; // null = no change, '' = remove, string URL = new photo
 
 function handlePhotoUpload(input) {
   const file = input.files[0];
   if (!file) return;
+
+  const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  if (!ALLOWED.includes(file.type)) {
+    alert('Please select a JPEG, PNG, WebP, or GIF image.');
+    input.value = '';
+    return;
+  }
+  const MAX_MB = 5;
+  if (file.size > MAX_MB * 1024 * 1024) {
+    alert(`Image is too large. Maximum size is ${MAX_MB} MB.`);
+    input.value = '';
+    return;
+  }
+
+  const preview = document.getElementById('edit_PhotoPreview');
+  if (preview) preview.innerHTML = '<div class="spinner" style="margin:12px auto;"></div>';
+
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = async function(e) {
     const img = new Image();
-    img.onload = function() {
-      const MAX_W = 600;
+    img.onload = async function() {
+      const MAX_W = 1200;
       const scale = img.width > MAX_W ? MAX_W / img.width : 1;
       const w = Math.round(img.width * scale);
       const h = Math.round(img.height * scale);
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.70);
-      _pendingPhotoURL = dataUrl;
-      const preview = document.getElementById('edit_PhotoPreview');
-      if (preview) {
-        preview.innerHTML = `<img src="${dataUrl}" alt="Event photo">
-          <button type="button" class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="clearEventPhoto()">Remove Photo</button>`;
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+      const base64 = dataUrl.split(',')[1];
+
+      try {
+        const res = await fetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/photo`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ base64, mimeType: 'image/jpeg' })
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'Photo upload failed.'); if (preview) preview.innerHTML = ''; return; }
+
+        _pendingPhotoURL = data.url;
+        currentEvent.PhotoURL = data.url;
+        renderEventHero(currentEvent);
+        if (preview) {
+          preview.innerHTML = `<img src="${data.url}" alt="Event photo" style="max-width:100%;border-radius:6px;">
+            <button type="button" class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="clearEventPhoto()">Remove Photo</button>`;
+        }
+        const uploadBtn = input.closest('label');
+        if (uploadBtn) uploadBtn.childNodes[0].textContent = 'Change Photo';
+      } catch (err) {
+        alert('Network error uploading photo. Please try again.');
+        if (preview) preview.innerHTML = '';
       }
-      const uploadBtn = input.closest('label');
-      if (uploadBtn) uploadBtn.childNodes[0].textContent = 'Change Photo';
     };
     img.src = e.target.result;
   };
@@ -393,8 +426,12 @@ async function saveOverview() {
     Description: _quillVal('edit_Description'),
     RegistrationInfo: _quillVal('edit_RegistrationInfo'),
   };
-  if (_pendingPhotoURL !== null) {
-    fields.PhotoURL = _pendingPhotoURL;
+  // Photo uploads now go directly to Drive via /events/:id/photo and are
+  // already persisted on the server, so we only need to handle explicit removal.
+  if (_pendingPhotoURL === '') {
+    fields.PhotoURL = '';
+    _pendingPhotoURL = null;
+  } else {
     _pendingPhotoURL = null;
   }
   if (!fields.EventName) {
@@ -934,28 +971,95 @@ function renderDocumentsTab(docs, el) {
     : emptyState('No documents linked to this event yet.'));
 }
 
-function openAddDocModal()  { document.getElementById('addDocForm')?.reset(); _modalError('addDocError',''); _openModal('addDocOverlay','addDocModal'); }
+let _addDocTab = 'url';
+
+function switchAddDocTab(tab) {
+  _addDocTab = tab;
+  document.getElementById('addDocPane_url').style.display  = tab === 'url'  ? '' : 'none';
+  document.getElementById('addDocPane_file').style.display = tab === 'file' ? '' : 'none';
+  const activeStyle = 'background:var(--gold-faint);color:var(--gold);';
+  document.getElementById('addDocTab_url').setAttribute('style',  `flex:1;border-radius:0;border:none;font-size:12px;${tab==='url'?activeStyle:''}`);
+  document.getElementById('addDocTab_file').setAttribute('style', `flex:1;border-radius:0;border:none;border-left:1px solid var(--gold-line);font-size:12px;${tab==='file'?activeStyle:''}`);
+}
+
+function onAddDocFileChange(input) {
+  if (input.files[0] && !document.getElementById('addDoc_Title').value.trim()) {
+    document.getElementById('addDoc_Title').value = input.files[0].name.replace(/\.[^.]+$/, '');
+  }
+}
+
+function openAddDocModal() {
+  document.getElementById('addDocForm')?.reset();
+  _modalError('addDocError','');
+  document.getElementById('addDoc_UploadProgress').style.display = 'none';
+  switchAddDocTab('url');
+  _openModal('addDocOverlay','addDocModal');
+}
 function closeAddDocModal() { _closeModal('addDocOverlay','addDocModal'); }
 
 async function submitAddDoc() {
   const g     = id => (document.getElementById(id)?.value ?? '').trim();
-  const title = g('addDoc_Title'), url = g('addDoc_URL');
-  if (!title || !url) { _modalError('addDocError','Title and URL are both required.'); return; }
+  const title = g('addDoc_Title');
+  if (!title) { _modalError('addDocError','Title is required.'); return; }
   _modalError('addDocError','');
-  _btnLoading('addDocSubmitBtn', true, 'Attach');
+
+  if (_addDocTab === 'url') {
+    const url = g('addDoc_URL');
+    if (!url) { _modalError('addDocError','Drive URL is required.'); return; }
+    _btnLoading('addDocSubmitBtn', true, 'Attach');
+    try {
+      const res  = await fetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/documents`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ Title: title, FileURL: url, AccessLevel: g('addDoc_Access') })
+      });
+      const data = await res.json();
+      if (!res.ok) { _modalError('addDocError', data.error || 'Failed.'); return; }
+      closeAddDocModal();
+      await loadDocuments();
+    } catch (err) {
+      _modalError('addDocError','Network error — please try again.');
+    } finally {
+      _btnLoading('addDocSubmitBtn', false, 'Attach');
+    }
+    return;
+  }
+
+  // File upload mode
+  const fileInput = document.getElementById('addDoc_File');
+  const file = fileInput.files[0];
+  if (!file) { _modalError('addDocError','Please select a file.'); return; }
+  const MAX_BYTES = 7 * 1024 * 1024;
+  if (file.size > MAX_BYTES) { _modalError('addDocError','File is too large. Maximum size is 7 MB.'); return; }
+
+  _btnLoading('addDocSubmitBtn', true, 'Uploading…');
+  document.getElementById('addDoc_UploadProgress').style.display = 'block';
+  document.getElementById('addDoc_UploadStatus').textContent = 'Reading file…';
+  document.getElementById('addDoc_UploadBar').style.width = '20%';
+
   try {
-    const res  = await fetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/documents`, {
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = e => resolve(e.target.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    document.getElementById('addDoc_UploadStatus').textContent = 'Uploading to Drive…';
+    document.getElementById('addDoc_UploadBar').style.width = '60%';
+
+    const res  = await fetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/documents/upload`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ Title: title, FileURL: url, AccessLevel: g('addDoc_Access') })
+      body: JSON.stringify({ name: title, base64, mimeType: file.type || 'application/octet-stream', accessLevel: g('addDoc_Access') })
     });
     const data = await res.json();
-    if (!res.ok) { _modalError('addDocError', data.error || 'Failed.'); return; }
+    document.getElementById('addDoc_UploadBar').style.width = '100%';
+    if (!res.ok) { _modalError('addDocError', data.error || 'Upload failed.'); return; }
     closeAddDocModal();
     await loadDocuments();
   } catch (err) {
-    _modalError('addDocError','Network error — please try again.');
+    _modalError('addDocError','Upload failed — please try again.');
   } finally {
     _btnLoading('addDocSubmitBtn', false, 'Attach');
+    document.getElementById('addDoc_UploadProgress').style.display = 'none';
   }
 }
 

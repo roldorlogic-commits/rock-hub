@@ -85,6 +85,52 @@ router.post('/members', requireBoard, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Bulk operations on contacts: delete, tag, or notify selected IDs.
+router.post('/members/bulk', requireBoard, async (req, res) => {
+  try {
+    const { action, ids, tag, subject, body: msgBody } = req.body || {};
+    if (!action || !Array.isArray(ids) || !ids.length) {
+      return res.status(400).json({ error: 'action and ids[] are required.' });
+    }
+    const members = await sheets.getMembers();
+    const targets = members.filter(m => ids.includes(m.MemberID));
+    if (!targets.length) return res.status(400).json({ error: 'No matching members found.' });
+
+    if (action === 'delete') {
+      for (const m of targets) {
+        await sheets.deleteRow('Members', 'MemberID', m.MemberID);
+      }
+      return res.json({ ok: true, affected: targets.length });
+    }
+
+    if (action === 'tag') {
+      if (!tag) return res.status(400).json({ error: 'tag is required for tag action.' });
+      for (const m of targets) {
+        const existing = (m.Tags || '').split(',').map(t => t.trim()).filter(Boolean);
+        if (!existing.includes(tag)) {
+          existing.push(tag);
+          await sheets.updateRowFields('Members', 'MemberID', m.MemberID, { Tags: existing.join(',') });
+        }
+      }
+      return res.json({ ok: true, affected: targets.length });
+    }
+
+    if (action === 'notify') {
+      if (!subject || !msgBody) return res.status(400).json({ error: 'subject and body are required for notify action.' });
+      let sent = 0;
+      for (const m of targets) {
+        if (m.Email) {
+          await email.send(m.Email, subject, msgBody).catch(() => {});
+          sent++;
+        }
+      }
+      return res.json({ ok: true, sent, total: targets.length });
+    }
+
+    res.status(400).json({ error: 'Unknown action. Use delete, tag, or notify.' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.patch('/members/:id', requireBoard, async (req, res) => {
   try {
     const allowed = ['FirstName', 'LastName', 'Email', 'Phone', 'Tags', 'MembershipType', 'MembershipStatus', 'Notes'];
@@ -175,6 +221,28 @@ router.get('/volunteers/:id', async (req, res) => {
     const vol = await sheets.getVolunteerById(req.params.id);
     if (!vol) return res.status(404).json({ error: 'Volunteer not found.' });
     res.json(vol);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.patch('/volunteers/:id', requireBoard, async (req, res) => {
+  try {
+    const allowed = ['FirstName', 'LastName', 'Email', 'Phone', 'PreferredRole', 'AvailabilityDays', 'Skills', 'Status', 'Notes'];
+    const fields = {};
+    for (const k of allowed) {
+      if (req.body[k] !== undefined) fields[k] = req.body[k];
+    }
+    if (!Object.keys(fields).length) return res.status(400).json({ error: 'Nothing to update.' });
+    const updated = await sheets.updateRowFields('Volunteers', 'VolunteerID', req.params.id, fields);
+    if (!updated) return res.status(404).json({ error: 'Volunteer not found.' });
+    res.json(updated);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/volunteers/:id', requireBoard, async (req, res) => {
+  try {
+    const ok = await sheets.deleteRow('Volunteers', 'VolunteerID', req.params.id);
+    if (!ok) return res.status(404).json({ error: 'Volunteer not found.' });
+    res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -346,7 +414,8 @@ router.post('/documents/upload', requireBoard, async (req, res) => {
       return res.status(400).json({ error: 'name, base64, and mimeType are required.' });
     }
     const buffer = Buffer.from(base64, 'base64');
-    const { fileId, url } = await drive.uploadFile(name, mimeType, buffer);
+    const folderId = process.env.DOCUMENTS_FOLDER_ID || null;
+    const { fileId, url } = await drive.uploadFile(name, mimeType, buffer, folderId);
     const docId = `DOC-${Date.now()}`;
     await sheets.appendRow('Documents', {
       DocumentID: docId,
@@ -358,7 +427,31 @@ router.post('/documents/upload', requireBoard, async (req, res) => {
       DriveFileID: fileId,
       UploadDate: todayStr(),
       UploadedBy: req.user.name || req.user.email,
-      Status: 'Active'
+      Status: 'Active',
+      Source: 'upload'
+    });
+    res.json({ ok: true, DocumentID: docId, url });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Paste an existing Drive link as a document (no file transfer; Source = 'drive').
+router.post('/documents/link', requireBoard, async (req, res) => {
+  try {
+    const { name, url, accessLevel, category } = req.body || {};
+    if (!name || !url) return res.status(400).json({ error: 'name and url are required.' });
+    const docId = `DOC-${Date.now()}`;
+    await sheets.appendRow('Documents', {
+      DocumentID: docId,
+      Title: name,
+      Category: category || 'General',
+      FileType: 'Link',
+      AccessLevel: accessLevel || 'Board Only',
+      FileURL: url,
+      DriveFileID: '',
+      UploadDate: todayStr(),
+      UploadedBy: req.user.name || req.user.email,
+      Status: 'Active',
+      Source: 'drive'
     });
     res.json({ ok: true, DocumentID: docId, url });
   } catch (err) { res.status(500).json({ error: err.message }); }

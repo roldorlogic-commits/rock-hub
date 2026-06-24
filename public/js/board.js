@@ -307,16 +307,30 @@ function renderReports(docs) {
 }
 
 // ── Document upload modal ────────────────────────────────────────────────────
+let _docTab = 'upload';
+
+function switchDocTab(tab) {
+  _docTab = tab;
+  document.getElementById('ud_pane_upload').style.display = tab === 'upload' ? '' : 'none';
+  document.getElementById('ud_pane_link').style.display   = tab === 'link'   ? '' : 'none';
+  const active = 'background:var(--gold-faint);color:var(--gold);';
+  document.getElementById('ud_tab_upload').setAttribute('style', `flex:1;border-radius:0;border:none;font-size:12px;${tab==='upload'?active:''}`);
+  document.getElementById('ud_tab_link').setAttribute('style',   `flex:1;border-radius:0;border:none;border-left:1px solid var(--gold-line);font-size:12px;${tab==='link'?active:''}`);
+  document.getElementById('ud_submit').textContent = tab === 'upload' ? 'Upload' : 'Add Link';
+}
+
 function openUploadDocModal() {
-  document.getElementById('ud_file').value      = '';
-  document.getElementById('ud_name').value      = '';
-  document.getElementById('ud_category').value  = 'General';
-  document.getElementById('ud_access').value    = 'Board Only';
-  document.getElementById('ud_progress').style.display  = 'none';
+  const fileInput = document.getElementById('ud_file');
+  if (fileInput) fileInput.value = '';
+  document.getElementById('ud_link_url').value   = '';
+  document.getElementById('ud_name').value       = '';
+  document.getElementById('ud_category').value   = 'General';
+  document.getElementById('ud_access').value     = 'Board Only';
+  document.getElementById('ud_progress').style.display     = 'none';
   document.getElementById('uploadDocSuccess').style.display = 'none';
-  document.getElementById('uploadDocNav').style.display = 'flex';
+  document.getElementById('uploadDocNav').style.display    = 'flex';
   document.getElementById('ud_submit').disabled = false;
-  document.getElementById('ud_submit').textContent = 'Upload';
+  switchDocTab('upload');
   document.getElementById('uploadDocOverlay').classList.add('open');
   document.getElementById('uploadDocModal').classList.add('open');
 }
@@ -333,18 +347,40 @@ function onUploadFileChange(input) {
 }
 
 async function submitDocUpload() {
-  const file        = document.getElementById('ud_file').files[0];
   const name        = document.getElementById('ud_name').value.trim();
   const category    = document.getElementById('ud_category').value;
   const accessLevel = document.getElementById('ud_access').value;
-  if (!file) { alert('Please select a file to upload.'); return; }
   if (!name) { alert('Please enter a document name.'); return; }
 
-  const MAX_BYTES = 7 * 1024 * 1024;
-  if (file.size > MAX_BYTES) {
-    alert('File is too large. Maximum size is 7 MB.');
+  if (_docTab === 'link') {
+    const url = document.getElementById('ud_link_url').value.trim();
+    if (!url) { alert('Please enter a Drive URL.'); return; }
+    const btn = document.getElementById('ud_submit');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      const res  = await fetch('/api/documents/link', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, url, category, accessLevel })
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || 'Failed to save link.'); return; }
+      document.getElementById('uploadDocNav').style.display = 'none';
+      document.getElementById('uploadDocSuccess').style.display = 'block';
+      document.getElementById('uploadDocSuccess').textContent = `"${name}" added successfully.`;
+      await loadFiles();
+      setTimeout(() => closeUploadDocModal(), 1500);
+    } catch (err) {
+      alert('Network error. Please try again.');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Add Link';
+    }
     return;
   }
+
+  const file = document.getElementById('ud_file').files[0];
+  if (!file) { alert('Please select a file to upload.'); return; }
+  const MAX_BYTES = 7 * 1024 * 1024;
+  if (file.size > MAX_BYTES) { alert('File is too large. Maximum size is 7 MB.'); return; }
 
   const btn = document.getElementById('ud_submit');
   btn.disabled = true;
@@ -456,10 +492,48 @@ function filterMembersByTag(tag) {
   renderMembersFull(_allMembersCache);
 }
 
+let _selectedMemberIds = new Set();
+
+function _updateBulkBar() {
+  const bar = document.getElementById('membersBulkBar');
+  const count = _selectedMemberIds.size;
+  if (count === 0) {
+    bar.style.display = 'none';
+  } else {
+    bar.style.display = 'flex';
+    document.getElementById('membersBulkCount').textContent = `${count} contact${count === 1 ? '' : 's'} selected`;
+  }
+}
+
+function toggleMemberSelect(id, checked) {
+  if (checked) _selectedMemberIds.add(id);
+  else _selectedMemberIds.delete(id);
+  _updateBulkBar();
+}
+
+function toggleSelectAllMembers(checked) {
+  const checkboxes = document.querySelectorAll('.member-chk');
+  checkboxes.forEach(cb => {
+    cb.checked = checked;
+    if (checked) _selectedMemberIds.add(cb.dataset.id);
+    else _selectedMemberIds.delete(cb.dataset.id);
+  });
+  _updateBulkBar();
+}
+
+function clearBulkSelection() {
+  _selectedMemberIds.clear();
+  document.querySelectorAll('.member-chk').forEach(cb => cb.checked = false);
+  const allChk = document.getElementById('membersSelectAll');
+  if (allChk) allChk.checked = false;
+  _updateBulkBar();
+}
+
 function renderMembersFull(members) {
   const el = document.getElementById('membersFull');
   if (!members.length) {
     el.innerHTML = emptyState('No contacts yet — use "+ Add Contact" to create your first contact.');
+    _updateBulkBar();
     return;
   }
 
@@ -482,20 +556,30 @@ function renderMembersFull(members) {
     ? members.filter(m => m.Tags && m.Tags.split(',').map(t => t.trim()).includes(_activeMemberTag))
     : members;
 
+  const selectAllBar = `<div style="padding:6px 20px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim);border-bottom:1px solid var(--gold-line);">
+    <input type="checkbox" id="membersSelectAll" style="cursor:pointer;" onchange="toggleSelectAllMembers(this.checked)">
+    <label for="membersSelectAll" style="cursor:pointer;margin:0;">Select all</label>
+  </div>`;
+
   const rows = filtered.length
     ? filtered.map(m => {
         const cacheIdx = _allMembersCache.indexOf(m);
         const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || m.Email || '—';
         const tags = m.Tags ? m.Tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+        const checked = _selectedMemberIds.has(m.MemberID) ? 'checked' : '';
         return `
-          <div class="contact-row clickable" role="button" tabindex="0"
-               onclick="location.href='/members/${encodeURIComponent(m.MemberID)}'"
-               onkeydown="if(event.key==='Enter')location.href='/members/${encodeURIComponent(m.MemberID)}'">
-            ${avatarHtml(name, null)}
-            <div class="contact-info">
-              <div class="contact-name">${name}</div>
-              <div class="contact-email">${m.Email || '—'}</div>
-              ${tags.length ? `<div class="contact-tags">${tags.map(t => `<span class="tag-chip-sm">${t}</span>`).join('')}</div>` : ''}
+          <div class="contact-row" style="cursor:default;">
+            <input type="checkbox" class="member-chk" data-id="${m.MemberID}" ${checked} style="flex-shrink:0;cursor:pointer;margin-right:4px;"
+              onchange="toggleMemberSelect('${m.MemberID}',this.checked)" onclick="event.stopPropagation()">
+            <div role="button" tabindex="0" style="display:flex;align-items:center;gap:12px;flex:1;cursor:pointer;min-width:0;"
+                 onclick="location.href='/members/${encodeURIComponent(m.MemberID)}'"
+                 onkeydown="if(event.key==='Enter')location.href='/members/${encodeURIComponent(m.MemberID)}'">
+              ${avatarHtml(name, null)}
+              <div class="contact-info">
+                <div class="contact-name">${name}</div>
+                <div class="contact-email">${m.Email || '—'}</div>
+                ${tags.length ? `<div class="contact-tags">${tags.map(t => `<span class="tag-chip-sm">${t}</span>`).join('')}</div>` : ''}
+              </div>
             </div>
             <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
               <span class="status-pill ${m.MembershipStatus?.toLowerCase() === 'active' ? 'active' : 'inactive'}">${m.MembershipStatus || '—'}</span>
@@ -507,7 +591,84 @@ function renderMembersFull(members) {
       }).join('')
     : emptyState('No contacts match the selected tag.');
 
-  el.innerHTML = tagBar + rows;
+  el.innerHTML = tagBar + selectAllBar + rows;
+  _updateBulkBar();
+}
+
+// ── Bulk actions ─────────────────────────────────────────────────────────────
+let _pendingBulkAction = null;
+
+function openBulkAction(action) {
+  const count = _selectedMemberIds.size;
+  if (!count) { alert('Select at least one contact first.'); return; }
+  _pendingBulkAction = action;
+  document.getElementById('bulkConfirmError').style.display = 'none';
+  document.getElementById('bulkNotifyFields').style.display = action === 'notify' ? '' : 'none';
+  document.getElementById('bulkTagFields').style.display    = action === 'tag'    ? '' : 'none';
+  if (action === 'notify') {
+    document.getElementById('bulk_Subject').value = '';
+    document.getElementById('bulk_Body').value    = '';
+  }
+  if (action === 'tag') document.getElementById('bulk_Tag').value = '';
+
+  const labels = { delete: 'Delete Contacts', tag: 'Apply Tag', notify: 'Send Email' };
+  const msgs   = {
+    delete: `Permanently delete ${count} contact${count===1?'':'s'}? This cannot be undone.`,
+    tag:    `Apply a tag to ${count} contact${count===1?'':'s'}.`,
+    notify: `Send an email to ${count} contact${count===1?'':'s'}.`
+  };
+  document.getElementById('bulkConfirmTitle').textContent = labels[action] || 'Confirm';
+  document.getElementById('bulkConfirmMsg').textContent   = msgs[action]   || '';
+  document.getElementById('bulkConfirmBtn').textContent   = labels[action] || 'Confirm';
+  document.getElementById('bulkConfirmOverlay').classList.add('open');
+  document.getElementById('bulkConfirmModal').classList.add('open');
+}
+
+function closeBulkConfirm() {
+  document.getElementById('bulkConfirmOverlay')?.classList.remove('open');
+  document.getElementById('bulkConfirmModal')?.classList.remove('open');
+  _pendingBulkAction = null;
+}
+
+async function executeBulkAction() {
+  const action = _pendingBulkAction;
+  if (!action) return;
+  const ids = [..._selectedMemberIds];
+  const errEl = document.getElementById('bulkConfirmError');
+  errEl.style.display = 'none';
+  const btn = document.getElementById('bulkConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Working…';
+
+  const body = { action, ids };
+  if (action === 'tag') {
+    body.tag = document.getElementById('bulk_Tag').value.trim();
+    if (!body.tag) { errEl.textContent = 'Tag is required.'; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = 'Apply Tag'; return; }
+  }
+  if (action === 'notify') {
+    body.subject = document.getElementById('bulk_Subject').value.trim();
+    body.body    = document.getElementById('bulk_Body').value.trim();
+    if (!body.subject || !body.body) { errEl.textContent = 'Subject and message are required.'; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = 'Send Email'; return; }
+  }
+
+  try {
+    const res  = await fetch('/api/members/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || 'Action failed.'; errEl.style.display = 'block'; return; }
+
+    closeBulkConfirm();
+    _selectedMemberIds.clear();
+    await loadMembers();
+
+    if (action === 'notify') alert(`Email sent to ${data.sent} of ${data.total} contacts.`);
+    else if (action === 'delete') alert(`${data.affected} contact${data.affected===1?'':'s'} deleted.`);
+    else if (action === 'tag') alert(`Tag applied to ${data.affected} contact${data.affected===1?'':'s'}.`);
+  } catch (err) {
+    errEl.textContent = 'Network error — please try again.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = { delete: 'Delete Contacts', tag: 'Apply Tag', notify: 'Send Email' }[action] || 'Confirm';
+  }
 }
 
 // ── Contact create / edit modal ──────────────────────────────────────────────
@@ -598,10 +759,13 @@ async function loadVolunteersFull() {
   }
 }
 
+let _volunteersCache = [];
+
 function renderVolunteersFull(vols) {
+  _volunteersCache = vols;
   const el = document.getElementById('volunteersFull');
   el.innerHTML = vols.length
-    ? vols.map(v => {
+    ? vols.map((v, idx) => {
         const name = [v.FirstName, v.LastName].filter(Boolean).join(' ') || v.Email || '—';
         return `
           <div class="contact-row clickable" role="button" tabindex="0"
@@ -612,10 +776,90 @@ function renderVolunteersFull(vols) {
               <div class="contact-name">${name}</div>
               <div class="contact-email">${v.PreferredRole || v.Email || '—'}</div>
             </div>
-            <span class="status-pill ${v.Status?.toLowerCase() === 'active' ? 'active' : 'inactive'}">${v.Status || '—'}</span>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+              <span class="status-pill ${v.Status?.toLowerCase() === 'active' ? 'active' : 'inactive'}">${v.Status || '—'}</span>
+              <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openVolEditModal(${idx})" title="Edit volunteer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:11px;height:11px;margin-right:2px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();confirmDeleteVol(${idx})" title="Delete volunteer" style="color:#ff6363;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:11px;height:11px;margin-right:2px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>Del
+              </button>
+            </div>
           </div>`;
       }).join('')
     : emptyState('No volunteers yet — add your first volunteer to the Volunteers sheet to see them here.');
+}
+
+// ── Volunteer edit / delete ───────────────────────────────────────────────────
+function openVolEditModal(idx) {
+  const v = _volunteersCache[idx];
+  if (!v) return;
+  document.getElementById('vol_id').value     = v.VolunteerID  || '';
+  document.getElementById('vol_first').value  = v.FirstName    || '';
+  document.getElementById('vol_last').value   = v.LastName     || '';
+  document.getElementById('vol_email').value  = v.Email        || '';
+  document.getElementById('vol_phone').value  = v.Phone        || '';
+  document.getElementById('vol_role').value   = v.PreferredRole || '';
+  document.getElementById('vol_avail').value  = v.AvailabilityDays || '';
+  document.getElementById('vol_status').value = v.Status       || 'Active';
+  document.getElementById('vol_notes').value  = v.Notes        || '';
+  document.getElementById('volEditSuccess').style.display = 'none';
+  document.getElementById('volEditNav').style.display    = 'flex';
+  document.getElementById('volEditOverlay').classList.add('open');
+  document.getElementById('volEditModal').classList.add('open');
+  setTimeout(() => document.getElementById('vol_first').focus(), 80);
+}
+
+function closeVolEditModal() {
+  document.getElementById('volEditOverlay')?.classList.remove('open');
+  document.getElementById('volEditModal')?.classList.remove('open');
+}
+
+async function submitVolEdit() {
+  const id  = document.getElementById('vol_id').value;
+  const btn = document.getElementById('vol_submit');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const res = await fetch(`/api/volunteers/${encodeURIComponent(id)}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        FirstName:        document.getElementById('vol_first').value.trim(),
+        LastName:         document.getElementById('vol_last').value.trim(),
+        Email:            document.getElementById('vol_email').value.trim(),
+        Phone:            document.getElementById('vol_phone').value.trim(),
+        PreferredRole:    document.getElementById('vol_role').value.trim(),
+        AvailabilityDays: document.getElementById('vol_avail').value.trim(),
+        Status:           document.getElementById('vol_status').value,
+        Notes:            document.getElementById('vol_notes').value.trim()
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not update volunteer.'); return; }
+    const ok = document.getElementById('volEditSuccess');
+    ok.style.display = 'block'; ok.textContent = 'Volunteer updated.';
+    document.getElementById('volEditNav').style.display = 'none';
+    await loadVolunteersFull();
+    setTimeout(() => closeVolEditModal(), 1200);
+  } catch (err) {
+    alert('Network error — could not update volunteer.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Changes';
+  }
+}
+
+async function confirmDeleteVol(idx) {
+  const v = _volunteersCache[idx];
+  if (!v) return;
+  const name = [v.FirstName, v.LastName].filter(Boolean).join(' ') || v.Email || 'this volunteer';
+  if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
+  try {
+    const res = await fetch(`/api/volunteers/${encodeURIComponent(v.VolunteerID)}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not delete volunteer.'); return; }
+    await loadVolunteersFull();
+  } catch (err) {
+    alert('Network error — could not delete volunteer.');
+  }
 }
 
 // ── Pending volunteers sidebar badge ─────────────────────────────────────────
