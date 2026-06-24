@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ROCK Hub — Usage Report</title>
+  <link rel="stylesheet" href="/css/vars.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/dashboard.css">
+  <link rel="stylesheet" href="/css/detail.css">
+  <style>
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+      margin-bottom: 20px;
+    }
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .filter-group label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .filter-group input {
+      background: var(--bg-primary);
+      border: 1px solid var(--gold-line);
+      border-radius: var(--radius-sm);
+      color: var(--text-white);
+      padding: 6px 10px;
+      font-family: inherit;
+      font-size: 13px;
+      min-width: 160px;
+    }
+    .filter-group input:focus {
+      outline: none;
+      border-color: var(--gold);
+    }
+    .filter-actions {
+      display: flex;
+      gap: 8px;
+      align-self: flex-end;
+    }
+    .activity-table-wrap {
+      overflow-x: auto;
+    }
+    .activity-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .activity-table th {
+      text-align: left;
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--gold-line);
+      white-space: nowrap;
+    }
+    .activity-table td {
+      padding: 9px 12px;
+      border-bottom: 1px solid rgba(201,169,110,.08);
+      color: var(--text-dim);
+      vertical-align: top;
+    }
+    .activity-table tr:hover td {
+      background: var(--gold-faint);
+    }
+    .activity-table td.col-email  { color: var(--text-white); font-weight: 500; }
+    .activity-table td.col-action { color: var(--gold); font-size: 12px; font-weight: 600; }
+    .activity-table td.col-ua     { font-size: 11px; color: var(--text-muted); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .activity-table td.col-when   { white-space: nowrap; font-size: 12px; }
+    .activity-table td.col-route  { font-family: monospace; font-size: 12px; }
+    .badge-method {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .04em;
+    }
+    .badge-GET    { background: rgba(99,198,130,.15); color: #63c682; }
+    .badge-POST   { background: rgba(99,163,255,.15); color: #63a3ff; }
+    .badge-PATCH,
+    .badge-PUT    { background: rgba(255,196,0,.15);  color: #ffc400; }
+    .badge-DELETE { background: rgba(255,99,99,.15);  color: #ff6363; }
+    .badge-other  { background: rgba(245,243,238,.08); color: var(--text-muted); }
+    .summary-chips {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .summary-chip {
+      background: var(--bg-secondary);
+      border: 1px solid var(--gold-line);
+      border-radius: var(--radius);
+      padding: 8px 14px;
+      font-size: 12px;
+    }
+    .summary-chip strong {
+      display: block;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--gold);
+      font-family: 'Cinzel', serif;
+    }
+    .empty-state { padding: 40px 0; text-align: center; color: var(--text-muted); }
+    #tableStatus { color: var(--text-muted); font-size: 12px; margin-bottom: 8px; }
+  </style>
+</head>
+<body class="detail-page-body">
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <a href="/board" class="topbar-logo">
+        <img src="/img/rock-logo.png" class="topbar-logo-img" alt="The ROCK Association">
+        <div class="topbar-logo-text">
+          <span class="logo-rock">ROCK</span>
+          <span class="logo-hub">Hub</span>
+        </div>
+      </a>
+      <span class="topbar-page-title">Usage Report</span>
+    </div>
+    <div class="topbar-right">
+      <div class="user-chip" id="userChip">
+        <span class="user-chip-info">
+          <span class="user-chip-name" id="userName">—</span>
+          <span class="user-chip-email" id="userEmail">—</span>
+        </span>
+        <img class="avatar" id="userAvatar" src="" alt="">
+        <div class="user-dropdown" id="userDropdown">
+          <form method="POST" action="/auth/logout">
+            <button type="submit">Sign out</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="detail-main" style="max-width:1100px;">
+    <button class="back-link" onclick="history.length > 1 ? history.back() : (location.href = '/board')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      Back to Dashboard
+    </button>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Activity Log</span>
+        <button class="btn btn-sm" onclick="downloadCsv()">Download CSV</button>
+      </div>
+
+      <!-- Filters -->
+      <div style="padding:16px 20px 0;">
+        <div class="filter-bar">
+          <div class="filter-group">
+            <label>Email</label>
+            <input type="text" id="filterEmail" placeholder="name@gorock.org" oninput="applyFilters()">
+          </div>
+          <div class="filter-group">
+            <label>From</label>
+            <input type="date" id="filterFrom" onchange="applyFilters()">
+          </div>
+          <div class="filter-group">
+            <label>To</label>
+            <input type="date" id="filterTo" onchange="applyFilters()">
+          </div>
+          <div class="filter-actions">
+            <button class="btn btn-sm btn-ghost" onclick="clearFilters()">Clear</button>
+            <button class="btn btn-sm" onclick="reload()">Refresh</button>
+          </div>
+        </div>
+
+        <div class="summary-chips" id="summaryChips" style="display:none;"></div>
+        <div id="tableStatus"></div>
+      </div>
+
+      <!-- Table -->
+      <div class="activity-table-wrap" style="padding:0 20px 20px;">
+        <table class="activity-table" id="activityTable">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Who (Email)</th>
+              <th>Action</th>
+              <th>Route</th>
+              <th>Method</th>
+              <th>IP</th>
+              <th>User-Agent</th>
+            </tr>
+          </thead>
+          <tbody id="activityBody">
+            <tr><td colspan="7" class="empty-state"><div class="spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <footer class="app-footer">© 2026 The ROCK Association · hub.gorock.org · Admin</footer>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script>
+    let _allRows = [];
+
+    (async () => {
+      await initUser();
+      await reload();
+    })();
+
+    async function reload() {
+      document.getElementById('tableStatus').textContent = 'Loading…';
+      document.getElementById('summaryChips').style.display = 'none';
+      try {
+        _allRows = await apiFetch('/api/admin/activity');
+        applyFilters();
+      } catch (e) {
+        document.getElementById('activityBody').innerHTML =
+          `<tr><td colspan="7" class="empty-state">Failed to load: ${e.message}</td></tr>`;
+        document.getElementById('tableStatus').textContent = '';
+      }
+    }
+
+    function applyFilters() {
+      const email = (document.getElementById('filterEmail').value || '').toLowerCase().trim();
+      const from  = document.getElementById('filterFrom').value;
+      const to    = document.getElementById('filterTo').value;
+
+      let rows = _allRows;
+      if (email) rows = rows.filter(r => (r.Email || '').toLowerCase().includes(email));
+      if (from)  rows = rows.filter(r => r.Timestamp >= from);
+      if (to)    rows = rows.filter(r => r.Timestamp <= to + 'T23:59:59.999Z');
+
+      renderTable(rows);
+      renderSummary(rows);
+    }
+
+    function clearFilters() {
+      document.getElementById('filterEmail').value = '';
+      document.getElementById('filterFrom').value  = '';
+      document.getElementById('filterTo').value    = '';
+      applyFilters();
+    }
+
+    function renderSummary(rows) {
+      if (!rows.length) {
+        document.getElementById('summaryChips').style.display = 'none';
+        return;
+      }
+      const uniqueUsers  = new Set(rows.map(r => r.Email).filter(Boolean)).size;
+      const logins       = rows.filter(r => (r.Action || '').includes('Login')).length;
+      const writes       = rows.filter(r => ['Create','Update','Delete'].includes(r.Action)).length;
+
+      const chips = document.getElementById('summaryChips');
+      chips.innerHTML = `
+        <div class="summary-chip"><strong>${rows.length.toLocaleString()}</strong>Events</div>
+        <div class="summary-chip"><strong>${uniqueUsers}</strong>Unique Users</div>
+        <div class="summary-chip"><strong>${logins}</strong>Logins</div>
+        <div class="summary-chip"><strong>${writes}</strong>Write Actions</div>
+      `;
+      chips.style.display = 'flex';
+    }
+
+    function methodBadge(m) {
+      const cls = ['GET','POST','PATCH','PUT','DELETE'].includes(m) ? `badge-${m}` : 'badge-other';
+      return `<span class="badge-method ${cls}">${m || '—'}</span>`;
+    }
+
+    function fmtTs(ts) {
+      if (!ts) return '—';
+      try {
+        return new Date(ts).toLocaleString(undefined, {
+          month:'short', day:'numeric', year:'numeric',
+          hour:'numeric', minute:'2-digit', hour12:true
+        });
+      } catch (_) { return ts; }
+    }
+
+    function esc(s) {
+      return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function renderTable(rows) {
+      const status = document.getElementById('tableStatus');
+      if (!rows.length) {
+        document.getElementById('activityBody').innerHTML =
+          '<tr><td colspan="7" class="empty-state">No activity records match these filters.</td></tr>';
+        status.textContent = '0 events';
+        return;
+      }
+      status.textContent = `${rows.length.toLocaleString()} event${rows.length === 1 ? '' : 's'}`;
+      document.getElementById('activityBody').innerHTML = rows.map(r => `
+        <tr>
+          <td class="col-when">${fmtTs(r.Timestamp)}</td>
+          <td class="col-email">${esc(r.Email)}</td>
+          <td class="col-action">${esc(r.Action)}</td>
+          <td class="col-route"><code>${esc(r.Route)}</code></td>
+          <td>${methodBadge(r.Method)}</td>
+          <td>${esc(r.IP)}</td>
+          <td class="col-ua" title="${esc(r.UserAgent)}">${esc(r.UserAgent)}</td>
+        </tr>`).join('');
+    }
+
+    function downloadCsv() {
+      const email = (document.getElementById('filterEmail').value || '').trim();
+      const from  = document.getElementById('filterFrom').value;
+      const to    = document.getElementById('filterTo').value;
+      const params = new URLSearchParams({ format: 'csv' });
+      if (email) params.set('email', email);
+      if (from)  params.set('from', from);
+      if (to)    params.set('to', to);
+      window.location.href = `/api/admin/activity?${params.toString()}`;
+    }
+  </script>
+</body>
+</html>

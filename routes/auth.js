@@ -7,10 +7,12 @@ const sheets   = require('../lib/sheets');
 const email    = require('../lib/email');
 const {
   signVolunteerToken, volunteerCookieOptions, VOLUNTEER_COOKIE,
-  loginRateLimiter, recordLoginFailure, recordLoginSuccess
+  loginRateLimiter, recordLoginFailure, recordLoginSuccess, VP_EMAIL
 } = require('../middleware/auth');
 
-const VP_EMAIL = 'vicepresident@gorock.org';
+function getIP(req) {
+  return req.ip || (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || '';
+}
 
 function today() { return new Date().toISOString().slice(0, 10); }
 
@@ -26,7 +28,17 @@ module.exports = function (passport) {
 
   router.get('/google/callback',
     passport.authenticate('google', { failureRedirect: '/?error=access_denied' }),
-    (req, res) => res.redirect(req.user?.role === 'Board' ? '/board' : '/volunteer')
+    (req, res) => {
+      sheets.logActivity({
+        email:     req.user?.email,
+        action:    'Google Login',
+        route:     '/auth/google/callback',
+        method:    'GET',
+        ip:        getIP(req),
+        userAgent: (req.headers['user-agent'] || '').slice(0, 200)
+      });
+      res.redirect(req.user?.role === 'Board' ? '/board' : '/volunteer');
+    }
   );
 
   // Logout clears both auth paths — Passport session (Board) and the
@@ -112,6 +124,14 @@ module.exports = function (passport) {
       if (!match) { recordLoginFailure(emailNorm); return res.status(401).json({ error: genericError }); }
 
       recordLoginSuccess(emailNorm);
+      sheets.logActivity({
+        email:     emailNorm,
+        action:    'Volunteer Login',
+        route:     '/auth/volunteer/login',
+        method:    'POST',
+        ip:        getIP(req),
+        userAgent: (req.headers['user-agent'] || '').slice(0, 200)
+      });
 
       if (authRow.Status === 'Declined') {
         return res.status(403).json({ error: `We're unable to confirm your volunteer registration at this time. Contact ${VP_EMAIL} for more information.` });

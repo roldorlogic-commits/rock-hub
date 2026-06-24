@@ -1,6 +1,9 @@
 'use strict';
 
-const jwt = require('jsonwebtoken');
+const path = require('path');
+const jwt  = require('jsonwebtoken');
+
+const VP_EMAIL = 'vicepresident@gorock.org';
 
 // Falls back to SESSION_SECRET so a missing JWT_SECRET doesn't hard-crash the
 // app, but this should be set to its own value in production — see the
@@ -92,6 +95,26 @@ function requireActiveVolunteer(req, res, next) {
   });
 }
 
+// Restricts a route to the VP account only. Returns 403 for all other
+// authenticated users; 401 (or redirect) if not logged in at all.
+function requireVP(req, res, next) {
+  attachUser(req, res, () => {
+    if (!req.isAuthenticated() || !req.user) {
+      const isApi = req.baseUrl?.startsWith('/api') || req.path?.startsWith('/api');
+      return isApi
+        ? res.status(401).json({ error: 'Authentication required.' })
+        : res.redirect('/?error=login_required');
+    }
+    if (req.user.email !== VP_EMAIL) {
+      const isApi = req.baseUrl?.startsWith('/api') || req.path?.startsWith('/api');
+      return isApi
+        ? res.status(403).json({ error: 'Access restricted to administrator.' })
+        : res.status(403).sendFile(path.join(__dirname, '../views/403.html'));
+    }
+    next();
+  });
+}
+
 // ── Login rate limiting (in-memory; resets on deploy/restart) ──────────────
 const MAX_ATTEMPTS  = 5;
 const LOCKOUT_MS     = 15 * 60 * 1000;
@@ -122,7 +145,8 @@ function recordLoginSuccess(email) {
 }
 
 module.exports = {
-  requireAuth, requireBoard, requireBoardOrAdmin, requireActiveVolunteer,
+  VP_EMAIL,
+  requireAuth, requireBoard, requireBoardOrAdmin, requireActiveVolunteer, requireVP,
   signVolunteerToken, volunteerCookieOptions, getJwtVolunteer, VOLUNTEER_COOKIE,
   loginRateLimiter, recordLoginFailure, recordLoginSuccess
 };

@@ -13,6 +13,9 @@ const sheetsLib = require('./lib/sheets');
 const app  = express();
 const PORT = process.env.PORT;
 
+// Railway sits behind a proxy — trust first hop so req.ip reflects the client IP.
+app.set('trust proxy', 1);
+
 // OAuth credentials: env vars take precedence (required on Railway); fall back to local gcloud ADC file for dev
 let ADC = { client_id: process.env.GOOGLE_CLIENT_ID, client_secret: process.env.GOOGLE_CLIENT_SECRET };
 if (!ADC.client_id) {
@@ -74,13 +77,50 @@ app.use(passport.session());
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ── Routes ───────────────────────────────────────────────────────────────────
-app.use('/auth',    require('./routes/auth')(passport));
-app.use('/api',     require('./routes/api'));
-app.use('/api',     require('./routes/events'));
-app.use('/social',  require('./routes/social'));
+// ── Activity logging middleware ───────────────────────────────────────────────
+// Runs after static files (already handled above) so we only capture
+// authenticated app requests. Writes are batched; never blocks the request.
+const { attachUser } = require('./middleware/auth');
 
-const { requireAuth, requireBoard, requireBoardOrAdmin, requireActiveVolunteer, getJwtVolunteer } = require('./middleware/auth');
+const SKIP_LOG_PATHS = new Set([
+  '/api/me',             // called on every page load — low signal, high noise
+  '/api/admin/activity'  // avoid recursive self-logging
+]);
+
+function deriveAction(method, urlPath) {
+  const m = method.toUpperCase();
+  if (m === 'GET')               return 'View';
+  if (m === 'POST')              return 'Create';
+  if (m === 'PATCH' || m === 'PUT') return 'Update';
+  if (m === 'DELETE')            return 'Delete';
+  return m;
+}
+
+app.use((req, res, next) => {
+  if (SKIP_LOG_PATHS.has(req.path)) return next();
+  attachUser(req, res, () => {
+    if (req.user) {
+      sheetsLib.logActivity({
+        email:     req.user.email,
+        action:    deriveAction(req.method, req.path),
+        route:     req.path,
+        method:    req.method,
+        ip:        req.ip || '',
+        userAgent: (req.headers['user-agent'] || '').slice(0, 200)
+      });
+    }
+    next();
+  });
+});
+
+// ── Routes ───────────────────────────────────────────────────────────────────
+app.use('/auth',       require('./routes/auth')(passport));
+app.use('/api',        require('./routes/api'));
+app.use('/api',        require('./routes/events'));
+app.use('/api/admin',  require('./routes/admin'));
+app.use('/social',     require('./routes/social'));
+
+const { requireAuth, requireBoard, requireBoardOrAdmin, requireActiveVolunteer, requireVP, getJwtVolunteer } = require('./middleware/auth');
 
 app.get('/', (req, res) => {
   if (req.isAuthenticated()) {
@@ -99,6 +139,7 @@ app.get('/volunteer',    requireActiveVolunteer, (req, res) => res.sendFile(path
 app.get('/social-feed',  requireBoard, (req, res) => res.sendFile(path.join(__dirname, 'views/social.html')));
 
 app.get('/volunteer/pending-approval', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'views/pending-approval.html')));
+app.get('/admin/usage', requireVP, (req, res) => res.sendFile(path.join(__dirname, 'views/admin-usage.html')));
 app.get('/volunteers/pending', requireBoardOrAdmin, (req, res) => res.sendFile(path.join(__dirname, 'views/pending-volunteers.html')));
 
 // Detail pages — open to both roles; the API endpoints behind them filter

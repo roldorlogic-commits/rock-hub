@@ -4,7 +4,11 @@
 let eventsById = {};
 
 (async () => {
-  await initUser();
+  const user = await initUser();
+  if (user?.email === 'vicepresident@gorock.org') {
+    const adminLink = document.getElementById('adminUsageLink');
+    if (adminLink) adminLink.style.display = '';
+  }
   await loadEvents(); // populates eventsById before tasks render
   await Promise.all([
     loadStats(), loadTasks(), loadContacts(), loadFiles(),
