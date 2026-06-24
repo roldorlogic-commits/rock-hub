@@ -146,6 +146,7 @@ function recordLoginSuccess(email) {
 
 module.exports = {
   VP_EMAIL,
+  attachUser,
   requireAuth, requireBoard, requireBoardOrAdmin, requireActiveVolunteer, requireVP,
   signVolunteerToken, volunteerCookieOptions, getJwtVolunteer, VOLUNTEER_COOKIE,
   loginRateLimiter, recordLoginFailure, recordLoginSuccess
