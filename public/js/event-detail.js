@@ -459,17 +459,41 @@ async function saveOverview() {
 
 // ── Registrations tab ─────────────────────────────────────────────────────────
 
+let _regRaw = [];                 // all registrations for this event
+let _regCache = {};               // RegistrationID → registration
+let _regSignupsByEmail = {};      // lowercased email → volunteer signup (board)
+let _regFilters = { name: '', status: 'All', source: 'All' };
+let _regSort = { key: 'name', dir: 'asc' };
+
 async function loadRegistrations() {
   _tabLoad('registrationsContent', async (el) => {
-    const regs = await apiFetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/registrations`);
+    const isBoard = currentUser?.role === 'Board';
+    const [regs, signups] = await Promise.all([
+      apiFetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/registrations`),
+      isBoard
+        ? apiFetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/signups`).catch(() => [])
+        : Promise.resolve([])
+    ]);
+    _regSignupsByEmail = {};
+    for (const s of signups) {
+      const key = (s.Email || '').toLowerCase();
+      // Prefer an approved signup if the person has more than one.
+      if (key && (!_regSignupsByEmail[key] || s.Status === 'approved')) _regSignupsByEmail[key] = s;
+    }
     renderRegistrationsTab(regs, el);
   });
 }
 
-let _regCategoryFilter = 'All';
+function _regIsVolunteer(r) {
+  return r.Source === 'volunteer' || r.Category === 'Volunteer' || (r.Category === '' && r.Role);
+}
 
 function renderRegistrationsTab(regs, el) {
   el = el || document.getElementById('registrationsContent');
+  _regRaw = regs;
+  _regCache = {};
+  for (const r of regs) _regCache[r.RegistrationID] = r;
+
   const isBoard = currentUser?.role === 'Board';
   const cap     = parseInt(currentEvent?.Capacity, 10) || 0;
   const total      = regs.length;
@@ -478,8 +502,6 @@ function renderRegistrationsTab(regs, el) {
   const waitlisted = regs.filter(r => r.Status === 'Waitlisted').length;
   const checkedIn  = regs.filter(r => r.CheckedIn === 'TRUE' || r.CheckedIn === 'true').length;
   const capPct     = cap > 0 ? Math.min(100, Math.round(((confirmed + pending) / cap) * 100)) : 0;
-  const volunteers = regs.filter(r => r.Category === 'Volunteer' || (r.Category === '' && r.Role)).length;
-  const attendees  = total - volunteers;
 
   const stats = `<div class="reg-stats-bar">
     <div class="reg-stat"><span class="reg-stat-num">${total}</span><span class="reg-stat-label">Total</span></div>
@@ -497,11 +519,17 @@ function renderRegistrationsTab(regs, el) {
     </div>` : ''}
   </div>`;
 
-  const catFilter = `<div class="reg-cat-filter">
-    ${[['All', total], ['Attendees', attendees], ['Volunteers', volunteers]].map(([lbl, cnt]) =>
-      `<button class="btn btn-sm ${_regCategoryFilter === lbl ? 'btn-gold' : 'btn-outline'}"
-               onclick="setRegCatFilter('${lbl}')">${lbl} (${cnt})</button>`
-    ).join('')}
+  const filterBar = `<div class="reg-filter-bar">
+    <input type="search" class="reg-filter-name" id="regFilterName" placeholder="Filter by name…"
+           value="${_esc(_regFilters.name)}" oninput="onRegFilter('name', this.value)">
+    <select id="regFilterStatus" onchange="onRegFilter('status', this.value)">
+      ${['All', 'Confirmed', 'Pending', 'Cancelled'].map(s =>
+        `<option value="${s}"${_regFilters.status === s ? ' selected' : ''}>${s === 'All' ? 'All statuses' : s}</option>`).join('')}
+    </select>
+    <select id="regFilterSource" onchange="onRegFilter('source', this.value)">
+      ${[['All', 'All sources'], ['Registered', 'Registered'], ['Volunteer', 'Volunteer']].map(([v, lbl]) =>
+        `<option value="${v}"${_regFilters.source === v ? ' selected' : ''}>${lbl}</option>`).join('')}
+    </select>
   </div>`;
 
   const boardActions = isBoard ? `<div class="reg-actions">
@@ -509,37 +537,93 @@ function renderRegistrationsTab(regs, el) {
     <button class="btn btn-gold btn-sm" onclick="openAddRegModal()">+ Add Registrant</button>
   </div>` : '';
 
-  let filtered = [...regs];
-  if (_regCategoryFilter === 'Volunteers') {
-    filtered = regs.filter(r => r.Category === 'Volunteer' || (r.Category === '' && r.Role));
-  } else if (_regCategoryFilter === 'Attendees') {
-    filtered = regs.filter(r => r.Category === 'Attendee' || (r.Category === '' && !r.Role));
-  }
-  const sorted = filtered.sort((a, b) => {
-    const ord = { Confirmed: 0, Pending: 1, Waitlisted: 2, Cancelled: 3 };
-    return (ord[a.Status] ?? 9) - (ord[b.Status] ?? 9);
-  });
+  const cols = [['name', 'Name'], ['email', 'Email'], ['status', 'Status'], ['date', 'Date'], ['source', 'Source']];
+  const sortHeader = `<div class="reg-sort-header" id="regSortHeader">
+    ${cols.map(([key, lbl]) =>
+      `<button class="reg-sort-col${_regSort.key === key ? ' active' : ''}" onclick="setRegSort('${key}')">
+        ${lbl}<span class="reg-sort-arrow">${_regSort.key === key ? (_regSort.dir === 'asc' ? '▲' : '▼') : ''}</span>
+      </button>`).join('')}
+  </div>`;
 
-  el.innerHTML = stats + catFilter + boardActions + `<div class="reg-list">${
-    sorted.length ? sorted.map(r => _regRow(r, isBoard)).join('') : emptyState('No registrations match this filter.')
-  }</div>`;
+  el.innerHTML = stats + filterBar + boardActions + sortHeader +
+    `<div class="reg-list" id="regListInner"></div>`;
+  _refreshRegList();
 }
 
-function setRegCatFilter(filter) {
-  _regCategoryFilter = filter;
-  loadRegistrations();
+function onRegFilter(key, value) {
+  _regFilters[key] = value;
+  _refreshRegList();
+}
+
+function setRegSort(key) {
+  if (_regSort.key === key) _regSort.dir = _regSort.dir === 'asc' ? 'desc' : 'asc';
+  else { _regSort.key = key; _regSort.dir = 'asc'; }
+  // Update header arrows without a full re-render.
+  document.querySelectorAll('#regSortHeader .reg-sort-col').forEach(btn => {
+    const active = btn.getAttribute('onclick') === `setRegSort('${key}')`;
+    btn.classList.toggle('active', active);
+    const arrow = btn.querySelector('.reg-sort-arrow');
+    if (arrow) arrow.textContent = active ? (_regSort.dir === 'asc' ? '▲' : '▼') : '';
+  });
+  _refreshRegList();
+}
+
+function _regSortValue(r, key) {
+  switch (key) {
+    case 'email':  return (r.Email || '').toLowerCase();
+    case 'status': return (r.Status || '').toLowerCase();
+    case 'date':   return r.SignUpDate ? new Date(r.SignUpDate + 'T00:00:00').getTime() || 0 : 0;
+    case 'source': return _regIsVolunteer(r) ? 1 : 0;
+    case 'name':
+    default:       return [r.FirstName, r.LastName].filter(Boolean).join(' ').toLowerCase();
+  }
+}
+
+function _applyRegFilters() {
+  const nameQ = _regFilters.name.trim().toLowerCase();
+  let list = _regRaw.filter(r => {
+    if (nameQ) {
+      const name = [r.FirstName, r.LastName].filter(Boolean).join(' ').toLowerCase();
+      if (!name.includes(nameQ)) return false;
+    }
+    if (_regFilters.status !== 'All' && (r.Status || '') !== _regFilters.status) return false;
+    if (_regFilters.source === 'Volunteer' && !_regIsVolunteer(r)) return false;
+    if (_regFilters.source === 'Registered' && _regIsVolunteer(r)) return false;
+    return true;
+  });
+  const dir = _regSort.dir === 'asc' ? 1 : -1;
+  list.sort((a, b) => {
+    const av = _regSortValue(a, _regSort.key), bv = _regSortValue(b, _regSort.key);
+    if (av < bv) return -1 * dir;
+    if (av > bv) return 1 * dir;
+    return 0;
+  });
+  return list;
+}
+
+function _refreshRegList() {
+  const listEl = document.getElementById('regListInner');
+  if (!listEl) return;
+  const isBoard = currentUser?.role === 'Board';
+  const sorted = _applyRegFilters();
+  listEl.innerHTML = sorted.length
+    ? sorted.map(r => _regRow(r, isBoard)).join('')
+    : emptyState('No registrations match these filters.');
 }
 
 function _regRow(r, isBoard) {
   const name = [r.FirstName, r.LastName].filter(Boolean).join(' ') || r.Email || '—';
   const ci   = r.CheckedIn === 'TRUE' || r.CheckedIn === 'true';
-  const isVol = r.Category === 'Volunteer' || (r.Category === '' && r.Role);
-  const catBadge = isVol
-    ? `<span class="status-pill active" style="font-size:10px;padding:1px 6px;margin-left:4px;">Volunteer</span>`
-    : `<span class="status-pill" style="font-size:10px;padding:1px 6px;margin-left:4px;opacity:0.6;">Attendee</span>`;
+  const isVol = _regIsVolunteer(r);
+  const badge = r.Source === 'volunteer'
+    ? `<span class="status-pill active reg-vol-badge" style="font-size:10px;padding:1px 6px;margin-left:4px;">VOLUNTEER</span>`
+    : isVol
+      ? `<span class="status-pill active" style="font-size:10px;padding:1px 6px;margin-left:4px;">Volunteer</span>`
+      : `<span class="status-pill" style="font-size:10px;padding:1px 6px;margin-left:4px;opacity:0.6;">Attendee</span>`;
   const statusCell = isBoard
     ? `<select class="reg-status-sel status-${(r.Status || '').toLowerCase()}"
-               onchange="updateRegStatus('${r.RegistrationID}', this.value, this)">
+               onclick="event.stopPropagation()"
+               onchange="event.stopPropagation(); updateRegStatus('${r.RegistrationID}', this.value, this)">
          <option value="Pending"    ${r.Status === 'Pending'    ? 'selected' : ''}>Pending</option>
          <option value="Confirmed"  ${r.Status === 'Confirmed'  ? 'selected' : ''}>Confirmed</option>
          <option value="Waitlisted" ${r.Status === 'Waitlisted' ? 'selected' : ''}>Waitlisted</option>
@@ -548,15 +632,16 @@ function _regRow(r, isBoard) {
     : statusPill(r.Status);
   const checkinCell = isBoard
     ? `<button class="btn btn-sm ${ci ? 'btn-checkin-done' : 'btn-outline'}"
-               onclick="toggleCheckin('${r.RegistrationID}', ${ci}, this)">
+               onclick="event.stopPropagation(); toggleCheckin('${r.RegistrationID}', ${ci}, this)">
          ${ci ? '✓ In' : 'Check In'}
        </button>`
     : (ci ? `<span class="status-pill active" style="font-size:10px;">✓ In</span>` : '');
-  return `<div class="reg-row" data-reg-id="${r.RegistrationID}">
+  return `<div class="reg-row${isBoard ? ' reg-clickable' : ''}" data-reg-id="${r.RegistrationID}"
+              ${isBoard ? `onclick="openRegPanel('${r.RegistrationID}')"` : ''}>
     <div class="reg-person">
       <div class="avatar-initials" style="width:30px;height:30px;font-size:10px;flex-shrink:0;">${initials(name)}</div>
       <div style="min-width:0;">
-        <div class="reg-person-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:2px;">${_esc(name)}${catBadge}</div>
+        <div class="reg-person-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:2px;">${_esc(name)}${badge}</div>
         <div class="reg-person-sub">${_esc(r.Email || '')}${r.Role ? ` · ${_esc(r.Role)}` : ''}</div>
       </div>
     </div>
@@ -566,6 +651,71 @@ function _regRow(r, isBoard) {
     </div>
     <div class="reg-controls">${statusCell}${checkinCell}</div>
   </div>`;
+}
+
+// ── Registration detail panel (Board — click-to-edit) ────────────────────────
+
+function openRegPanel(regId) {
+  const r = _regCache[regId];
+  if (!r) return;
+  document.getElementById('regPanel_ID').value        = regId;
+  document.getElementById('regPanel_FirstName').value = r.FirstName || '';
+  document.getElementById('regPanel_LastName').value  = r.LastName || '';
+  document.getElementById('regPanel_Email').value     = r.Email || '';
+  document.getElementById('regPanel_Phone').value     = r.Phone || '';
+  document.getElementById('regPanel_SignUpDate').value = r.SignUpDate || '';
+  document.getElementById('regPanel_Status').value    = r.Status || 'Pending';
+  document.getElementById('regPanel_Notes').value     = r.Notes || '';
+  _modalError('regPanelError', '');
+
+  // Read-only volunteer role, matched by email against this event's signups.
+  const sec = document.getElementById('regPanel_VolSection');
+  const signup = _regSignupsByEmail[(r.Email || '').toLowerCase()];
+  if (signup) {
+    document.getElementById('regPanel_VolTitle').textContent  = signup.PositionTitle || '—';
+    const st = (signup.Status || 'pending').toLowerCase();
+    const cls = st === 'approved' ? 'confirmed' : st === 'rejected' ? 'cancelled' : 'pending';
+    document.getElementById('regPanel_VolStatus').innerHTML = `<span class="status-pill ${cls}" style="font-size:10px;">${st.toUpperCase()}</span>`;
+    sec.style.display = '';
+  } else {
+    sec.style.display = 'none';
+  }
+
+  document.getElementById('regPanelOverlay').classList.add('open');
+  document.getElementById('regPanel').classList.add('open');
+}
+
+function closeRegPanel() {
+  document.getElementById('regPanelOverlay').classList.remove('open');
+  document.getElementById('regPanel').classList.remove('open');
+}
+
+async function saveRegPanel() {
+  const g = id => (document.getElementById(id)?.value ?? '').trim();
+  const regId = g('regPanel_ID');
+  if (!regId) return;
+  _modalError('regPanelError', '');
+  _btnLoading('regPanelSaveBtn', true, 'Save Changes');
+  try {
+    const res = await fetch(
+      `/api/events/${encodeURIComponent(currentEvent.EventID)}/registrations/${encodeURIComponent(regId)}`,
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          FirstName: g('regPanel_FirstName'), LastName: g('regPanel_LastName'),
+          Email: g('regPanel_Email'), Phone: g('regPanel_Phone'),
+          SignUpDate: g('regPanel_SignUpDate'), Status: g('regPanel_Status'),
+          Notes: g('regPanel_Notes')
+        }) }
+    );
+    const data = await res.json();
+    if (!res.ok) { _modalError('regPanelError', data.error || 'Save failed.'); return; }
+    closeRegPanel();
+    await loadRegistrations();
+  } catch (err) {
+    _modalError('regPanelError', 'Network error — please try again.');
+  } finally {
+    _btnLoading('regPanelSaveBtn', false, 'Save Changes');
+  }
 }
 
 async function updateRegStatus(regId, status, selectEl) {

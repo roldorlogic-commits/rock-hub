@@ -369,12 +369,57 @@
   flex-shrink: 0;
 }
 
-.reg-cat-filter {
+.reg-filter-bar {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   margin-bottom: 10px;
 }
+.reg-filter-bar input,
+.reg-filter-bar select {
+  background: var(--bg-primary);
+  border: 0.5px solid var(--gold-line);
+  border-radius: var(--radius-sm);
+  color: var(--text-white);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 10px;
+}
+.reg-filter-bar input:focus,
+.reg-filter-bar select:focus { outline: none; border-color: var(--gold); }
+.reg-filter-name { flex: 1; min-width: 160px; }
+.reg-filter-bar select { cursor: pointer; }
+.reg-filter-bar select option { background: var(--bg-secondary); }
+
+.reg-sort-header {
+  display: flex;
+  gap: 8px;
+  padding: 0 14px 6px;
+  margin-bottom: 4px;
+  border-bottom: 0.5px solid var(--gold-line);
+}
+.reg-sort-col {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 2px 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: color var(--ease);
+}
+.reg-sort-col:hover { color: var(--text-white); }
+.reg-sort-col.active { color: var(--gold); }
+.reg-sort-arrow { font-size: 8px; }
+
+.reg-clickable { cursor: pointer; }
+.reg-vol-badge { letter-spacing: .04em; }
 
 .reg-actions {
   display: flex;
@@ -823,3 +868,21 @@
 }
 .vol-signup-table td .btn { margin-right: 4px; }
 .vol-signup-table tr:last-child td { border-bottom: none; }
+
+/* ── Registration detail panel — volunteer role section ──────────────────────── */
+.reg-panel-vol {
+  background: var(--gold-faint, rgba(201,169,110,.06));
+  border: 0.5px solid var(--gold-line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-top: 4px;
+}
+.reg-panel-vol-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 6px;
+}
+.reg-panel-vol-title { font-size: 13px; font-weight: 600; color: var(--text-white); margin-bottom: 6px; }
