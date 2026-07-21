@@ -7,6 +7,7 @@
 const express = require('express');
 const router  = express.Router();
 const sheets  = require('../lib/sheets');
+const registrations = require('../lib/registrations');
 const drive   = require('../lib/drive');
 const email   = require('../lib/email');
 const sms     = require('../lib/sms');
@@ -269,6 +270,24 @@ router.patch('/events/:eventId/registrations/:regId', requireBoard, async (req, 
     }
     if (req.body.Notes !== undefined) fields.Notes = req.body.Notes;
     const updated = await sheets.updateRowFields('EventRegistrations', 'RegistrationID', req.params.regId, fields);
+    if (!updated) return res.status(404).json({ error: 'Registration not found.' });
+    res.json(updated);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Full edit from the registrations detail panel. Accepts the editable fields
+// and, for volunteer-sourced registrants, mirrors name/email/phone changes
+// back onto the matching VolunteerSignup row (handled in lib/registrations).
+router.put('/events/:eventId/registrations/:regId', requireBoard, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const fields = {};
+    for (const k of ['FirstName', 'LastName', 'Email', 'Phone', 'SignUpDate', 'Status', 'Notes']) {
+      if (b[k] !== undefined) fields[k] = b[k];
+    }
+    if (b.Status === 'Confirmed') fields.ConfirmedDate = todayStr();
+    if (!Object.keys(fields).length) return res.status(400).json({ error: 'Nothing to update.' });
+    const updated = await registrations.updateRegistrant(req.params.regId, fields);
     if (!updated) return res.status(404).json({ error: 'Registration not found.' });
     res.json(updated);
   } catch (err) { res.status(500).json({ error: err.message }); }

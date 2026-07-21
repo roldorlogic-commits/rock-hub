@@ -117,6 +117,7 @@ app.use((req, res, next) => {
 app.use('/auth',       require('./routes/auth')(passport));
 app.use('/api',        require('./routes/api'));
 app.use('/api',        require('./routes/events'));
+app.use('/api',        require('./routes/volunteer'));
 app.use('/api/admin',  require('./routes/admin'));
 app.use('/social',     require('./routes/social'));
 
