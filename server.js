@@ -167,5 +167,5 @@ sheetsLib.ensureColumns('Members', ['Tags'])
 sheetsLib.ensureColumns('Documents', ['DocumentID', 'UploadedBy', 'Tags', 'Source'])
   .catch(err => console.error('Could not add columns to Documents:', err.message));
 
-sheetsLib.ensureColumns('EventRegistrations', ['Category'])
-  .catch(err => console.error('Could not add Category column to EventRegistrations:', err.message));
+sheetsLib.ensureColumns('EventRegistrations', ['Category', 'Source'])
+  .catch(err => console.error('Could not add columns to EventRegistrations:', err.message));
