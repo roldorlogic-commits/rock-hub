@@ -144,6 +144,7 @@ function switchTab(tabName, el) {
     const loaders = {
       itinerary:     loadItinerary,
       registrations: loadRegistrations,
+      volunteers:    loadVolunteers,
       checklist:     loadChecklist,
       budget:        loadBudget,
       documents:     loadDocuments,
@@ -634,6 +635,313 @@ async function submitAddReg() {
     _modalError('addRegError','Network error — please try again.');
   } finally {
     _btnLoading('addRegSubmitBtn', false, 'Add Registrant');
+  }
+}
+
+// ── Volunteers tab ────────────────────────────────────────────────────────────
+
+let _volPositions = [];
+let _volContactMap = {};        // datalist value → { name, email, phone }
+const _volSignupsByPos = {};    // posId → signups[] (board, lazy-loaded)
+const _volExpanded = new Set(); // posIds whose signup table is open
+
+// Positions the current (non-board) user has signed up for, persisted per
+// event so the "Pending approval" state survives a reload.
+function _volMineKey() { return `rock_vol_signups_${currentEvent?.EventID || ''}`; }
+function _volMine() {
+  try { return new Set(JSON.parse(localStorage.getItem(_volMineKey()) || '[]')); }
+  catch { return new Set(); }
+}
+function _volMarkMine(posId) {
+  const s = _volMine(); s.add(posId);
+  localStorage.setItem(_volMineKey(), JSON.stringify([...s]));
+}
+
+async function loadVolunteers() {
+  _tabLoad('volunteersContent', async (el) => {
+    _volPositions = await apiFetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/positions`);
+    renderVolunteersTab(_volPositions, el);
+  });
+}
+
+function _volStatusBadge(status) {
+  const s = (status || 'open').toLowerCase();
+  const cls = s === 'filled' ? 'confirmed' : s === 'closed' ? 'cancelled' : 'active';
+  return `<span class="status-pill ${cls}" style="font-size:10px;">${s.toUpperCase()}</span>`;
+}
+
+function renderVolunteersTab(positions, el) {
+  el = el || document.getElementById('volunteersContent');
+  const isBoard = currentUser?.role === 'Board';
+
+  const header = `<div class="tab-inner-header">
+    <div style="font-size:12px;color:var(--text-muted);">${positions.length} position${positions.length === 1 ? '' : 's'}</div>
+    ${isBoard ? `<button class="btn btn-gold btn-sm" onclick="openAddPositionModal()">+ Add Position</button>` : ''}
+  </div>`;
+
+  if (!positions.length) {
+    el.innerHTML = header + emptyState(isBoard
+      ? 'No volunteer positions yet. Add one to start recruiting.'
+      : 'No volunteer positions have been posted for this event yet.');
+    return;
+  }
+
+  el.innerHTML = header + `<div class="vol-list">${
+    positions.map(p => _positionCard(p, isBoard)).join('')
+  }</div>`;
+
+  // Re-open any signup tables that were expanded before a refresh.
+  if (isBoard) _volExpanded.forEach(posId => {
+    if (!positions.some(p => p.PositionID === posId)) return;
+    const card = el.querySelector(`.vol-card[data-pos-id="${posId}"]`);
+    const btn  = card?.querySelector('.vol-card-actions .btn-outline');
+    if (btn) btn.textContent = 'Hide Signups';
+    _renderSignupTable(posId);
+  });
+}
+
+function _positionCard(p, isBoard) {
+  const total     = parseInt(p.SlotsTotal, 10) || 0;
+  const filled    = parseInt(p.SlotsFilled, 10) || 0;
+  const remaining = Math.max(0, total - filled);
+  const editIco  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+  const trashIco = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+
+  let action;
+  if (isBoard) {
+    action = `<div class="vol-card-actions">
+      <button class="btn btn-outline btn-sm" onclick="toggleSignups('${p.PositionID}', this)">Manage Signups</button>
+      <button class="icon-btn" title="Edit" onclick="openEditPositionModal('${p.PositionID}')">${editIco}</button>
+      <button class="icon-btn" title="Delete" onclick="deletePosition('${p.PositionID}')">${trashIco}</button>
+    </div>`;
+  } else {
+    const mine = _volMine().has(p.PositionID);
+    if (mine) {
+      action = `<div class="vol-card-actions"><span class="status-pill pending" style="font-size:11px;">⏳ Pending approval</span></div>`;
+    } else if ((p.Status || 'open').toLowerCase() === 'open' && remaining > 0) {
+      action = `<div class="vol-card-actions"><button class="btn btn-gold btn-sm" onclick="openVolSignupModal('${p.PositionID}')">Sign Up</button></div>`;
+    } else {
+      action = `<div class="vol-card-actions"><span class="status-pill" style="font-size:11px;opacity:.6;">Not accepting signups</span></div>`;
+    }
+  }
+
+  return `<div class="vol-card" data-pos-id="${p.PositionID}">
+    <div class="vol-card-head">
+      <div style="min-width:0;">
+        <div class="vol-card-title">${_esc(p.Title)}</div>
+        ${p.Description ? `<div class="vol-card-desc">${_esc(p.Description)}</div>` : ''}
+        <div class="vol-card-slots">
+          ${_volStatusBadge(p.Status)}
+          <span>${filled} of ${total} filled${!isBoard && remaining > 0 ? ` · ${remaining} slot${remaining === 1 ? '' : 's'} left` : ''}</span>
+        </div>
+      </div>
+      ${action}
+    </div>
+    <div class="vol-signups" id="volSignups_${p.PositionID}" style="display:none;"></div>
+  </div>`;
+}
+
+// ── Manage signups (board, inline expand) ────────────────────────────────────
+
+async function toggleSignups(posId, btn) {
+  const box = document.getElementById(`volSignups_${posId}`);
+  if (!box) return;
+  if (_volExpanded.has(posId)) {
+    _volExpanded.delete(posId);
+    box.style.display = 'none';
+    if (btn) btn.textContent = 'Manage Signups';
+    return;
+  }
+  _volExpanded.add(posId);
+  if (btn) btn.textContent = 'Hide Signups';
+  box.style.display = 'block';
+  box.innerHTML = `<div class="loading-row"><div class="spinner"></div></div>`;
+  await _renderSignupTable(posId);
+}
+
+async function _renderSignupTable(posId) {
+  const box = document.getElementById(`volSignups_${posId}`);
+  if (!box) return;
+  try {
+    const signups = await apiFetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/positions/${encodeURIComponent(posId)}/signups`);
+    _volSignupsByPos[posId] = signups;
+    if (!signups.length) { box.innerHTML = `<div class="vol-signups-empty">No signups yet.</div>`; box.style.display = 'block'; return; }
+    box.innerHTML = `<table class="vol-signup-table">
+      <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Status</th><th>Submitted</th><th>Actions</th></tr></thead>
+      <tbody>${signups.map(s => _signupRow(posId, s)).join('')}</tbody>
+    </table>`;
+    box.style.display = 'block';
+  } catch (e) {
+    box.innerHTML = `<div class="vol-signups-empty">Could not load signups.</div>`;
+    box.style.display = 'block';
+  }
+}
+
+function _signupRow(posId, s) {
+  const status = (s.Status || 'pending').toLowerCase();
+  const cls = status === 'approved' ? 'confirmed' : status === 'rejected' ? 'cancelled' : 'pending';
+  const actions = status === 'pending'
+    ? `<button class="btn btn-sm btn-gold" onclick="setSignupStatus('${posId}','${s.SignupID}','approved')">Approve</button>
+       <button class="btn btn-sm btn-outline" onclick="setSignupStatus('${posId}','${s.SignupID}','rejected')">Reject</button>`
+    : `<button class="btn btn-sm btn-outline" onclick="setSignupStatus('${posId}','${s.SignupID}','pending')" title="Reset to pending">Reset</button>`;
+  return `<tr>
+    <td>${_esc(s.ContactName || '—')}</td>
+    <td>${_esc(s.Email || '')}</td>
+    <td>${_esc(s.Phone || '')}</td>
+    <td><span class="status-pill ${cls}" style="font-size:10px;">${status.toUpperCase()}</span></td>
+    <td style="white-space:nowrap;">${s.SignedUpAt ? fmtDate(s.SignedUpAt) : '—'}</td>
+    <td style="white-space:nowrap;">${actions}</td>
+  </tr>`;
+}
+
+async function setSignupStatus(posId, signupId, status) {
+  try {
+    const res = await fetch(
+      `/api/events/${encodeURIComponent(currentEvent.EventID)}/positions/${encodeURIComponent(posId)}/signups/${encodeURIComponent(signupId)}`,
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ Status: status }) }
+    );
+    if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'Could not update signup.'); return; }
+    // Refresh positions (slot counts change) then re-open this table.
+    _volExpanded.add(posId);
+    await loadVolunteers();
+    // Approving auto-enrolls a registrant — refresh that tab next time it opens.
+    if (status === 'approved') _tabLoaded.registrations = false;
+  } catch (e) { alert('Network error — please try again.'); }
+}
+
+// ── Position add / edit modal ────────────────────────────────────────────────
+
+async function _loadContactsDatalist() {
+  const dl = document.getElementById('pos_ContactList');
+  if (!dl || Object.keys(_volContactMap).length) return; // load once
+  try {
+    const members = await apiFetch('/api/members');
+    _volContactMap = {};
+    dl.innerHTML = members.map(m => {
+      const name = [m.FirstName, m.LastName].filter(Boolean).join(' ');
+      if (!m.Email && !name) return '';
+      const label = `${name}${m.Email ? ` <${m.Email}>` : ''}`;
+      _volContactMap[label] = { name, email: m.Email || '', phone: m.Phone || '' };
+      return `<option value="${_esc(label)}"></option>`;
+    }).join('');
+  } catch (e) { /* assign-to just won't autocomplete */ }
+}
+
+function openAddPositionModal() {
+  document.getElementById('posForm')?.reset();
+  document.getElementById('pos_ID').value = '';
+  document.getElementById('pos_Slots').value = '1';
+  document.getElementById('posModalTitle').textContent = 'Add Position';
+  document.getElementById('posSubmitBtn').textContent = 'Add Position';
+  document.getElementById('pos_AssignWrap').style.display = '';
+  _modalError('posError', '');
+  _loadContactsDatalist();
+  _openModal('posOverlay', 'posModal');
+}
+
+function openEditPositionModal(posId) {
+  const p = _volPositions.find(x => x.PositionID === posId);
+  if (!p) return;
+  document.getElementById('posForm')?.reset();
+  document.getElementById('pos_ID').value = posId;
+  document.getElementById('pos_Title').value = p.Title || '';
+  document.getElementById('pos_Description').value = p.Description || '';
+  document.getElementById('pos_Slots').value = p.SlotsTotal || '1';
+  document.getElementById('posModalTitle').textContent = 'Edit Position';
+  document.getElementById('posSubmitBtn').textContent = 'Save Changes';
+  // Assign-To only applies when first creating a position.
+  document.getElementById('pos_AssignWrap').style.display = 'none';
+  _modalError('posError', '');
+  _openModal('posOverlay', 'posModal');
+}
+
+function closePositionModal() { _closeModal('posOverlay', 'posModal'); }
+
+async function submitPosition() {
+  const g = id => (document.getElementById(id)?.value ?? '').trim();
+  const id    = g('pos_ID');
+  const title = g('pos_Title');
+  if (!title) { _modalError('posError', 'Position title is required.'); return; }
+  _modalError('posError', '');
+  _btnLoading('posSubmitBtn', true, id ? 'Save Changes' : 'Add Position');
+
+  const body = {
+    Title: title, Description: g('pos_Description'),
+    SlotsTotal: g('pos_Slots') || '1'
+  };
+  if (!id) {
+    const assign = _volContactMap[g('pos_Assign')];
+    if (assign) { body.AssignName = assign.name; body.AssignEmail = assign.email; body.AssignPhone = assign.phone; }
+  }
+
+  try {
+    const url = id
+      ? `/api/events/${encodeURIComponent(currentEvent.EventID)}/positions/${encodeURIComponent(id)}`
+      : `/api/events/${encodeURIComponent(currentEvent.EventID)}/positions`;
+    const res = await fetch(url, {
+      method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) { _modalError('posError', data.error || 'Failed.'); return; }
+    closePositionModal();
+    if (!id && (body.AssignEmail)) _tabLoaded.registrations = false; // assigned contact becomes a registrant
+    await loadVolunteers();
+  } catch (err) {
+    _modalError('posError', 'Network error — please try again.');
+  } finally {
+    _btnLoading('posSubmitBtn', false, id ? 'Save Changes' : 'Add Position');
+  }
+}
+
+async function deletePosition(posId) {
+  if (!confirm('Delete this position and all its signups from view?')) return;
+  try {
+    const res = await fetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/positions/${encodeURIComponent(posId)}`, { method: 'DELETE' });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'Could not delete.'); return; }
+    _volExpanded.delete(posId);
+    await loadVolunteers();
+  } catch (e) { alert('Network error.'); }
+}
+
+// ── Volunteer sign-up modal (member view) ────────────────────────────────────
+
+function openVolSignupModal(posId) {
+  const p = _volPositions.find(x => x.PositionID === posId);
+  document.getElementById('volSignupForm')?.reset();
+  document.getElementById('volSignup_PosID').value = posId;
+  document.getElementById('volSignupPosTitle').textContent = p ? p.Title : '';
+  if (currentUser) {
+    document.getElementById('volSignup_Name').value  = currentUser.name || '';
+    document.getElementById('volSignup_Email').value = currentUser.email || '';
+  }
+  _modalError('volSignupError', '');
+  _openModal('volSignupOverlay', 'volSignupModal');
+}
+
+function closeVolSignupModal() { _closeModal('volSignupOverlay', 'volSignupModal'); }
+
+async function submitVolSignup() {
+  const g = id => (document.getElementById(id)?.value ?? '').trim();
+  const posId = g('volSignup_PosID');
+  const name  = g('volSignup_Name'), email_ = g('volSignup_Email');
+  if (!name || !email_) { _modalError('volSignupError', 'Name and email are required.'); return; }
+  _modalError('volSignupError', '');
+  _btnLoading('volSignupSubmitBtn', true, 'Sign Up');
+  try {
+    const res = await fetch(
+      `/api/events/${encodeURIComponent(currentEvent.EventID)}/positions/${encodeURIComponent(posId)}/signup`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ContactName: name, Email: email_, Phone: g('volSignup_Phone'), Notes: g('volSignup_Notes') }) }
+    );
+    const data = await res.json();
+    if (!res.ok) { _modalError('volSignupError', data.error || 'Failed.'); return; }
+    _volMarkMine(posId);
+    closeVolSignupModal();
+    await loadVolunteers();
+  } catch (err) {
+    _modalError('volSignupError', 'Network error — please try again.');
+  } finally {
+    _btnLoading('volSignupSubmitBtn', false, 'Sign Up');
   }
 }
 

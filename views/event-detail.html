@@ -75,6 +75,7 @@
       <button class="event-tab active" data-tab="overview"      onclick="switchTab('overview',this)">Overview</button>
       <button class="event-tab"        data-tab="itinerary"     onclick="switchTab('itinerary',this)">Itinerary</button>
       <button class="event-tab"        data-tab="registrations" onclick="switchTab('registrations',this)">Registrations</button>
+      <button class="event-tab"        data-tab="volunteers"    onclick="switchTab('volunteers',this)">Volunteers</button>
       <button class="event-tab"        data-tab="checklist"     onclick="switchTab('checklist',this)">Checklist</button>
       <button class="event-tab"        data-tab="budget"        onclick="switchTab('budget',this)">Budget</button>
       <button class="event-tab"        data-tab="documents"     onclick="switchTab('documents',this)">Documents</button>
@@ -101,6 +102,13 @@
       <div class="card">
         <div class="card-header"><span class="card-title">Registrations</span></div>
         <div id="registrationsContent"><div class="loading-row"><div class="spinner"></div></div></div>
+      </div>
+    </div>
+
+    <div id="tab-volunteers" class="tab-pane">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Volunteers</span></div>
+        <div id="volunteersContent"><div class="loading-row"><div class="spinner"></div></div></div>
       </div>
     </div>
 
@@ -185,6 +193,68 @@
       <div class="modal-nav">
         <button type="button" class="btn btn-outline" onclick="closeAddRegModal()">Cancel</button>
         <button type="submit" class="btn btn-gold" id="addRegSubmitBtn">Add Registrant</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── Add / Edit Volunteer Position Modal ─────────────────────────────────── -->
+  <div class="modal-overlay" id="posOverlay" onclick="closePositionModal()"></div>
+  <div class="modal-box" id="posModal" style="width:500px;">
+    <button class="icon-btn slide-panel-close" onclick="closePositionModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title" id="posModalTitle">Add Position</div>
+    <form id="posForm" onsubmit="event.preventDefault(); submitPosition();">
+      <input type="hidden" id="pos_ID">
+      <label>Position Title <span style="color:var(--gold);">*</span>
+        <input type="text" id="pos_Title" placeholder="e.g. Setup Crew">
+      </label>
+      <label>Description
+        <textarea id="pos_Description" rows="3" placeholder="What this role involves…"></textarea>
+      </label>
+      <div style="display:grid;grid-template-columns:120px 1fr;gap:12px;">
+        <label>Slots Available
+          <input type="number" id="pos_Slots" min="1" value="1">
+        </label>
+        <label id="pos_AssignWrap">Assign To <span style="font-size:9px;font-weight:500;color:var(--text-muted);">(optional)</span>
+          <input type="text" id="pos_Assign" list="pos_ContactList" placeholder="Search contacts…" autocomplete="off">
+          <datalist id="pos_ContactList"></datalist>
+        </label>
+      </div>
+      <p class="form-error" id="posError" style="display:none;"></p>
+      <div class="modal-nav">
+        <button type="button" class="btn btn-outline" onclick="closePositionModal()">Cancel</button>
+        <button type="submit" class="btn btn-gold" id="posSubmitBtn">Add Position</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── Volunteer Sign-Up Modal ─────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="volSignupOverlay" onclick="closeVolSignupModal()"></div>
+  <div class="modal-box" id="volSignupModal">
+    <button class="icon-btn slide-panel-close" onclick="closeVolSignupModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Sign Up</div>
+    <p class="modal-subtitle" id="volSignupPosTitle">—</p>
+    <form id="volSignupForm" onsubmit="event.preventDefault(); submitVolSignup();">
+      <input type="hidden" id="volSignup_PosID">
+      <label>Name <span style="color:var(--gold);">*</span>
+        <input type="text" id="volSignup_Name" placeholder="Your name">
+      </label>
+      <label>Email <span style="color:var(--gold);">*</span>
+        <input type="email" id="volSignup_Email" placeholder="email@example.com" autocomplete="email">
+      </label>
+      <label>Phone
+        <input type="tel" id="volSignup_Phone" placeholder="(555) 000-0000" autocomplete="tel">
+      </label>
+      <label>Notes
+        <textarea id="volSignup_Notes" rows="2" placeholder="Anything we should know?"></textarea>
+      </label>
+      <p class="form-error" id="volSignupError" style="display:none;"></p>
+      <div class="modal-nav">
+        <button type="button" class="btn btn-outline" onclick="closeVolSignupModal()">Cancel</button>
+        <button type="submit" class="btn btn-gold" id="volSignupSubmitBtn">Sign Up</button>
       </div>
     </form>
   </div>
