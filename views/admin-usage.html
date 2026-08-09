@@ -118,35 +118,9 @@
     .empty-state { padding: 40px 0; text-align: center; color: var(--text-muted); }
     #tableStatus { color: var(--text-muted); font-size: 12px; margin-bottom: 8px; }
   </style>
+  <link rel="stylesheet" href="/css/hub.css">
 </head>
-<body class="detail-page-body">
-
-  <header class="topbar">
-    <div class="topbar-left">
-      <a href="/board" class="topbar-logo">
-        <img src="/img/rock-logo.png" class="topbar-logo-img" alt="The ROCK Association">
-        <div class="topbar-logo-text">
-          <span class="logo-rock">ROCK</span>
-          <span class="logo-hub">Hub</span>
-        </div>
-      </a>
-      <span class="topbar-page-title">Usage Report</span>
-    </div>
-    <div class="topbar-right">
-      <div class="user-chip" id="userChip">
-        <span class="user-chip-info">
-          <span class="user-chip-name" id="userName">—</span>
-          <span class="user-chip-email" id="userEmail">—</span>
-        </span>
-        <img class="avatar" id="userAvatar" src="" alt="">
-        <div class="user-dropdown" id="userDropdown">
-          <form method="POST" action="/auth/logout">
-            <button type="submit">Sign out</button>
-          </form>
-        </div>
-      </div>
-    </div>
-  </header>
+<body class="detail-page-body hub-page" data-hub-active="" data-hub-back>
 
   <main class="detail-main" style="max-width:1100px;">
     <button class="back-link" onclick="history.length > 1 ? history.back() : (location.href = '/board')">
@@ -210,6 +184,7 @@
   </main>
 
   <script src="/js/api.js"></script>
+  <script src="/js/hub-nav.js"></script>
   <script>
     let _allRows = [];
 

@@ -450,10 +450,13 @@ async function initUser() {
       if (user.photo) { av.src = user.photo; }
       else { av.outerHTML = `<div class="avatar-initials" style="width:28px;height:28px;font-size:10px;">${initials(user.name)}</div>`; }
     }
-    // User dropdown toggle
+    // User dropdown toggle. Guarded so initUser() can be called more than once
+    // per page (e.g. by both hub-nav.js and a page script) without stacking
+    // listeners, which would otherwise make the dropdown toggle twice per click.
     const chip = document.getElementById('userChip');
     const drop = document.getElementById('userDropdown');
-    if (chip && drop) {
+    if (chip && drop && !chip.dataset.wired) {
+      chip.dataset.wired = '1';
       chip.addEventListener('click', e => { e.stopPropagation(); drop.classList.toggle('open'); });
       document.addEventListener('click', () => drop.classList.remove('open'));
     }

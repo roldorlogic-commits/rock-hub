@@ -18,12 +18,11 @@ function eventIdFromPath() {
 }
 
 function wireNavLinks(user) {
+  // The shared top nav (hub-nav.js) provides the brand link and back button
+  // and wires the back button itself; just point the brand at the role home.
   const home = user?.role === 'Board' ? '/board' : '/volunteer';
   const homeEl = document.getElementById('topbarHome');
   if (homeEl) homeEl.href = home;
-  document.getElementById('backBtn')?.addEventListener('click', () => {
-    if (history.length > 1) history.back(); else location.href = home;
-  });
 }
 
 // ── Event load ────────────────────────────────────────────────────────────────

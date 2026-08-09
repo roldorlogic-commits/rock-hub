@@ -12,63 +12,9 @@
   <link rel="stylesheet" href="/css/hub.css">
   <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
 </head>
-<body class="hub-page">
+<body class="hub-page" data-hub-active="dashboard">
 
-  <!-- ── Top navigation bar ─────────────────────────────────────────────── -->
-  <header class="hub-topnav">
-    <a href="/board" class="hub-brand">
-      <img src="/img/rock-logo.png" class="hub-brand-img" alt="The ROCK Association">
-      <span class="hub-brand-text">
-        <span class="hub-logo-rock">ROCK</span>
-        <span class="hub-logo-hub">Hub</span>
-      </span>
-    </a>
-
-    <nav class="hub-nav">
-      <button class="nav-item active" data-section="dashboard" onclick="showSection('dashboard',this)">Dashboard</button>
-      <button class="nav-item" data-section="events" onclick="showSection('events',this)">Events</button>
-      <button class="nav-item" data-section="members" onclick="showSection('members',this)">Contacts</button>
-      <button class="nav-item" data-section="volunteers" onclick="showSection('volunteers',this)">Volunteers</button>
-
-      <div class="hub-dd">
-        <button class="nav-item hub-dd-toggle" id="boardNavBtn" type="button">Board</button>
-        <div class="hub-dd-menu">
-          <button type="button" onclick="selectBoard('contacts')">Board Directory</button>
-          <button type="button" onclick="selectBoard('minutes')">Meeting Minutes</button>
-          <button type="button" onclick="selectBoard('tasks')">Action Items</button>
-          <a href="/volunteers/pending">Pending Volunteers <span class="nav-badge" id="pendingVolunteersBadge" style="display:none;"></span></a>
-          <a href="/social-feed">Social Media</a>
-          <a href="/admin/usage" id="adminUsageLink" style="display:none;">Usage Report</a>
-        </div>
-      </div>
-
-      <button class="nav-item" data-section="files" onclick="showSection('files',this)">Files &amp; Docs</button>
-      <button class="nav-item" data-section="reports" onclick="showSection('reports',this)">Reports</button>
-      <button class="nav-item" data-section="settings" onclick="showSection('settings',this)">Settings</button>
-    </nav>
-
-    <div class="topbar-right">
-      <div class="notif-wrap" style="position:relative;">
-        <button class="icon-btn" title="Notifications" id="notifBtn" onclick="toggleNotifDropdown()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-          <span class="notif-badge" id="notifBadge" style="display:none;"></span>
-        </button>
-        <div class="notif-dropdown" id="notifDropdown"></div>
-      </div>
-      <div class="user-chip" id="userChip">
-        <span class="user-chip-info">
-          <span class="user-chip-name" id="userName">—</span>
-          <span class="user-chip-email" id="userEmail">—</span>
-        </span>
-        <img class="avatar" id="userAvatar" src="" alt="">
-        <div class="user-dropdown" id="userDropdown">
-          <form method="POST" action="/auth/logout">
-            <button type="submit">Sign out</button>
-          </form>
-        </div>
-      </div>
-    </div>
-  </header>
+  <!-- Top navigation bar is injected by /js/hub-nav.js -->
 
   <!-- ── Hero banner ────────────────────────────────────────────────────── -->
   <section class="hub-hero">
@@ -727,6 +673,7 @@
 
   <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
   <script src="/js/api.js"></script>
+  <script src="/js/hub-nav.js"></script>
   <script src="/js/board.js"></script>
   <script src="/js/hub-home.js"></script>
 </body>
