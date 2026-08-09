@@ -515,9 +515,11 @@ router.post('/events/:id/documents/upload', requireBoard, async (req, res) => {
       return res.status(400).json({ error: 'name, base64, and mimeType are required.' });
     }
     const buffer = Buffer.from(base64, 'base64');
-    const folderId = process.env.DOCUMENTS_FOLDER_ID || null;
-    const { fileId, url } = await drive.uploadFile(name, mimeType, buffer, folderId);
     const ev = await sheets.getEventById(req.params.id);
+    // Store in Hub Event Documents/{EventName}/ inside the shared drive.
+    const folderId = await drive.ensureEventFolder('Hub Event Documents', ev?.EventName || req.params.id, process.env.DOCS_DRIVE_ID);
+    const { fileId } = await drive.uploadFile(name, mimeType, buffer, folderId);
+    const url = `/api/drive/file/${fileId}`;
     const row = await sheets.appendRow('Documents', {
       DocumentID: `DOC${Date.now()}`, Title: name, Category: 'Events',
       FileType: (mimeType.split('/').pop() || 'file').toUpperCase(),
@@ -542,8 +544,13 @@ router.post('/events/:id/photo', requireBoard, async (req, res) => {
     const MAX_BYTES = 5 * 1024 * 1024;
     if (buffer.length > MAX_BYTES) return res.status(400).json({ error: 'Image must be under 5 MB.' });
     const ext = mimeType.split('/')[1] || 'jpg';
-    const folderId = process.env.EVENT_PHOTOS_FOLDER_ID || null;
-    const { url } = await drive.uploadFile(`event-${req.params.id}-${Date.now()}.${ext}`, mimeType, buffer, folderId);
+    const ev = await sheets.getEventById(req.params.id);
+    if (!ev) return res.status(404).json({ error: 'Event not found.' });
+    // Store in Hub Event Photos/{EventName}/ inside the shared drive, then
+    // serve it back through the app's proxy route so it works for every user.
+    const folderId = await drive.ensureEventFolder('Hub Event Photos', ev.EventName || req.params.id, process.env.PHOTOS_DRIVE_ID);
+    const { fileId } = await drive.uploadFile(`event-${req.params.id}-${Date.now()}.${ext}`, mimeType, buffer, folderId);
+    const url = `/api/drive/file/${fileId}`;
     const updated = await sheets.updateRowFields('Events', 'EventID', req.params.id, { PhotoURL: url, UpdatedAt: todayStr() });
     if (!updated) return res.status(404).json({ error: 'Event not found.' });
     res.json({ ok: true, url });

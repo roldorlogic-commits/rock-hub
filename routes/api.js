@@ -6,6 +6,7 @@ const path    = require('path');
 const router  = express.Router();
 const sheets  = require('../lib/sheets');
 const drive   = require('../lib/drive');
+const documents = require('../lib/documents');
 const email   = require('../lib/email');
 const sms     = require('../lib/sms');
 const { requireAuth, requireBoard, requireBoardOrAdmin } = require('../middleware/auth');
@@ -54,6 +55,39 @@ router.get('/volunteers',    async (req, res) => { try { res.json(await sheets.g
 router.get('/tasks',         async (req, res) => { try { res.json(await sheets.getTasks());         } catch (e) { res.status(500).json({ error: e.message }); } });
 router.get('/announcements', async (req, res) => { try { res.json(await sheets.getAnnouncements()); } catch (e) { res.status(500).json({ error: e.message }); } });
 router.get('/documents',     async (req, res) => { try { res.json(await sheets.getDocuments());     } catch (e) { res.status(500).json({ error: e.message }); } });
+
+// ── Shared Drive documents (Documents tab) ──────────────────────────────────
+// Lists every hub-managed file from the shared drive, tagged with its section
+// and event. Powers the Documents tab's list, filters, and event grouping.
+router.get('/drive/documents', async (req, res) => {
+  try {
+    res.json(await documents.listAll());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Streams a shared-drive file back through the app so it works for any logged-in
+// user regardless of their own Drive access. Used for event photos (<img src>)
+// and for viewing/downloading documents. `?download=1` forces a download.
+router.get('/drive/file/:id', async (req, res) => {
+  try {
+    const meta = await drive.getFileMeta(req.params.id);
+    // Google-native files (Docs/Sheets/Slides) can't be streamed as bytes —
+    // send the viewer to Drive instead.
+    if (meta.mimeType && meta.mimeType.startsWith('application/vnd.google-apps')) {
+      return res.redirect(meta.webViewLink || `https://drive.google.com/file/d/${req.params.id}/view`);
+    }
+    res.setHeader('Content-Type', meta.mimeType || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    const disp = req.query.download ? 'attachment' : 'inline';
+    res.setHeader('Content-Disposition', `${disp}; filename="${encodeURIComponent(meta.name || 'file')}"`);
+    const stream = await drive.getFileStream(req.params.id);
+    stream.on('error', err => { if (!res.headersSent) res.status(502).json({ error: err.message }); });
+    stream.pipe(res);
+  } catch (e) {
+    const code = e.code === 404 ? 404 : 500;
+    res.status(code).json({ error: e.message });
+  }
+});
 router.get('/userroles',     async (req, res) => { try { res.json(await sheets.getUserRoles());     } catch (e) { res.status(500).json({ error: e.message }); } });
 
 // ── Member detail (role-filtered) ───────────────────────────────────────────
@@ -414,8 +448,10 @@ router.post('/documents/upload', requireBoard, async (req, res) => {
       return res.status(400).json({ error: 'name, base64, and mimeType are required.' });
     }
     const buffer = Buffer.from(base64, 'base64');
-    const folderId = process.env.DOCUMENTS_FOLDER_ID || null;
-    const { fileId, url } = await drive.uploadFile(name, mimeType, buffer, folderId);
+    // Direct (non-event) uploads land in the shared drive's General/ folder.
+    const folderId = await drive.ensureRootFolder('General', process.env.DOCS_DRIVE_ID);
+    const { fileId } = await drive.uploadFile(name, mimeType, buffer, folderId);
+    const url = `/api/drive/file/${fileId}`;
     const docId = `DOC-${Date.now()}`;
     await sheets.appendRow('Documents', {
       DocumentID: docId,

@@ -286,6 +286,17 @@
             <span class="card-title">Files &amp; Documents</span>
             <button class="btn btn-gold btn-sm" onclick="openUploadDocModal()">Upload Document</button>
           </div>
+          <div class="doc-filter-bar">
+            <input type="search" id="docSearch" class="doc-filter-input" placeholder="Search files…" oninput="renderDriveDocs()">
+            <select id="docFilterEvent" class="doc-filter-select" onchange="renderDriveDocs()"><option value="">All events</option></select>
+            <select id="docFilterType" class="doc-filter-select" onchange="renderDriveDocs()"><option value="">All types</option></select>
+            <select id="docFilterSection" class="doc-filter-select" onchange="renderDriveDocs()">
+              <option value="">All folders</option>
+              <option value="Documents">Event documents</option>
+              <option value="Photos">Event photos</option>
+              <option value="General">General</option>
+            </select>
+          </div>
           <div id="filesFull"><div class="loading-row"><div class="spinner"></div></div></div>
         </div>
       </section>
