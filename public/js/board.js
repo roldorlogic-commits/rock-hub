@@ -11,7 +11,7 @@ let eventsById = {};
   }
   await loadEvents(); // populates eventsById before tasks render
   await Promise.all([
-    loadStats(), loadTasks(), loadContacts(), loadFiles(),
+    loadStats(), loadTasks(), loadContacts(), loadFiles(), loadDriveDocs(),
     loadMembers(), loadVolunteersFull(), loadAnnouncements(),
     initNotifications(['All', 'Board']), loadPendingVolunteerBadge(),
     loadNotifSummary()
@@ -68,7 +68,7 @@ function eventRow(ev) {
 
 function renderEventsPreview(events) {
   const el = document.getElementById('eventsPreview');
-  const upcoming = sortByStartDate(events.filter(isUpcomingEvent)).slice(0, 5);
+  const upcoming = sortByStartDate(events.filter(isUpcomingEvent)).slice(0, 3);
   el.innerHTML = upcoming.length
     ? upcoming.map(eventRow).join('')
     : emptyState('No upcoming events. Add them to the Events sheet.');
@@ -249,12 +249,130 @@ async function loadFiles() {
     const docs = await apiFetch('/api/documents');
     _docsCache = docs;
     renderFilesPreview(docs);
-    renderFilesFull(docs);
     renderMinutes(docs);
     renderReports(docs);
   } catch (e) {
     document.getElementById('filesPreview').innerHTML = emptyState('Could not load files.');
   }
+}
+
+// ── Documents tab (Shared Drive backed) ─────────────────────────────────────
+let _driveDocs = [];
+
+function _docEsc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+function fmtBytes(n) {
+  if (n == null || isNaN(n)) return '';
+  if (n < 1024) return n + ' B';
+  const u = ['KB', 'MB', 'GB'];
+  let i = -1, v = n;
+  do { v /= 1024; i++; } while (v >= 1024 && i < u.length - 1);
+  return `${v.toFixed(v < 10 ? 1 : 0)} ${u[i]}`;
+}
+
+async function loadDriveDocs() {
+  const el = document.getElementById('filesFull');
+  try {
+    _driveDocs = await apiFetch('/api/drive/documents');
+    populateDocFilters();
+    renderDriveDocs();
+  } catch (e) {
+    if (el) el.innerHTML = emptyState('Could not load files from the Shared Drive.');
+  }
+}
+
+// Fill the event + file-type dropdowns from whatever's actually in the drive.
+function populateDocFilters() {
+  const events = [...new Set(_driveDocs.map(d => d.event).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const types  = [...new Set(_driveDocs.map(d => d.fileType).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const evSel = document.getElementById('docFilterEvent');
+  const tySel = document.getElementById('docFilterType');
+  if (evSel) {
+    const cur = evSel.value;
+    evSel.innerHTML = '<option value="">All events</option>' +
+      events.map(e => `<option value="${_docEsc(e)}">${_docEsc(e)}</option>`).join('');
+    evSel.value = cur;
+  }
+  if (tySel) {
+    const cur = tySel.value;
+    tySel.innerHTML = '<option value="">All types</option>' +
+      types.map(t => `<option value="${_docEsc(t)}">${_docEsc(t)}</option>`).join('');
+    tySel.value = cur;
+  }
+}
+
+function renderDriveDocs() {
+  const el = document.getElementById('filesFull');
+  if (!el) return;
+  const q       = (document.getElementById('docSearch')?.value || '').trim().toLowerCase();
+  const fEvent  = document.getElementById('docFilterEvent')?.value || '';
+  const fType   = document.getElementById('docFilterType')?.value || '';
+  const fSection = document.getElementById('docFilterSection')?.value || '';
+
+  let docs = _driveDocs.filter(d => {
+    if (q && !d.name.toLowerCase().includes(q) && !(d.event || '').toLowerCase().includes(q)) return false;
+    if (fEvent && d.event !== fEvent) return false;
+    if (fType && d.fileType !== fType) return false;
+    if (fSection && d.section !== fSection) return false;
+    return true;
+  });
+
+  if (!docs.length) {
+    el.innerHTML = emptyState(_driveDocs.length
+      ? 'No files match these filters.'
+      : 'No files in the Shared Drive yet — upload one, or upload a photo/document from an event.');
+    return;
+  }
+
+  // Group by event, then a "General / No event" bucket last.
+  const groups = new Map();
+  for (const d of docs) {
+    const key = d.event || (d.section === 'General' ? 'General' : 'Unsorted');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(d);
+  }
+  const keys = [...groups.keys()].sort((a, b) => {
+    for (const last of ['General', 'Unsorted']) {
+      if (a === last) return 1;
+      if (b === last) return -1;
+    }
+    return a.localeCompare(b);
+  });
+
+  el.innerHTML = keys.map(k => {
+    const rows = groups.get(k).map(driveDocRow).join('');
+    return `<div class="doc-group">
+      <div class="doc-group-title">${_docEsc(k)} <span class="doc-group-count">${groups.get(k).length}</span></div>
+      ${rows}
+    </div>`;
+  }).join('');
+}
+
+function driveDocRow(d) {
+  const isImg = (d.mimeType || '').startsWith('image/');
+  const icon = isImg
+    ? `<img class="doc-thumb" src="${_docEsc(d.proxyUrl)}" alt="" loading="lazy">`
+    : `<div class="file-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>`;
+  const sub = [d.fileType, fmtBytes(d.size), fmtDate(d.modifiedTime)].filter(Boolean).join(' · ');
+  const view = _docEsc(d.proxyUrl);
+  const dl   = _docEsc(d.downloadUrl);
+  return `
+    <div class="list-item clickable" role="button" tabindex="0"
+         onclick="window.open('${view}','_blank','noopener')"
+         onkeydown="if(event.key==='Enter')window.open('${view}','_blank','noopener')">
+      ${icon}
+      <div class="item-info">
+        <div class="item-title">${_docEsc(d.name)}</div>
+        <div class="doc-file-meta">${_docEsc(sub)}</div>
+      </div>
+      <div class="doc-file-actions">
+        <a class="btn btn-ghost btn-sm" href="${dl}" onclick="event.stopPropagation()" title="Download">Download</a>
+      </div>
+    </div>`;
 }
 
 function renderFilesPreview(docs) {
@@ -287,11 +405,6 @@ function boardDocumentRow(d) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:11px;height:11px;margin-right:2px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit</button>` : ''}
       </div>
     </div>`;
-}
-
-function renderFilesFull(docs) {
-  const el = document.getElementById('filesFull');
-  el.innerHTML = docs.length ? docs.map(boardDocumentRow).join('') : emptyState('No documents yet — use "Upload Document" to add your first file.');
 }
 
 function renderMinutes(docs) {
@@ -367,7 +480,7 @@ async function submitDocUpload() {
       document.getElementById('uploadDocNav').style.display = 'none';
       document.getElementById('uploadDocSuccess').style.display = 'block';
       document.getElementById('uploadDocSuccess').textContent = `"${name}" added successfully.`;
-      await loadFiles();
+      await Promise.all([loadFiles(), loadDriveDocs()]);
       setTimeout(() => closeUploadDocModal(), 1500);
     } catch (err) {
       alert('Network error. Please try again.');
@@ -414,7 +527,7 @@ async function submitDocUpload() {
     document.getElementById('uploadDocSuccess').style.display = 'block';
     document.getElementById('uploadDocSuccess').textContent = `"${name}" uploaded successfully.`;
 
-    await loadFiles();
+    await Promise.all([loadFiles(), loadDriveDocs()]);
     setTimeout(() => closeUploadDocModal(), 1500);
   } catch (err) {
     alert('Upload failed. Please try again.');
@@ -463,7 +576,7 @@ async function submitEditDoc() {
     const data = await res.json();
     if (!res.ok) { alert(data.error || 'Could not update document.'); return; }
     closeEditDocModal();
-    await loadFiles();
+    await Promise.all([loadFiles(), loadDriveDocs()]);
   } catch (err) {
     alert('Network error — could not update document.');
   } finally {

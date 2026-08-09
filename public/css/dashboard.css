@@ -936,3 +936,48 @@ html, body { height: 100%; }
   .card { padding: 14px; }
   .content-section { padding: 12px; }
 }
+
+/* ── Documents tab: filter bar + grouped file list ─────────────────────────── */
+.doc-filter-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 4px 0 14px;
+}
+.doc-filter-input,
+.doc-filter-select {
+  background: var(--bg-primary);
+  border: 0.5px solid var(--gold-line);
+  color: var(--text-white);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+}
+.doc-filter-input { flex: 1 1 200px; min-width: 160px; }
+.doc-filter-select { flex: 0 0 auto; cursor: pointer; }
+.doc-filter-input:focus,
+.doc-filter-select:focus { border-color: var(--gold); }
+
+.doc-group { margin-bottom: 18px; }
+.doc-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--gold);
+  padding: 6px 0;
+  border-bottom: 0.5px solid var(--gold-line);
+  margin-bottom: 4px;
+}
+.doc-group-count { color: var(--text-muted); font-weight: 400; }
+.doc-file-meta { font-size: 11px; color: var(--text-dim); }
+.doc-file-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0; }
+.doc-thumb {
+  width: 34px; height: 34px; border-radius: var(--radius-sm);
+  object-fit: cover; flex-shrink: 0;
+}
