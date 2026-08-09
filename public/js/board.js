@@ -68,7 +68,7 @@ function eventRow(ev) {
 
 function renderEventsPreview(events) {
   const el = document.getElementById('eventsPreview');
-  const upcoming = sortByStartDate(events.filter(isUpcomingEvent)).slice(0, 5);
+  const upcoming = sortByStartDate(events.filter(isUpcomingEvent)).slice(0, 3);
   el.innerHTML = upcoming.length
     ? upcoming.map(eventRow).join('')
     : emptyState('No upcoming events. Add them to the Events sheet.');

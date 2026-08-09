@@ -443,6 +443,9 @@ async function initUser() {
     const av = document.getElementById('userAvatar');
     if (nm) nm.textContent = user.firstName || user.name;
     if (em) em.textContent = user.email;
+    // Dashboard hero greeting (present only on the board dashboard).
+    const wn = document.getElementById('welcomeName');
+    if (wn) wn.textContent = (user.firstName || user.name || 'there').toUpperCase();
     if (av) {
       if (user.photo) { av.src = user.photo; }
       else { av.outerHTML = `<div class="avatar-initials" style="width:28px;height:28px;font-size:10px;">${initials(user.name)}</div>`; }
