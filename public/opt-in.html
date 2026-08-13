@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMS Text Message Opt-In — The ROCK Association</title>
+<style>
+  :root{ --navy:#12213f; --gold:#c9a54e; --ink:#1c2430; --muted:#5a6472; --line:#e6e8ee; --bg:#ffffff; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.65;}
+  header{background:var(--navy);color:#fff;padding:28px 24px;}
+  header .wrap{max-width:760px;margin:0 auto;display:flex;align-items:center;gap:14px;}
+  header .brand{font-weight:700;font-size:1.15rem;letter-spacing:.3px;}
+  header .brand span{color:var(--gold);}
+  main{max-width:760px;margin:0 auto;padding:40px 24px 72px;}
+  h1{font-size:1.8rem;margin:0 0 6px;color:var(--navy);}
+  .sub{color:var(--muted);font-size:1rem;margin:0 0 26px;}
+  h2{font-size:1.15rem;margin:30px 0 10px;color:var(--navy);}
+  p,li{color:var(--ink);}
+  a{color:#1a5fb4;}
+  ol{padding-left:20px;}
+  ol li{margin:6px 0;}
+  .form-card{border:1px solid var(--line);border-radius:12px;padding:26px;margin:22px 0;background:#fbfcfe;box-shadow:0 1px 2px rgba(18,33,63,.04);}
+  .form-card h3{margin:0 0 4px;font-size:1.05rem;color:var(--navy);}
+  .form-card .hint{color:var(--muted);font-size:.9rem;margin:0 0 18px;}
+  .field{margin:14px 0;}
+  .field label{display:block;font-size:.9rem;font-weight:600;color:var(--ink);margin-bottom:6px;}
+  .field input[type=text],.field input[type=tel]{width:100%;padding:11px 12px;border:1px solid #cdd3de;border-radius:8px;font-size:1rem;background:#fff;}
+  .prefs{margin:16px 0;border-top:1px solid var(--line);padding-top:16px;}
+  .prefs .prefs-title{font-weight:600;font-size:.92rem;margin-bottom:10px;}
+  .check{display:flex;align-items:flex-start;gap:10px;margin:10px 0;}
+  .check input{margin-top:3px;width:17px;height:17px;flex:0 0 auto;}
+  .check label{font-size:.95rem;color:var(--ink);}
+  .consent{display:flex;align-items:flex-start;gap:10px;margin:18px 0 4px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:14px;}
+  .consent input{margin-top:3px;width:18px;height:18px;flex:0 0 auto;}
+  .consent label{font-size:.9rem;color:var(--ink);line-height:1.55;}
+  .btn{margin-top:18px;display:inline-block;background:var(--navy);color:#fff;border:none;border-radius:8px;padding:12px 22px;font-size:1rem;font-weight:600;cursor:pointer;text-decoration:none;}
+  .callout{background:#f6f8fb;border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:8px;padding:15px 18px;margin:22px 0;font-size:.94rem;}
+  footer{border-top:1px solid var(--line);color:var(--muted);font-size:.9rem;max-width:760px;margin:0 auto;padding:24px;}
+</style>
+</head>
+<body>
+<header><div class="wrap"><div class="brand">The <span>ROCK</span> Association</div></div></header>
+<main>
+  <h1>SMS Text Message Opt-In</h1>
+  <p class="sub">How board members and volunteers consent to receive text messages from The ROCK Association.</p>
+
+  <p>The ROCK Association, a 501(c)(3) nonprofit, sends SMS text notifications to its board members and volunteers &mdash; including organizational announcements, event sign-up confirmations and reminders, and volunteer task assignments. Participation is voluntary and requires opt-in.</p>
+
+  <h2>How members opt in</h2>
+  <ol>
+    <li>A member joins The ROCK Association and creates their profile in the ROCK Hub member portal (<a href="https://hub.gorock.org">hub.gorock.org</a>).</li>
+    <li>In their <strong>Notification Preferences</strong>, the member provides their mobile number and actively checks the box(es) for the SMS notifications they wish to receive. No boxes are pre-checked &mdash; consent is opt-in only.</li>
+    <li>By checking the SMS consent box, the member agrees to receive recurring text messages at the number they provided.</li>
+  </ol>
+
+  <div class="callout">The form below is a public copy of the SMS opt-in exactly as it appears to members inside the ROCK Hub portal. It is shown here so the opt-in flow and consent language can be reviewed without a member login. All checkboxes are unchecked by default; members must actively opt in.</div>
+
+  <div class="form-card" aria-label="Illustration of the ROCK Hub SMS opt-in">
+    <h3>Notification Preferences &mdash; Text Messages (SMS)</h3>
+    <p class="hint">As shown to members in the ROCK Hub portal.</p>
+
+    <div class="field">
+      <label for="name">Full name</label>
+      <input type="text" id="name" placeholder="Your name">
+    </div>
+    <div class="field">
+      <label for="mobile">Mobile phone number</label>
+      <input type="tel" id="mobile" placeholder="(407) 000-0000">
+    </div>
+
+    <div class="prefs">
+      <div class="prefs-title">Text me about:</div>
+      <div class="check"><input type="checkbox" id="p1"><label for="p1">Announcements from The ROCK Association</label></div>
+      <div class="check"><input type="checkbox" id="p2"><label for="p2">Event sign-up confirmations &amp; reminders</label></div>
+      <div class="check"><input type="checkbox" id="p3"><label for="p3">Volunteer task assignments</label></div>
+    </div>
+
+    <div class="consent">
+      <input type="checkbox" id="consent">
+      <label for="consent">I agree to receive recurring automated SMS text messages from The ROCK Association at the mobile number I provided. Message frequency varies. Message and data rates may apply. Reply <strong>STOP</strong> to unsubscribe or <strong>HELP</strong> for help. I have read the <a href="/privacy.html">Privacy Policy</a> and <a href="/terms.html">Terms &amp; Conditions</a>.</label>
+    </div>
+
+    <a class="btn" href="https://hub.gorock.org">Save preferences</a>
+  </div>
+
+  <h2>Program details</h2>
+  <p>Message frequency varies based on organizational activity. Message and data rates may apply. Reply <strong>STOP</strong> at any time to cancel; reply <strong>HELP</strong> for help, or contact us at info@gorock.org / (407) 750-1198. Mobile carriers are not liable for delayed or undelivered messages. Mobile opt-in and consent data is never shared with third parties or affiliates for marketing purposes. See our <a href="/privacy.html">Privacy Policy</a> and <a href="/terms.html">Terms &amp; Conditions</a>.</p>
+</main>
+<footer>© 2026 The ROCK Association (Recruiters of Christ's Kingdom Inc.). A 501(c)(3) nonprofit organization.</footer>
+</body>
+</html>
