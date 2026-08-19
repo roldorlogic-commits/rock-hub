@@ -35,6 +35,7 @@
         { label: 'Social Media',      href: '/social-feed' },
         { label: 'Usage Report',      href: '/admin/usage', id: 'adminUsageLink', vpOnly: true }
     ]},
+    { label: 'Reach Map', href: '/reach-map', activeKey: 'reach-map' },
     { label: 'Files & Docs', section: 'files',    href: '/board?s=files' },
     { label: 'Reports',      section: 'reports',  href: '/board?s=reports' },
     { label: 'Settings',     section: 'settings', href: '/board?s=settings' }

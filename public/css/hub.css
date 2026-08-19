@@ -529,3 +529,93 @@ body.hub-page .welcome-banner .welcome-text h2 { color: #FFFFFF; }
 body.hub-page .welcome-banner .welcome-text p  { color: rgba(245,243,238,.78); }
 body.hub-page .welcome-banner .assignment-label { color: var(--gold); }
 body.hub-page .welcome-banner .assignment-value { color: #FFFFFF; }
+
+/* ── View switcher (Contacts / Youth Groups) ────────────────────────────── */
+.view-switcher {
+  display: flex;
+  border: 1px solid var(--gold-line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.view-sw-btn {
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background .14s, color .14s;
+  white-space: nowrap;
+}
+.view-sw-btn + .view-sw-btn { border-left: 1px solid var(--gold-line); }
+.view-sw-btn:hover { background: var(--gold-faint); color: var(--text-white); }
+.view-sw-btn.active { background: var(--gold-faint); color: var(--gold); font-weight: 600; }
+
+/* ── Youth Group card grid ───────────────────────────────────────────────── */
+.yg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+  padding: 16px 20px 20px;
+}
+.yg-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--gold-line);
+  border-radius: var(--radius);
+  padding: 16px;
+  cursor: pointer;
+  transition: box-shadow .15s, border-color .15s;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.yg-card:hover {
+  box-shadow: 0 3px 10px rgba(13,36,68,.10);
+  border-color: var(--gold);
+}
+.yg-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.yg-card-name   { font-size: 14px; font-weight: 600; color: var(--text-white); }
+.yg-card-church { font-size: 11.5px; color: var(--text-dim); }
+.yg-card-loc    { font-size: 11.5px; color: var(--text-muted); }
+.yg-card-pc     { font-size: 11.5px; color: var(--text-dim); }
+.yg-card-tags   { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+
+/* ── Category badge (Prospect / Partner) ────────────────────────────────── */
+.yg-cat-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 20px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.yg-cat-badge.partner  { background: rgba(201,168,76,.18); color: #8A6E1A; border: 1px solid rgba(201,168,76,.45); }
+.yg-cat-badge.prospect { background: rgba(107,124,158,.14); color: #3E506E; border: 1px solid rgba(107,124,158,.35); }
+
+/* ── Youth Group panel ───────────────────────────────────────────────────── */
+.yg-panel-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.yg-contact-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--gold-line);
+  text-decoration: none;
+  color: inherit;
+  transition: background .12s;
+}
+.yg-contact-row:hover { background: var(--gold-faint); }
+.yg-contact-row:last-child { border-bottom: none; }

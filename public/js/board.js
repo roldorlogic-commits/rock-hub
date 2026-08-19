@@ -12,7 +12,7 @@ let eventsById = {};
   await loadEvents(); // populates eventsById before tasks render
   await Promise.all([
     loadStats(), loadTasks(), loadContacts(), loadFiles(), loadDriveDocs(),
-    loadMembers(), loadVolunteersFull(), loadAnnouncements(),
+    loadMembers(), loadYouthGroups(), loadVolunteersFull(), loadAnnouncements(),
     initNotifications(['All', 'Board']), loadPendingVolunteerBadge(),
     loadNotifSummary()
   ]);
@@ -595,6 +595,7 @@ async function loadMembers() {
     _allMembersCache = members;
     _activeMemberTag = null;
     renderMembersFull(members);
+    _populateContactYGDropdown();
   } catch (e) {
     document.getElementById('membersFull').innerHTML = emptyState('Could not load contacts.');
   }
@@ -800,6 +801,7 @@ function openContactModal(m) {
   document.getElementById('cm_type').value    = m?.MembershipType    || '';
   document.getElementById('cm_status').value  = m?.MembershipStatus  || 'Active';
   document.getElementById('cm_notes').value   = m?.Notes             || '';
+  document.getElementById('cm_youth_group').value = m?.youth_group_id || '';
   document.getElementById('contactModalSuccess').style.display = 'none';
   document.getElementById('contactModalNav').style.display    = 'flex';
   document.getElementById('contactModalOverlay').classList.add('open');
@@ -833,7 +835,8 @@ async function submitContactForm() {
       Tags:             document.getElementById('cm_tags').value.trim(),
       MembershipType:   document.getElementById('cm_type').value,
       MembershipStatus: document.getElementById('cm_status').value,
-      Notes:            document.getElementById('cm_notes').value.trim()
+      Notes:            document.getElementById('cm_notes').value.trim(),
+      youth_group_id:   document.getElementById('cm_youth_group').value
     };
     const isEdit = !!_contactModalMember;
     const url    = isEdit ? `/api/members/${encodeURIComponent(_contactModalMember.MemberID)}` : '/api/members';
@@ -1172,5 +1175,276 @@ async function saveNotifPrefs() {
     errEl.textContent = 'Network error — please try again.'; errEl.style.display = 'block';
   } finally {
     btn.disabled = false; btn.textContent = 'Save Preferences';
+  }
+}
+
+// ── Youth Groups ──────────────────────────────────────────────────────────────
+let _youthGroupsCache = [];
+let _activeContactsView = 'contacts'; // 'contacts' | 'youthgroups'
+
+async function loadYouthGroups() {
+  try {
+    _youthGroupsCache = await apiFetch('/api/youth-groups');
+    if (_activeContactsView === 'youthgroups') renderYouthGroupsFull();
+    _populateContactYGDropdown();
+    _populateYGContactDropdown();
+  } catch (e) {
+    document.getElementById('youthGroupsFull').innerHTML = emptyState('Could not load youth groups.');
+  }
+}
+
+// Populate the Youth Group dropdown inside the contact create/edit modal
+function _populateContactYGDropdown() {
+  const sel = document.getElementById('cm_youth_group');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— Unassigned —</option>' +
+    _youthGroupsCache.map(g => {
+      const name = g.youth_group_name || g.church_name || g.id;
+      return `<option value="${g.id}">${name}</option>`;
+    }).join('');
+  if (current) sel.value = current;
+}
+
+// Populate the linked-contact dropdown inside the YG modal
+function _populateYGContactDropdown() {
+  const sel = document.getElementById('yg_contact_id');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— Select from contacts —</option>' +
+    _allMembersCache.map(m => {
+      const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || m.Email || m.MemberID;
+      return `<option value="${m.MemberID}">${name}</option>`;
+    }).join('');
+  if (current) sel.value = current;
+}
+
+// ── View switcher ─────────────────────────────────────────────────────────────
+function switchContactsView(view) {
+  _activeContactsView = view;
+  const isContacts = view === 'contacts';
+  document.getElementById('membersFull').style.display       = isContacts ? '' : 'none';
+  document.getElementById('membersBulkBar').style.display    = isContacts ? '' : 'none';
+  document.getElementById('youthGroupsFull').style.display   = isContacts ? 'none' : '';
+  document.getElementById('addContactBtn').style.display     = isContacts ? '' : 'none';
+  document.getElementById('addYGBtn').style.display          = isContacts ? 'none' : '';
+  document.getElementById('exportContactsBtn').style.display = isContacts ? '' : 'none';
+  document.getElementById('vswContacts').classList.toggle('active', isContacts);
+  document.getElementById('vswYouthGroups').classList.toggle('active', !isContacts);
+  if (!isContacts) renderYouthGroupsFull();
+}
+
+// ── Youth Group list ─────────────────────────────────────────────────────────
+function _ygDisplayName(g) {
+  return g.youth_group_name || g.church_name || '—';
+}
+
+function renderYouthGroupsFull() {
+  const el = document.getElementById('youthGroupsFull');
+  if (!el) return;
+  if (!_youthGroupsCache.length) {
+    el.innerHTML = `<div style="padding:20px;">${emptyState('No youth groups yet — use "+ Add Group" to create your first one.')}</div>`;
+    return;
+  }
+  el.innerHTML = `<div class="yg-grid">${_youthGroupsCache.map((g, idx) => ygCard(g, idx)).join('')}</div>`;
+}
+
+function ygCard(g, idx) {
+  const name   = _ygDisplayName(g);
+  const loc    = [g.city, g.state].filter(Boolean).join(', ');
+  const tags   = g.tags ? g.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+  const isPartner = g.category === 'Partner';
+  const pc = g.primary_contact_name || '';
+  return `
+    <div class="yg-card" role="button" tabindex="0"
+         onclick="openYGPanel(_youthGroupsCache[${idx}])"
+         onkeydown="if(event.key==='Enter')openYGPanel(_youthGroupsCache[${idx}])">
+      <div class="yg-card-header">
+        <div class="yg-card-name">${name}</div>
+        <span class="yg-cat-badge ${isPartner ? 'partner' : 'prospect'}">${g.category || 'Prospect'}</span>
+      </div>
+      ${g.church_name && g.youth_group_name ? `<div class="yg-card-church">${g.church_name}</div>` : ''}
+      ${loc ? `<div class="yg-card-loc">${loc}</div>` : ''}
+      ${pc  ? `<div class="yg-card-pc">Contact: ${pc}</div>` : ''}
+      ${tags.length ? `<div class="yg-card-tags">${tags.map(t => `<span class="tag-chip-sm">${t}</span>`).join('')}</div>` : ''}
+    </div>`;
+}
+
+// ── Youth Group slide panel ───────────────────────────────────────────────────
+let _currentYG = null;
+
+async function openYGPanel(g) {
+  _currentYG = g;
+  const panel = document.getElementById('ygPanel');
+  const body  = document.getElementById('ygPanelBody');
+  body.innerHTML = '<div class="loading-row"><div class="spinner"></div></div>';
+  panel.classList.add('open');
+  document.getElementById('ygPanelOverlay').classList.add('open');
+
+  try {
+    const detail = await apiFetch(`/api/youth-groups/${encodeURIComponent(g.id)}`);
+    _currentYG = detail;
+    const name    = _ygDisplayName(detail);
+    const loc     = [detail.address, detail.city, detail.state, detail.zip].filter(Boolean).join(', ');
+    const tags    = detail.tags ? detail.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+    const isPartner = detail.category === 'Partner';
+    const contacts  = detail.contacts || [];
+
+    const pcHtml = detail.primary_contact_id
+      ? `<a href="/members/${encodeURIComponent(detail.primary_contact_id)}">${detail.primary_contact_name || detail.primary_contact_id}</a>`
+      : (detail.primary_contact_name || '—');
+
+    body.innerHTML = `
+      <div class="yg-panel-title">
+        <div>
+          <div style="font-size:17px;font-weight:700;color:var(--text-white);">${name}</div>
+          ${detail.church_name && detail.youth_group_name ? `<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${detail.church_name}</div>` : ''}
+        </div>
+        <span class="yg-cat-badge ${isPartner ? 'partner' : 'prospect'}" style="flex-shrink:0;">${detail.category || 'Prospect'}</span>
+      </div>
+      <div class="detail-field-grid" style="grid-template-columns:1fr;margin-top:12px;">
+        <div class="detail-field">
+          <div class="detail-field-label">Address</div>
+          <div class="detail-field-value${loc ? '' : ' empty'}">${loc || '—'}</div>
+        </div>
+        <div class="detail-field">
+          <div class="detail-field-label">Primary Contact</div>
+          <div class="detail-field-value">${pcHtml}</div>
+          ${detail.primary_contact_phone ? `<div class="detail-field-value" style="font-size:12px;">${detail.primary_contact_phone}</div>` : ''}
+          ${detail.primary_contact_email ? `<div class="detail-field-value" style="font-size:12px;"><a href="mailto:${detail.primary_contact_email}">${detail.primary_contact_email}</a></div>` : ''}
+        </div>
+        ${tags.length ? `<div class="detail-field"><div class="detail-field-label">Tags</div><div class="contact-tags">${tags.map(t => `<span class="tag-chip-sm">${t}</span>`).join('')}</div></div>` : ''}
+        ${detail.notes ? `<div class="detail-field"><div class="detail-field-label">Notes</div><div class="detail-field-value">${detail.notes}</div></div>` : ''}
+      </div>
+
+      <div style="margin-top:16px;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-dim);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px;">
+          Linked Contacts (${contacts.length})
+        </div>
+        ${contacts.length ? contacts.map(m => {
+          const cname = [m.FirstName, m.LastName].filter(Boolean).join(' ') || m.Email || '—';
+          return `<a href="/members/${encodeURIComponent(m.MemberID)}" class="yg-contact-row">
+            ${avatarHtml(cname, null)}
+            <div class="contact-info"><div class="contact-name">${cname}</div><div class="contact-email">${m.Email || '—'}</div></div>
+          </a>`;
+        }).join('') : `<div style="color:var(--text-muted);font-size:13px;">No contacts linked yet. Edit a contact and assign this group.</div>`}
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:20px;flex-wrap:wrap;">
+        <button class="btn btn-gold btn-sm" style="flex:1;" onclick="openYGModal(_currentYG)">Edit Group</button>
+        <button class="btn btn-outline btn-sm" style="color:#ff6363;border-color:#ff636344;" onclick="confirmDeleteYG()">Delete</button>
+      </div>`;
+  } catch (e) {
+    body.innerHTML = emptyState('Could not load youth group details.');
+  }
+}
+
+function closeYGPanel() {
+  document.getElementById('ygPanel')?.classList.remove('open');
+  document.getElementById('ygPanelOverlay')?.classList.remove('open');
+}
+
+// ── Youth Group create / edit modal ───────────────────────────────────────────
+let _ygModalGroup = null;
+
+function openYGModal(g) {
+  _ygModalGroup = g || null;
+  const isEdit = !!g;
+  document.getElementById('ygModalTitle').textContent   = isEdit ? 'Edit Youth Group' : 'Add Youth Group';
+  document.getElementById('ygModalSubmit').textContent  = isEdit ? 'Save Changes' : 'Add Group';
+  document.getElementById('yg_name').value       = g?.youth_group_name      || '';
+  document.getElementById('yg_church').value     = g?.church_name           || '';
+  document.getElementById('yg_category').value   = g?.category              || 'Prospect';
+  document.getElementById('yg_address').value    = g?.address               || '';
+  document.getElementById('yg_city').value       = g?.city                  || '';
+  document.getElementById('yg_state').value      = g?.state                 || '';
+  document.getElementById('yg_zip').value        = g?.zip                   || '';
+  document.getElementById('yg_pc_name').value    = g?.primary_contact_name  || '';
+  document.getElementById('yg_pc_phone').value   = g?.primary_contact_phone || '';
+  document.getElementById('yg_pc_email').value   = g?.primary_contact_email || '';
+  document.getElementById('yg_tags').value       = g?.tags                  || '';
+  document.getElementById('yg_notes').value      = g?.notes                 || '';
+  _populateYGContactDropdown();
+  document.getElementById('yg_contact_id').value = g?.primary_contact_id    || '';
+  document.getElementById('ygModalSuccess').style.display = 'none';
+  document.getElementById('ygModalNav').style.display    = 'flex';
+  document.getElementById('ygModalOverlay').classList.add('open');
+  document.getElementById('ygModal').classList.add('open');
+  setTimeout(() => document.getElementById('yg_name').focus(), 80);
+}
+
+function closeYGModal() {
+  document.getElementById('ygModalOverlay')?.classList.remove('open');
+  document.getElementById('ygModal')?.classList.remove('open');
+}
+
+async function submitYGForm() {
+  const name   = document.getElementById('yg_name').value.trim();
+  const church = document.getElementById('yg_church').value.trim();
+  if (!name && !church) { alert('Please enter a Youth Group Name or Church Name.'); return; }
+
+  const btn = document.getElementById('ygModalSubmit');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  const body = {
+    youth_group_name:      name,
+    church_name:           church,
+    category:              document.getElementById('yg_category').value,
+    address:               document.getElementById('yg_address').value.trim(),
+    city:                  document.getElementById('yg_city').value.trim(),
+    state:                 document.getElementById('yg_state').value.trim(),
+    zip:                   document.getElementById('yg_zip').value.trim(),
+    primary_contact_id:    document.getElementById('yg_contact_id').value,
+    primary_contact_name:  document.getElementById('yg_pc_name').value.trim(),
+    primary_contact_phone: document.getElementById('yg_pc_phone').value.trim(),
+    primary_contact_email: document.getElementById('yg_pc_email').value.trim(),
+    tags:                  document.getElementById('yg_tags').value.trim(),
+    notes:                 document.getElementById('yg_notes').value.trim()
+  };
+
+  try {
+    const isEdit = !!_ygModalGroup;
+    const url    = isEdit ? `/api/youth-groups/${encodeURIComponent(_ygModalGroup.id)}` : '/api/youth-groups';
+    const res    = await fetch(url, {
+      method:  isEdit ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not save youth group.'); return; }
+
+    const ok = document.getElementById('ygModalSuccess');
+    ok.style.display = 'block';
+    ok.textContent   = isEdit ? 'Youth group updated.' : 'Youth group added.';
+    document.getElementById('ygModalNav').style.display = 'none';
+    await loadYouthGroups();
+    setTimeout(() => {
+      closeYGModal();
+      if (isEdit) { closeYGPanel(); openYGPanel(data); }
+    }, 1200);
+  } catch (err) {
+    alert('Network error — could not save youth group.');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = _ygModalGroup ? 'Save Changes' : 'Add Group';
+    if (document.getElementById('ygModalSuccess').style.display === 'none') {
+      document.getElementById('ygModalNav').style.display = 'flex';
+    }
+  }
+}
+
+async function confirmDeleteYG() {
+  const g = _currentYG;
+  if (!g) return;
+  const name = _ygDisplayName(g);
+  if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+  try {
+    const res  = await fetch(`/api/youth-groups/${encodeURIComponent(g.id)}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not delete youth group.'); return; }
+    closeYGPanel();
+    await loadYouthGroups();
+  } catch (err) {
+    alert('Network error — could not delete youth group.');
   }
 }

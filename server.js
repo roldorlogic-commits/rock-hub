@@ -118,6 +118,7 @@ app.use('/auth',       require('./routes/auth')(passport));
 app.use('/api',        require('./routes/api'));
 app.use('/api',        require('./routes/events'));
 app.use('/api',        require('./routes/volunteer'));
+app.use('/api',        require('./routes/youth-groups'));
 app.use('/api/admin',  require('./routes/admin'));
 app.use('/social',     require('./routes/social'));
 
@@ -138,6 +139,7 @@ app.get('/reset-password', (req, res) => res.sendFile(path.join(__dirname, 'view
 app.get('/board',        requireBoard, (req, res) => res.sendFile(path.join(__dirname, 'views/board.html')));
 app.get('/volunteer',    requireActiveVolunteer, (req, res) => res.sendFile(path.join(__dirname, 'views/volunteer.html')));
 app.get('/social-feed',  requireBoard, (req, res) => res.sendFile(path.join(__dirname, 'views/social.html')));
+app.get('/reach-map',    requireBoard, (req, res) => res.sendFile(path.join(__dirname, 'views/reach-map.html')));
 
 app.get('/volunteer/pending-approval', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'views/pending-approval.html')));
 app.get('/admin/usage', requireVP, (req, res) => res.sendFile(path.join(__dirname, 'views/admin-usage.html')));
@@ -164,6 +166,9 @@ sheetsLib.ensureColumns('Events', ['PhotoURL'])
 
 sheetsLib.ensureColumns('Members', ['Tags'])
   .catch(err => console.error('Could not add Tags column to Members:', err.message));
+
+sheetsLib.ensureColumns('Members', ['youth_group_id'])
+  .catch(err => console.error('Could not add youth_group_id column to Members:', err.message));
 
 sheetsLib.ensureColumns('Documents', ['DocumentID', 'UploadedBy', 'Tags', 'Source'])
   .catch(err => console.error('Could not add columns to Documents:', err.message));

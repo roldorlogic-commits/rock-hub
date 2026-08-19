@@ -213,17 +213,23 @@
       </div>
     </section>
 
-    <!-- ── MEMBERS ────────────────────────────────────────────────────────── -->
+    <!-- ── MEMBERS / YOUTH GROUPS ───────────────────────────────────────── -->
     <section id="members" class="content-section">
       <div class="card">
         <div class="card-header">
-          <span class="card-title">Contacts</span>
+          <span class="card-title" id="contactsCardTitle">Contacts</span>
           <div style="display:flex;align-items:center;gap:10px;">
-            <button class="btn btn-gold btn-sm" onclick="openContactModal()">+ Add Contact</button>
-            <a class="btn btn-outline btn-sm" href="/api/export/members" download>Export CSV</a>
+            <div class="view-switcher" id="contactsViewSwitcher">
+              <button class="view-sw-btn active" id="vswContacts" onclick="switchContactsView('contacts')">Contacts</button>
+              <button class="view-sw-btn" id="vswYouthGroups" onclick="switchContactsView('youthgroups')">Youth Groups</button>
+            </div>
+            <button class="btn btn-gold btn-sm" id="addContactBtn" onclick="openContactModal()">+ Add Contact</button>
+            <button class="btn btn-gold btn-sm" id="addYGBtn" style="display:none;" onclick="openYGModal()">+ Add Group</button>
+            <a class="btn btn-outline btn-sm" id="exportContactsBtn" href="/api/export/members" download>Export CSV</a>
             <span class="role-badge">Board View</span>
           </div>
         </div>
+        <!-- Individual contacts sub-view -->
         <div id="membersBulkBar" style="display:none;padding:8px 20px;background:var(--gold-faint);border-bottom:1px solid var(--gold-line);display:none;align-items:center;gap:10px;flex-wrap:wrap;">
           <span id="membersBulkCount" style="font-size:12px;color:var(--text-dim);flex:1;min-width:80px;"></span>
           <button class="btn btn-sm btn-ghost" onclick="openBulkAction('tag')">Apply Tag</button>
@@ -232,6 +238,8 @@
           <button class="btn btn-sm btn-ghost" onclick="clearBulkSelection()">✕ Clear</button>
         </div>
         <div id="membersFull"><div class="loading-row"><div class="spinner"></div></div></div>
+        <!-- Youth Groups sub-view -->
+        <div id="youthGroupsFull" style="display:none;"><div class="loading-row"><div class="spinner"></div></div></div>
       </div>
     </section>
 
@@ -356,6 +364,15 @@
     <div class="slide-panel-body"></div>
   </aside>
 
+  <!-- ── Youth Group detail slide panel ───────────────────────────────────── -->
+  <div class="slide-panel-overlay" id="ygPanelOverlay" onclick="closeYGPanel()"></div>
+  <aside class="slide-panel" id="ygPanel" style="width:420px;">
+    <button class="icon-btn slide-panel-close" onclick="closeYGPanel()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="slide-panel-body" id="ygPanelBody"></div>
+  </aside>
+
   <!-- ── Create Event modal (Board only) ──────────────────────────────────── -->
   <div class="modal-overlay" id="createEventOverlay" onclick="closeCreateEventModal()"></div>
   <div class="modal-box" id="createEventModal" style="width:500px;">
@@ -465,6 +482,9 @@
       <label>Email<input type="email" id="cm_email" placeholder="jane@example.com"></label>
       <label>Phone<input type="tel" id="cm_phone" placeholder="(555) 000-0000"></label>
       <label>Tags <span style="color:var(--text-muted);font-weight:400;">(comma-separated)</span><input type="text" id="cm_tags" placeholder="e.g. Donor, Parent, Alumni"></label>
+      <label>Youth Group <span style="color:var(--text-muted);font-weight:400;">(optional)</span>
+        <select id="cm_youth_group"><option value="">— Unassigned —</option></select>
+      </label>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <label>Membership Type
           <select id="cm_type">
@@ -636,6 +656,53 @@
       <button class="btn btn-outline btn-sm" onclick="closeEditDocModal()">Cancel</button>
       <button class="btn btn-gold btn-sm" id="ed_submit" onclick="submitEditDoc()">Save Changes</button>
     </div>
+  </div>
+
+  <!-- ── Youth Group create / edit modal ──────────────────────────────────── -->
+  <div class="modal-overlay" id="ygModalOverlay" onclick="closeYGModal()"></div>
+  <div class="modal-box" id="ygModal" style="width:520px;">
+    <button class="icon-btn slide-panel-close" onclick="closeYGModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title" id="ygModalTitle">Add Youth Group</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px;" id="ygModalForm">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label>Youth Group Name<input type="text" id="yg_name" placeholder="e.g. Calvary Youth"></label>
+        <label>Church / Org Name<input type="text" id="yg_church" placeholder="e.g. Calvary Chapel"></label>
+      </div>
+      <label>Category
+        <select id="yg_category">
+          <option value="Prospect">Prospect</option>
+          <option value="Partner">Partner</option>
+        </select>
+      </label>
+      <label>Street Address<input type="text" id="yg_address" placeholder="123 Main St"></label>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;">
+        <label>City<input type="text" id="yg_city" placeholder="Orlando"></label>
+        <label>State<input type="text" id="yg_state" placeholder="FL" maxlength="2"></label>
+        <label>ZIP<input type="text" id="yg_zip" placeholder="32801"></label>
+      </div>
+      <p style="font-size:11px;color:var(--text-muted);margin:0;">Address will be geocoded automatically for the Reach Map.</p>
+      <hr style="border:none;border-top:1px solid var(--gold-line);margin:4px 0;">
+      <div class="modal-title" style="font-size:13px;font-weight:600;margin:0;">Primary Contact</div>
+      <label>Linked Contact (optional)
+        <select id="yg_contact_id"><option value="">— Select from contacts —</option></select>
+      </label>
+      <p style="font-size:11px;color:var(--text-muted);margin:-8px 0 0;">Or fill in free-text fields below if contact isn't in the system yet.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label>Name<input type="text" id="yg_pc_name" placeholder="Jane Smith"></label>
+        <label>Phone<input type="tel" id="yg_pc_phone" placeholder="(555) 000-0000"></label>
+      </div>
+      <label>Email<input type="email" id="yg_pc_email" placeholder="jane@example.com"></label>
+      <hr style="border:none;border-top:1px solid var(--gold-line);margin:4px 0;">
+      <label>Tags <span style="color:var(--text-muted);font-weight:400;">(comma-separated)</span><input type="text" id="yg_tags" placeholder="e.g. Active, East Side"></label>
+      <label>Notes<textarea id="yg_notes" rows="2" style="resize:vertical;" placeholder="Any additional notes…"></textarea></label>
+    </div>
+    <div class="modal-nav" id="ygModalNav">
+      <button class="btn btn-outline btn-sm" onclick="closeYGModal()">Cancel</button>
+      <button class="btn btn-gold btn-sm" id="ygModalSubmit" onclick="submitYGForm()">Add Group</button>
+    </div>
+    <div class="modal-success" id="ygModalSuccess" style="display:none;"></div>
   </div>
 
   <!-- Notification Settings Modal -->
