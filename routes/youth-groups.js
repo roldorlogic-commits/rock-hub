@@ -74,6 +74,64 @@ async function geocode(address, city, state, zip) {
   return null;
 }
 
+// US state full-name → abbreviation (used when parsing Photon results)
+const STATE_ABBR = {
+  'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA',
+  'Colorado':'CO','Connecticut':'CT','Delaware':'DE','Florida':'FL','Georgia':'GA',
+  'Hawaii':'HI','Idaho':'ID','Illinois':'IL','Indiana':'IN','Iowa':'IA',
+  'Kansas':'KS','Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD',
+  'Massachusetts':'MA','Michigan':'MI','Minnesota':'MN','Mississippi':'MS',
+  'Missouri':'MO','Montana':'MT','Nebraska':'NE','Nevada':'NV','New Hampshire':'NH',
+  'New Jersey':'NJ','New Mexico':'NM','New York':'NY','North Carolina':'NC',
+  'North Dakota':'ND','Ohio':'OH','Oklahoma':'OK','Oregon':'OR','Pennsylvania':'PA',
+  'Rhode Island':'RI','South Carolina':'SC','South Dakota':'SD','Tennessee':'TN',
+  'Texas':'TX','Utah':'UT','Vermont':'VT','Virginia':'VA','Washington':'WA',
+  'West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY','District of Columbia':'DC'
+};
+
+// GET /api/youth-groups/photon?q=... — server-side Photon autocomplete proxy.
+// Sets User-Agent + Florida location bias; returns simplified suggestion list.
+// Must be registered before /:id to avoid capturing "photon" as an ID param.
+router.get('/youth-groups/photon', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.json([]);
+  try {
+    const params = new URLSearchParams({
+      q, limit: '6', lang: 'en',
+      lat: '28.0', lon: '-81.5'   // bias toward central Florida
+    });
+    const url = `https://photon.komoot.io/api/?${params}`;
+    const r = await fetch(url, {
+      headers: { 'User-Agent': 'ROCK-Hub/1.0 (hub.gorock.org; roldorlogic@gmail.com)' },
+      signal: AbortSignal.timeout(6000)
+    });
+    if (!r.ok) return res.json([]);
+    const data = await r.json();
+
+    const suggestions = (data.features || [])
+      .filter(f => f.properties?.country === 'United States')
+      .map(f => {
+        const p    = f.properties;
+        const num  = p.housenumber || '';
+        const st   = p.street      || '';
+        const addr = [num, st].filter(Boolean).join(' ') || p.name || '';
+        const city = p.city || p.town || p.village || '';
+        const rawState = p.state || '';
+        const state = STATE_ABBR[rawState] || rawState.slice(0, 2).toUpperCase();
+        const zip   = p.postcode ? p.postcode.slice(0, 5) : '';
+        const [lon, lat] = f.geometry.coordinates;
+        const label = [addr, city, state, zip].filter(Boolean).join(', ');
+        return { label, address: addr, city, state, zip, lat: String(lat), lng: String(lon) };
+      })
+      .filter(s => s.label);
+
+    res.json(suggestions);
+  } catch (err) {
+    console.error('[photon] proxy error:', err.message);
+    res.json([]);
+  }
+});
+
 // GET /api/youth-groups
 router.get('/youth-groups', async (req, res) => {
   try {
@@ -105,18 +163,30 @@ router.post('/youth-groups', requireBoard, async (req, res) => {
     const now = todayStr();
     const id  = `YG-${Date.now()}`;
 
-    let lat = '', lng = '';
-    if (b.address || b.city || b.state || b.zip) {
+    let lat = '', lng = '', location_type = '';
+
+    // Autocomplete path: form sent exact coords — skip geocoder entirely.
+    const hasExactCoords = b.lat && b.lng &&
+      !isNaN(parseFloat(b.lat)) && !isNaN(parseFloat(b.lng));
+
+    if (hasExactCoords) {
+      lat = String(b.lat); lng = String(b.lng);
+      location_type = 'exact';
+      console.log(`[youth-groups] create id=${id}: using autocomplete coords lat=${lat} lng=${lng}`);
+    } else if (b.address || b.city || b.state || b.zip) {
+      // Fallback: progressive Nominatim geocode
       console.log(`[youth-groups] geocoding on create: address="${b.address}" city="${b.city}" state="${b.state}" zip="${b.zip}"`);
       const coords = await geocode(b.address, b.city, b.state, b.zip);
       if (coords) {
         lat = coords.lat; lng = coords.lng;
+        location_type = 'approximate';
         console.log(`[youth-groups] geocode result: lat=${lat} lng=${lng}`);
       } else {
-        console.warn(`[youth-groups] geocode returned null on create — lat/lng will be blank for id=${id}`);
+        console.warn(`[youth-groups] geocode returned null on create — lat/lng blank for id=${id}`);
       }
     }
-    console.log(`[youth-groups] appending row id=${id} lat="${lat}" lng="${lng}"`);
+
+    console.log(`[youth-groups] appending row id=${id} lat="${lat}" lng="${lng}" location_type="${location_type}"`);
     const row = await sheets.appendRow('YouthGroups', {
       id,
       youth_group_name:      b.youth_group_name      || '',
@@ -133,6 +203,7 @@ router.post('/youth-groups', requireBoard, async (req, res) => {
       primary_contact_email: b.primary_contact_email || '',
       tags:                  b.tags                  || '',
       notes:                 b.notes                 || '',
+      location_type,
       created_at: now,
       updated_at: now
     });
@@ -155,23 +226,35 @@ router.patch('/youth-groups/:id', requireBoard, async (req, res) => {
       return res.status(400).json({ error: 'category must be Prospect or Partner.' });
     }
 
-    // Re-geocode when any address field changed
-    const addrKeys = ['address', 'city', 'state', 'zip'];
-    if (addrKeys.some(k => fields[k] !== undefined)) {
-      const existing = await sheets.getYouthGroupById(req.params.id);
-      if (existing) {
-        const addr  = fields.address !== undefined ? fields.address : existing.address;
-        const city  = fields.city    !== undefined ? fields.city    : existing.city;
-        const state = fields.state   !== undefined ? fields.state   : existing.state;
-        const zip   = fields.zip     !== undefined ? fields.zip     : existing.zip;
-        if (addr || city || state || zip) {
-          console.log(`[youth-groups] geocoding on edit ${req.params.id}: address="${addr}" city="${city}" state="${state}" zip="${zip}"`);
-          const coords = await geocode(addr, city, state, zip);
-          if (coords) {
-            fields.lat = coords.lat; fields.lng = coords.lng;
-            console.log(`[youth-groups] geocode result on edit: lat=${fields.lat} lng=${fields.lng}`);
-          } else {
-            console.warn(`[youth-groups] geocode returned null on edit ${req.params.id} — lat/lng not updated`);
+    // Autocomplete path: form sent exact coords — write them directly, skip geocoder.
+    const hasExactCoords = req.body.lat && req.body.lng &&
+      !isNaN(parseFloat(req.body.lat)) && !isNaN(parseFloat(req.body.lng));
+
+    if (hasExactCoords) {
+      fields.lat = String(req.body.lat);
+      fields.lng = String(req.body.lng);
+      fields.location_type = 'exact';
+      console.log(`[youth-groups] edit ${req.params.id}: using autocomplete coords lat=${fields.lat} lng=${fields.lng}`);
+    } else {
+      // Fallback: re-geocode when any address field changed
+      const addrKeys = ['address', 'city', 'state', 'zip'];
+      if (addrKeys.some(k => fields[k] !== undefined)) {
+        const existing = await sheets.getYouthGroupById(req.params.id);
+        if (existing) {
+          const addr  = fields.address !== undefined ? fields.address : existing.address;
+          const city  = fields.city    !== undefined ? fields.city    : existing.city;
+          const state = fields.state   !== undefined ? fields.state   : existing.state;
+          const zip   = fields.zip     !== undefined ? fields.zip     : existing.zip;
+          if (addr || city || state || zip) {
+            console.log(`[youth-groups] geocoding on edit ${req.params.id}: address="${addr}" city="${city}" state="${state}" zip="${zip}"`);
+            const coords = await geocode(addr, city, state, zip);
+            if (coords) {
+              fields.lat = coords.lat; fields.lng = coords.lng;
+              fields.location_type = 'approximate';
+              console.log(`[youth-groups] geocode result on edit: lat=${fields.lat} lng=${fields.lng}`);
+            } else {
+              console.warn(`[youth-groups] geocode returned null on edit ${req.params.id}`);
+            }
           }
         }
       }

@@ -1306,6 +1306,8 @@ async function openYGPanel(g) {
         <div class="detail-field">
           <div class="detail-field-label">Address</div>
           <div class="detail-field-value${loc ? '' : ' empty'}">${loc || '—'}</div>
+          ${detail.location_type === 'approximate' ? '<div class="loc-approx-badge">~ Approximate location</div>' : ''}
+          ${detail.location_type === 'exact'       ? '<div class="loc-exact-badge">&#x1F4CD; Exact location</div>' : ''}
         </div>
         <div class="detail-field">
           <div class="detail-field-label">Primary Contact</div>
@@ -1366,6 +1368,13 @@ function openYGModal(g) {
   document.getElementById('yg_notes').value      = g?.notes                 || '';
   _populateYGContactDropdown();
   document.getElementById('yg_contact_id').value = g?.primary_contact_id    || '';
+
+  // Restore autocomplete hidden state for existing groups
+  document.getElementById('yg_lat').value           = g?.lat           || '';
+  document.getElementById('yg_lng').value           = g?.lng           || '';
+  document.getElementById('yg_location_type').value = g?.location_type || '';
+  if (typeof ygAcSetStatus === 'function') ygAcSetStatus(g?.location_type || '');
+
   document.getElementById('ygModalSuccess').style.display = 'none';
   document.getElementById('ygModalNav').style.display    = 'flex';
   document.getElementById('ygModalOverlay').classList.add('open');
@@ -1401,6 +1410,14 @@ async function submitYGForm() {
     tags:                  document.getElementById('yg_tags').value.trim(),
     notes:                 document.getElementById('yg_notes').value.trim()
   };
+  // Include autocomplete-captured coordinates when present
+  const acLat = document.getElementById('yg_lat').value;
+  const acLng = document.getElementById('yg_lng').value;
+  if (acLat && acLng) {
+    body.lat           = acLat;
+    body.lng           = acLng;
+    body.location_type = document.getElementById('yg_location_type').value || 'exact';
+  }
 
   try {
     const isEdit = !!_ygModalGroup;

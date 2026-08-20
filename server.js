@@ -177,8 +177,8 @@ sheetsLib.ensureColumns('Documents', ['DocumentID', 'UploadedBy', 'Tags', 'Sourc
 sheetsLib.ensureColumns('EventRegistrations', ['Category', 'Source'])
   .catch(err => console.error('Could not add columns to EventRegistrations:', err.message));
 
-sheetsLib.ensureColumns('YouthGroups', ['lat', 'lng'])
-  .catch(err => console.error('Could not ensure lat/lng columns in YouthGroups:', err.message));
+sheetsLib.ensureColumns('YouthGroups', ['lat', 'lng', 'location_type'])
+  .catch(err => console.error('Could not ensure lat/lng/location_type columns in YouthGroups:', err.message));
 
 // Geocode any YouthGroups rows that have addresses but no coordinates.
 // Runs after boot with a small delay to avoid hitting Nominatim before the

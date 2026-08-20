@@ -718,13 +718,24 @@
           <option value="Partner">Partner</option>
         </select>
       </label>
-      <label>Street Address<input type="text" id="yg_address" placeholder="123 Main St"></label>
+      <!-- Hidden coords captured from autocomplete selection -->
+      <input type="hidden" id="yg_lat">
+      <input type="hidden" id="yg_lng">
+      <input type="hidden" id="yg_location_type">
+
+      <label>Street Address
+        <div class="ac-wrap">
+          <input type="text" id="yg_address" placeholder="Start typing an address…" autocomplete="off">
+          <div class="ac-dropdown" id="ygAddressDropdown"></div>
+        </div>
+      </label>
       <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;">
         <label>City<input type="text" id="yg_city" placeholder="Orlando"></label>
         <label>State<input type="text" id="yg_state" placeholder="FL" maxlength="2"></label>
         <label>ZIP<input type="text" id="yg_zip" placeholder="32801"></label>
       </div>
-      <p style="font-size:11px;color:var(--text-muted);margin:0;">Address will be geocoded automatically for the Reach Map.</p>
+      <!-- Location accuracy indicator — set by autocomplete JS -->
+      <div id="yg_loc_status" style="display:none;"></div>
       <hr style="border:none;border-top:1px solid var(--gold-line);margin:4px 0;">
       <div class="modal-title" style="font-size:13px;font-weight:600;margin:0;">Primary Contact</div>
       <label>Linked Contact (optional)
@@ -787,5 +798,6 @@
   <script src="/js/hub-nav.js"></script>
   <script src="/js/board.js"></script>
   <script src="/js/hub-home.js"></script>
+  <script src="/js/yg-autocomplete.js"></script>
 </body>
 </html>
