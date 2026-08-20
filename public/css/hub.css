@@ -266,7 +266,7 @@ body.hub-page .content-section { padding: 24px 0; }
 /* Dashboard two-column grid */
 .dash-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
   gap: 20px;
   align-items: start;
   margin-top: 4px;
@@ -274,7 +274,134 @@ body.hub-page .content-section { padding: 24px 0; }
 .dash-main { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .dash-side { display: flex; flex-direction: column; gap: 20px; }
 
-body.hub-page .metrics-row { margin-bottom: 20px; }
+/* Stat tiles contained inside left column — no bottom margin (gap handles spacing) */
+body.hub-page .metrics-row { margin-bottom: 0; }
+
+/* ── Dashboard bottom tile pair (Calendar + Reach Map) ──────────────────── */
+.dash-bottom-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: stretch;
+}
+.dash-tile-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Map tile link wrapper — no underline, no default anchor color */
+a.dash-map-tile {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color var(--ease);
+}
+a.dash-map-tile:hover { border-color: var(--gold); }
+.dash-map-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 16px 10px;
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  color: var(--navy);
+  flex-shrink: 0;
+}
+
+/* ── Google Calendar tile ───────────────────────────────────────────────── */
+.cal-tile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 8px;
+  flex-shrink: 0;
+}
+.cal-tile-month {
+  font-family: 'Cinzel', serif;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  color: var(--navy);
+  text-align: center;
+  flex: 1;
+}
+.cal-nav-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: var(--navy);
+  cursor: pointer;
+  padding: 0 6px;
+  line-height: 1;
+  opacity: .6;
+  transition: opacity var(--ease);
+}
+.cal-nav-btn:hover { opacity: 1; }
+
+.cal-grid-tile {
+  padding: 0 12px 12px;
+  flex: 1;
+}
+.cal-grid-tile .cal-grid { gap: 1px; }
+.cal-grid-tile .cal-cell {
+  font-size: 10.5px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background .1s;
+}
+.cal-grid-tile .cal-cell:hover:not(.empty) { background: rgba(20,32,58,.08); }
+.cal-grid-tile .cal-cell.has-event { font-weight: 600; color: var(--navy); }
+
+/* Day events popover (anchored inside the tile) */
+.cal-day-popover {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  right: 10px;
+  background: #fff;
+  border: 1px solid var(--gold-line);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.15);
+  z-index: 10;
+  max-height: 55%;
+  overflow-y: auto;
+}
+.cal-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--navy);
+}
+.cal-popover-close {
+  background: none;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  color: #888;
+  line-height: 1;
+  padding: 0;
+}
+.cal-popover-events { display: flex; flex-direction: column; gap: 6px; }
+.cal-popover-event {
+  font-size: 11px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  background: rgba(20,32,58,.05);
+  border-left: 3px solid var(--gold);
+  color: #26314C;
+  line-height: 1.4;
+}
+.cal-popover-event-time { font-size: 10px; color: #888; margin-top: 2px; }
 
 /* ── App Launcher ───────────────────────────────────────────────────────── */
 .app-grid {
@@ -381,6 +508,11 @@ body.hub-page .app-footer { border: none; color: var(--text-muted); }
   body.hub-page .metrics-row { grid-template-columns: repeat(2, 1fr); }
   .hub-hero-org { font-size: 25px; }
   .hub-hero-search { flex-basis: 100%; }
+  .dash-bottom-tiles { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 640px) {
+  .dash-bottom-tiles { grid-template-columns: 1fr; }
+  .dash-tile-card { min-height: 280px; }
 }
 @media (max-width: 560px) {
   .app-grid { grid-template-columns: repeat(4, 1fr); }

@@ -119,6 +119,7 @@ app.use('/api',        require('./routes/api'));
 app.use('/api',        require('./routes/events'));
 app.use('/api',        require('./routes/volunteer'));
 app.use('/api',        require('./routes/youth-groups'));
+app.use('/api',        require('./routes/calendar'));
 app.use('/api/admin',  require('./routes/admin'));
 app.use('/social',     require('./routes/social'));
 
@@ -175,3 +176,13 @@ sheetsLib.ensureColumns('Documents', ['DocumentID', 'UploadedBy', 'Tags', 'Sourc
 
 sheetsLib.ensureColumns('EventRegistrations', ['Category', 'Source'])
   .catch(err => console.error('Could not add columns to EventRegistrations:', err.message));
+
+sheetsLib.ensureColumns('YouthGroups', ['lat', 'lng'])
+  .catch(err => console.error('Could not ensure lat/lng columns in YouthGroups:', err.message));
+
+// Geocode any YouthGroups rows that have addresses but no coordinates.
+// Runs after boot with a small delay to avoid hitting Nominatim before the
+// server is fully ready. Fire-and-forget; errors are logged but not fatal.
+setTimeout(() => {
+  require('./routes/youth-groups').runGeocodeBackfill();
+}, 5000);

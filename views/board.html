@@ -11,6 +11,9 @@
   <link rel="stylesheet" href="/css/detail.css">
   <link rel="stylesheet" href="/css/hub.css">
   <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
 </head>
 <body class="hub-page" data-hub-active="dashboard">
 
@@ -37,16 +40,18 @@
 
     <!-- ── DASHBOARD OVERVIEW ─────────────────────────────────────────────── -->
     <section id="dashboard" class="content-section active">
-      <div class="metrics-row" id="metricsRow">
-        <div class="metric-card clickable" role="button" tabindex="0" aria-label="View all contacts" onclick="goToSection('members')" onkeydown="if(event.key==='Enter')goToSection('members')"><div class="metric-label">Total Contacts</div><div class="metric-value" id="mMembers">—</div><div class="metric-sub">registered contacts</div></div>
-        <div class="metric-card clickable" role="button" tabindex="0" aria-label="View all events" onclick="goToSection('events')" onkeydown="if(event.key==='Enter')goToSection('events')"><div class="metric-label">Active Events</div><div class="metric-value" id="mEvents">—</div><div class="metric-sub">upcoming &amp; in-progress</div></div>
-        <div class="metric-card clickable" role="button" tabindex="0" aria-label="View all volunteers" onclick="goToSection('volunteers')" onkeydown="if(event.key==='Enter')goToSection('volunteers')"><div class="metric-label">Active Volunteers</div><div class="metric-value" id="mVolunteers">—</div><div class="metric-sub">ready to serve</div></div>
-        <div class="metric-card clickable" role="button" tabindex="0" aria-label="View all action items" onclick="selectBoard('tasks')" onkeydown="if(event.key==='Enter')selectBoard('tasks')"><div class="metric-label">Open Tasks</div><div class="metric-value" id="mTasks">—</div><div class="metric-sub">action items pending</div></div>
-      </div>
-
       <div class="dash-grid">
-        <!-- Left main column -->
+
+        <!-- ── LEFT COLUMN ─────────────────────────────────────────────────── -->
         <div class="dash-main">
+
+          <!-- Stat tiles (contained to left column) -->
+          <div class="metrics-row" id="metricsRow">
+            <div class="metric-card clickable" role="button" tabindex="0" aria-label="View all contacts" onclick="goToSection('members')" onkeydown="if(event.key==='Enter')goToSection('members')"><div class="metric-label">Total Contacts</div><div class="metric-value" id="mMembers">—</div><div class="metric-sub">registered contacts</div></div>
+            <div class="metric-card clickable" role="button" tabindex="0" aria-label="View all events" onclick="goToSection('events')" onkeydown="if(event.key==='Enter')goToSection('events')"><div class="metric-label">Active Events</div><div class="metric-value" id="mEvents">—</div><div class="metric-sub">upcoming &amp; in-progress</div></div>
+            <div class="metric-card clickable" role="button" tabindex="0" aria-label="View all volunteers" onclick="goToSection('volunteers')" onkeydown="if(event.key==='Enter')goToSection('volunteers')"><div class="metric-label">Active Volunteers</div><div class="metric-value" id="mVolunteers">—</div><div class="metric-sub">ready to serve</div></div>
+            <div class="metric-card clickable" role="button" tabindex="0" aria-label="View all action items" onclick="selectBoard('tasks')" onkeydown="if(event.key==='Enter')selectBoard('tasks')"><div class="metric-label">Open Tasks</div><div class="metric-value" id="mTasks">—</div><div class="metric-sub">action items pending</div></div>
+          </div>
 
           <!-- App Launcher -->
           <div class="card">
@@ -113,18 +118,44 @@
             </div>
           </div>
 
-          <!-- Action Items -->
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title">Action Items</span>
-              <a class="card-action" href="#" onclick="selectBoard('tasks');return false;">View all</a>
+          <!-- Bottom tile pair: Google Calendar + Reach Map -->
+          <div class="dash-bottom-tiles">
+
+            <!-- Interactive Google Calendar tile -->
+            <div class="card dash-tile-card" id="calTileCard">
+              <div class="cal-tile-header">
+                <button class="cal-nav-btn" id="calPrevBtn" aria-label="Previous month">&#8249;</button>
+                <span class="cal-tile-month" id="calTileMonth">—</span>
+                <button class="cal-nav-btn" id="calNextBtn" aria-label="Next month">&#8250;</button>
+              </div>
+              <div id="calTileGrid" class="cal-grid-tile"><div class="loading-row"><div class="spinner"></div></div></div>
+
+              <!-- Day events popover -->
+              <div class="cal-day-popover" id="calDayPopover" style="display:none;">
+                <div class="cal-popover-head">
+                  <span id="calPopoverDate"></span>
+                  <button class="cal-popover-close" onclick="closeCalPopover()">&#10005;</button>
+                </div>
+                <div id="calPopoverEvents" class="cal-popover-events"></div>
+                <button class="btn btn-gold btn-sm" style="width:100%;margin-top:10px;" onclick="openCalAddEvent()">+ Add Event</button>
+              </div>
             </div>
-            <div id="tasksPreview"><div class="loading-row"><div class="spinner"></div></div></div>
+
+            <!-- Reach Map tile -->
+            <a class="card dash-tile-card dash-map-tile" href="/reach-map" aria-label="Open full Reach Map">
+              <div class="dash-map-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:14px;height:14px;"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                Reach Map
+              </div>
+              <div id="dashReachMap" style="flex:1;min-height:0;border-radius:0 0 var(--radius) var(--radius);overflow:hidden;"></div>
+            </a>
+
           </div>
         </div>
 
-        <!-- Right sidebar -->
+        <!-- ── RIGHT COLUMN ────────────────────────────────────────────────── -->
         <aside class="dash-side">
+
           <!-- Upcoming Events -->
           <div class="card">
             <div class="card-header">
@@ -134,49 +165,60 @@
             <div id="eventsPreview"><div class="loading-row"><div class="spinner"></div></div></div>
           </div>
 
-          <!-- Calendar -->
+          <!-- Action Items -->
           <div class="card">
             <div class="card-header">
-              <span class="card-title">Calendar</span>
+              <span class="card-title">Action Items</span>
+              <a class="card-action" href="#" onclick="selectBoard('tasks');return false;">View all</a>
             </div>
-            <div id="miniCalendar"><div class="loading-row"><div class="spinner"></div></div></div>
+            <div id="tasksPreview"><div class="loading-row"><div class="spinner"></div></div></div>
           </div>
 
-          <!-- Quick Links -->
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title">Quick Links</span>
-            </div>
-            <div class="quick-links">
-              <button class="quick-link" type="button" onclick="selectBoard('tasks')">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                Submit Action Item
-              </button>
-              <button class="quick-link" type="button" onclick="openUploadDocModal()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                Upload Document
-              </button>
-              <button class="quick-link" type="button" onclick="openContactModal()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-                Add Contact
-              </button>
-              <button class="quick-link" type="button" onclick="openCreateEventModal()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
-                Create Event
-              </button>
-            </div>
-          </div>
         </aside>
       </div>
 
       <!-- Hidden holders: board.js writes to these IDs on load; not shown on the
-           new dashboard but kept present so their loaders never error. -->
+           dashboard but kept present so their loaders never error. -->
       <div style="display:none;" aria-hidden="true">
+        <div id="miniCalendar"></div>
         <div id="contactsPreview"></div>
         <div id="filesPreview"></div>
         <div id="announcementsPreview"></div>
       </div>
     </section>
+
+    <!-- ── Add Calendar Event modal ──────────────────────────────────────────── -->
+    <div class="modal-overlay" id="calAddOverlay" onclick="closeCalAddEvent()"></div>
+    <div class="modal-box" id="calAddModal" style="width:440px;">
+      <button class="icon-btn slide-panel-close" onclick="closeCalAddEvent()" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <div class="modal-title">Add Calendar Event</div>
+      <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px;">
+        <label>Title <span style="color:var(--gold);">*</span><input type="text" id="cal_title" placeholder="e.g. Board Meeting"></label>
+        <label>Description<textarea id="cal_desc" rows="2" placeholder="Optional description…" style="resize:vertical;"></textarea></label>
+        <label>Location<input type="text" id="cal_location" placeholder="e.g. Zoom / Church Hall"></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label>Date <span style="color:var(--gold);">*</span><input type="date" id="cal_date"></label>
+          <label style="justify-content:flex-end;">
+            <span style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+              <input type="checkbox" id="cal_allday" onchange="toggleCalAllDay(this)" checked style="width:auto;">
+              All day
+            </span>
+          </label>
+        </div>
+        <div id="cal_time_fields" style="display:none;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label>Start Time<input type="time" id="cal_start_time"></label>
+          <label>End Time<input type="time" id="cal_end_time"></label>
+        </div>
+      </div>
+      <p class="form-error" id="calAddError" style="display:none;margin-top:10px;"></p>
+      <div class="modal-nav">
+        <button class="btn btn-outline btn-sm" onclick="closeCalAddEvent()">Cancel</button>
+        <button class="btn btn-gold btn-sm" id="calAddSubmit" onclick="submitCalAddEvent()">Add to Calendar</button>
+      </div>
+      <div class="modal-success" id="calAddSuccess" style="display:none;text-align:center;padding:16px 0;">Event added to ROCK Calendar!</div>
+    </div>
 
     <!-- ── EVENTS ─────────────────────────────────────────────────────────── -->
     <section id="events" class="content-section">
@@ -739,6 +781,8 @@
   </div>
 
   <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/hub-nav.js"></script>
   <script src="/js/board.js"></script>

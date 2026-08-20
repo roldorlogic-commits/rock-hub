@@ -12,11 +12,11 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
 // Nominatim geocoder — no key needed, rate-limit: 1 req/sec.
-// Returns { lat, lng } strings or null.
-async function geocode(address, city, state, zip) {
-  const parts = [address, city, state, zip].filter(Boolean).join(', ');
-  if (!parts.trim()) return null;
+// Returns { lat, lng } strings or null. Retries once after 1.5s on failure.
+async function geocodeOnce(parts) {
   return new Promise((resolve) => {
     const q = encodeURIComponent(parts);
     const options = {
@@ -41,6 +41,21 @@ async function geocode(address, city, state, zip) {
     req.on('error', () => resolve(null));
     req.setTimeout(8000, () => { req.destroy(); resolve(null); });
   });
+}
+
+async function geocode(address, city, state, zip) {
+  const parts = [address, city, state, zip].filter(Boolean).join(', ');
+  if (!parts.trim()) return null;
+  let result = await geocodeOnce(parts);
+  if (!result) {
+    // Retry once after a pause to handle transient Nominatim rate-limiting.
+    await sleep(1500);
+    result = await geocodeOnce(parts);
+  }
+  if (!result) {
+    console.warn(`[geocode] No result for: "${parts}"`);
+  }
+  return result;
 }
 
 // GET /api/youth-groups
@@ -75,7 +90,7 @@ router.post('/youth-groups', requireBoard, async (req, res) => {
     const id  = `YG-${Date.now()}`;
 
     let lat = '', lng = '';
-    if (b.address || b.city || b.state) {
+    if (b.address || b.city || b.state || b.zip) {
       const coords = await geocode(b.address, b.city, b.state, b.zip);
       if (coords) { lat = coords.lat; lng = coords.lng; }
     }
@@ -127,8 +142,10 @@ router.patch('/youth-groups/:id', requireBoard, async (req, res) => {
         const city  = fields.city    !== undefined ? fields.city    : existing.city;
         const state = fields.state   !== undefined ? fields.state   : existing.state;
         const zip   = fields.zip     !== undefined ? fields.zip     : existing.zip;
-        const coords = await geocode(addr, city, state, zip);
-        if (coords) { fields.lat = coords.lat; fields.lng = coords.lng; }
+        if (addr || city || state || zip) {
+          const coords = await geocode(addr, city, state, zip);
+          if (coords) { fields.lat = coords.lat; fields.lng = coords.lng; }
+        }
       }
     }
 
@@ -148,4 +165,62 @@ router.delete('/youth-groups/:id', requireBoard, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// POST /api/youth-groups/geocode-backfill — Board only.
+// Geocodes any YouthGroups rows that have an address but missing lat/lng.
+// Respects Nominatim's 1 req/sec policy.
+router.post('/youth-groups/geocode-backfill', requireBoard, async (req, res) => {
+  try {
+    const groups = await sheets.getYouthGroups();
+    const missing = groups.filter(g =>
+      (g.address || g.city || g.state || g.zip) && (!g.lat || !g.lng)
+    );
+    let filled = 0, failed = 0;
+    for (const g of missing) {
+      if (filled + failed > 0) await sleep(1100); // 1 req/sec Nominatim policy
+      const coords = await geocode(g.address, g.city, g.state, g.zip);
+      if (coords) {
+        await sheets.updateRowFields('YouthGroups', 'id', g.id, {
+          lat: coords.lat,
+          lng: coords.lng,
+          updated_at: todayStr()
+        });
+        console.log(`[geocode-backfill] OK: ${g.id} → ${coords.lat},${coords.lng}`);
+        filled++;
+      } else {
+        console.warn(`[geocode-backfill] FAILED: ${g.id} (${g.address}, ${g.city}, ${g.state} ${g.zip})`);
+        failed++;
+      }
+    }
+    res.json({ total: missing.length, filled, failed });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Exported for boot-time use (server.js can call this without HTTP).
+async function runGeocodeBackfill() {
+  try {
+    const groups = await sheets.getYouthGroups();
+    const missing = groups.filter(g =>
+      (g.address || g.city || g.state || g.zip) && (!g.lat || !g.lng)
+    );
+    if (!missing.length) return;
+    console.log(`[geocode-backfill] ${missing.length} group(s) need geocoding…`);
+    for (let i = 0; i < missing.length; i++) {
+      const g = missing[i];
+      if (i > 0) await sleep(1100);
+      const coords = await geocode(g.address, g.city, g.state, g.zip);
+      if (coords) {
+        await sheets.updateRowFields('YouthGroups', 'id', g.id, {
+          lat: coords.lat, lng: coords.lng, updated_at: todayStr()
+        });
+        console.log(`[geocode-backfill] ${g.id} → ${coords.lat},${coords.lng}`);
+      } else {
+        console.warn(`[geocode-backfill] no result for ${g.id}`);
+      }
+    }
+  } catch (err) {
+    console.error('[geocode-backfill] error:', err.message);
+  }
+}
+
 module.exports = router;
+module.exports.runGeocodeBackfill = runGeocodeBackfill;
