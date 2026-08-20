@@ -44,18 +44,34 @@ async function geocodeOnce(parts) {
 }
 
 async function geocode(address, city, state, zip) {
-  const parts = [address, city, state, zip].filter(Boolean).join(', ');
-  if (!parts.trim()) return null;
-  let result = await geocodeOnce(parts);
-  if (!result) {
-    // Retry once after a pause to handle transient Nominatim rate-limiting.
-    await sleep(1500);
-    result = await geocodeOnce(parts);
+  // Try progressively less specific queries so we always get at least a
+  // city/zip-level pin even when OSM hasn't indexed the exact street.
+  const attempts = [
+    [address, city, state, zip],  // full address
+    [city, state, zip],            // city + state + zip  (drops street)
+    [zip],                         // zip only
+  ].map(parts => parts.filter(Boolean).join(', ')).filter(s => s.trim());
+
+  for (let i = 0; i < attempts.length; i++) {
+    const q = attempts[i];
+    if (i > 0) await sleep(1100); // respect Nominatim 1 req/sec
+    console.log(`[geocode] attempt ${i + 1}/${attempts.length}: "${q}"`);
+    const result = await geocodeOnce(q);
+    if (result) {
+      if (i > 0) console.log(`[geocode] resolved at fallback level ${i + 1}: "${q}" → ${result.lat},${result.lng}`);
+      return result;
+    }
+    // Retry the same query once on failure before moving to next fallback
+    await sleep(1100);
+    const retry = await geocodeOnce(q);
+    if (retry) {
+      console.log(`[geocode] resolved on retry at level ${i + 1}: "${q}" → ${retry.lat},${retry.lng}`);
+      return retry;
+    }
+    console.warn(`[geocode] no result for: "${q}"`);
   }
-  if (!result) {
-    console.warn(`[geocode] No result for: "${parts}"`);
-  }
-  return result;
+  console.error(`[geocode] all attempts failed for address="${address}" city="${city}" state="${state}" zip="${zip}"`);
+  return null;
 }
 
 // GET /api/youth-groups
@@ -91,10 +107,16 @@ router.post('/youth-groups', requireBoard, async (req, res) => {
 
     let lat = '', lng = '';
     if (b.address || b.city || b.state || b.zip) {
+      console.log(`[youth-groups] geocoding on create: address="${b.address}" city="${b.city}" state="${b.state}" zip="${b.zip}"`);
       const coords = await geocode(b.address, b.city, b.state, b.zip);
-      if (coords) { lat = coords.lat; lng = coords.lng; }
+      if (coords) {
+        lat = coords.lat; lng = coords.lng;
+        console.log(`[youth-groups] geocode result: lat=${lat} lng=${lng}`);
+      } else {
+        console.warn(`[youth-groups] geocode returned null on create — lat/lng will be blank for id=${id}`);
+      }
     }
-
+    console.log(`[youth-groups] appending row id=${id} lat="${lat}" lng="${lng}"`);
     const row = await sheets.appendRow('YouthGroups', {
       id,
       youth_group_name:      b.youth_group_name      || '',
@@ -143,8 +165,14 @@ router.patch('/youth-groups/:id', requireBoard, async (req, res) => {
         const state = fields.state   !== undefined ? fields.state   : existing.state;
         const zip   = fields.zip     !== undefined ? fields.zip     : existing.zip;
         if (addr || city || state || zip) {
+          console.log(`[youth-groups] geocoding on edit ${req.params.id}: address="${addr}" city="${city}" state="${state}" zip="${zip}"`);
           const coords = await geocode(addr, city, state, zip);
-          if (coords) { fields.lat = coords.lat; fields.lng = coords.lng; }
+          if (coords) {
+            fields.lat = coords.lat; fields.lng = coords.lng;
+            console.log(`[youth-groups] geocode result on edit: lat=${fields.lat} lng=${fields.lng}`);
+          } else {
+            console.warn(`[youth-groups] geocode returned null on edit ${req.params.id} — lat/lng not updated`);
+          }
         }
       }
     }
