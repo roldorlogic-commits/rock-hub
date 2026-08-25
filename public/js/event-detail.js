@@ -760,30 +760,169 @@ async function confirmAllPending() {
   } catch (err) { alert('Network error — please try again.'); }
 }
 
-function openAddRegModal()  { document.getElementById('addRegForm')?.reset(); _modalError('addRegError',''); _openModal('addRegOverlay','addRegModal'); }
-function closeAddRegModal() { _closeModal('addRegOverlay','addRegModal'); }
+// ── Add Registrant — search-first modal ────────────────────────────────────
+
+let _regMembersCache = null;
+let _regSelectedMember = null;
+
+async function _loadRegMembers() {
+  if (_regMembersCache) return _regMembersCache;
+  try { _regMembersCache = await apiFetch('/api/members'); } catch (_) { _regMembersCache = []; }
+  return _regMembersCache;
+}
+
+function openAddRegModal() {
+  _regSelectedMember = null;
+  document.getElementById('addRegStep1').style.display = '';
+  document.getElementById('addRegStep2').style.display = 'none';
+  const searchEl = document.getElementById('addReg_Search');
+  if (searchEl) searchEl.value = '';
+  document.getElementById('addRegSuggest').style.display = 'none';
+  document.getElementById('addRegSelected').style.display = 'none';
+  document.getElementById('addRegLinkFields').style.display = 'none';
+  document.getElementById('addRegSubmitBtn').disabled = true;
+  document.getElementById('addReg_Role').value = '';
+  document.getElementById('addReg_Category').value = 'Attendee';
+  document.getElementById('addReg_Notes').value = '';
+  _modalError('addRegError', '');
+  _openModal('addRegOverlay', 'addRegModal');
+  _loadRegMembers();
+}
+
+function closeAddRegModal() { _closeModal('addRegOverlay', 'addRegModal'); }
+
+async function regSearch() {
+  const q = (document.getElementById('addReg_Search')?.value ?? '').toLowerCase().trim();
+  const suggest = document.getElementById('addRegSuggest');
+  if (!q || q.length < 2) { suggest.style.display = 'none'; return; }
+  const members = await _loadRegMembers();
+  const hits = members.filter(m => {
+    const name = `${m.FirstName || ''} ${m.LastName || ''}`.toLowerCase();
+    const em   = (m.Email || '').toLowerCase();
+    return name.includes(q) || em.includes(q);
+  }).slice(0, 8);
+  if (!hits.length) {
+    suggest.innerHTML = '<div style="padding:10px 14px;color:var(--text-muted);font-size:0.875rem;">No contacts found</div>';
+  } else {
+    suggest.innerHTML = hits.map(m => {
+      const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || '(no name)';
+      const em   = m.Email ? `<span style="color:var(--text-muted);font-size:0.8rem;margin-left:6px;">${_esc(m.Email)}</span>` : '';
+      return `<div style="padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--gold-line);"
+        onclick="regSelectContact('${_esc(m.MemberID)}')"
+        onmouseover="this.style.background='var(--surface-hover,rgba(255,255,255,0.05))'"
+        onmouseout="this.style.background=''">
+        <strong>${_esc(name)}</strong>${em}
+      </div>`;
+    }).join('');
+  }
+  suggest.style.display = '';
+}
+
+function regSelectContact(memberID) {
+  const members = _regMembersCache || [];
+  const m = members.find(x => x.MemberID === memberID);
+  if (!m) return;
+  _regSelectedMember = m;
+  const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || '(no name)';
+  document.getElementById('addRegSel_Name').textContent  = name;
+  document.getElementById('addRegSel_Email').textContent = m.Email || '';
+  document.getElementById('addRegSel_Phone').textContent = m.Phone || '';
+  document.getElementById('addRegSuggest').style.display  = 'none';
+  document.getElementById('addReg_Search').value          = '';
+  document.getElementById('addRegSelected').style.display = '';
+  document.getElementById('addRegLinkFields').style.display = '';
+  document.getElementById('addRegSubmitBtn').disabled = false;
+  _modalError('addRegError', '');
+}
+
+function regClearContact() {
+  _regSelectedMember = null;
+  document.getElementById('addRegSelected').style.display  = 'none';
+  document.getElementById('addRegLinkFields').style.display = 'none';
+  document.getElementById('addRegSubmitBtn').disabled = true;
+  document.getElementById('addReg_Search').value = '';
+  document.getElementById('addReg_Search').focus();
+}
+
+function regShowCreateNew() {
+  document.getElementById('addRegStep1').style.display = 'none';
+  document.getElementById('addRegStep2').style.display = '';
+  document.getElementById('addRegNewForm')?.reset();
+  _modalError('addRegNewError', '');
+  document.getElementById('addRegNewDupeHint').style.display = 'none';
+}
+
+function regBackToSearch() {
+  document.getElementById('addRegStep2').style.display = 'none';
+  document.getElementById('addRegStep1').style.display = '';
+  _modalError('addRegError', '');
+}
 
 async function submitAddReg() {
+  if (!_regSelectedMember) { _modalError('addRegError', 'Select a contact first.'); return; }
   const g = id => (document.getElementById(id)?.value ?? '').trim();
-  const first = g('addReg_FirstName'), email_ = g('addReg_Email');
-  if (!first || !email_) { _modalError('addRegError','First name and email are required.'); return; }
-  _modalError('addRegError','');
+  _modalError('addRegError', '');
   _btnLoading('addRegSubmitBtn', true, 'Add Registrant');
   try {
-    const res  = await fetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/registrations`, {
+    const res = await fetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/registrations`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ FirstName: first, LastName: g('addReg_LastName'), Email: email_,
-        Phone: g('addReg_Phone'), Role: g('addReg_Role'), Notes: g('addReg_Notes'),
-        Category: g('addReg_Category') || 'Attendee' })
+      body: JSON.stringify({
+        MemberID: _regSelectedMember.MemberID,
+        Role: g('addReg_Role'), Notes: g('addReg_Notes'),
+        Category: g('addReg_Category') || 'Attendee'
+      })
     });
     const data = await res.json();
     if (!res.ok) { _modalError('addRegError', data.error || 'Failed.'); return; }
     closeAddRegModal();
     await loadRegistrations();
   } catch (err) {
-    _modalError('addRegError','Network error — please try again.');
+    _modalError('addRegError', 'Network error — please try again.');
   } finally {
     _btnLoading('addRegSubmitBtn', false, 'Add Registrant');
+  }
+}
+
+async function submitNewContact() {
+  const g = id => (document.getElementById(id)?.value ?? '').trim();
+  const first = g('addRegNew_FirstName'), email_ = g('addRegNew_Email');
+  if (!first || !email_) { _modalError('addRegNewError', 'First name and email are required.'); return; }
+  _modalError('addRegNewError', '');
+  _btnLoading('addRegNewSubmitBtn', true, 'Create & Register');
+  try {
+    const res = await fetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/registrations`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        createNew: true,
+        FirstName: first, LastName: g('addRegNew_LastName'),
+        Email: email_, Phone: g('addRegNew_Phone'),
+        Role: g('addRegNew_Role'), Notes: g('addRegNew_Notes'),
+        Category: g('addRegNew_Category') || 'Attendee'
+      })
+    });
+    const data = await res.json();
+    if (res.status === 409 && data.error === 'exact_match') {
+      const m = data.matches[0];
+      const name = [m.FirstName, m.LastName].filter(Boolean).join(' ');
+      document.getElementById('addRegNewDupeName').textContent = ` ${name} (${m.Email || ''})`;
+      const link = document.getElementById('addRegNewDupeLink');
+      link.onclick = (e) => {
+        e.preventDefault();
+        _regMembersCache = null;
+        _loadRegMembers().then(() => { regBackToSearch(); regSelectContact(m.MemberID); });
+      };
+      document.getElementById('addRegNewDupeHint').style.display = '';
+      return;
+    }
+    document.getElementById('addRegNewDupeHint').style.display = 'none';
+    if (!res.ok) { _modalError('addRegNewError', data.error || 'Failed.'); return; }
+    _regMembersCache = null; // invalidate so next open re-fetches the new member
+    closeAddRegModal();
+    await loadRegistrations();
+  } catch (err) {
+    _modalError('addRegNewError', 'Network error — please try again.');
+  } finally {
+    _btnLoading('addRegNewSubmitBtn', false, 'Create & Register');
   }
 }
 

@@ -127,44 +127,100 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
     <div class="modal-title">Add Registrant</div>
-    <p class="modal-subtitle">Manually register someone for this event.</p>
-    <form id="addRegForm" onsubmit="event.preventDefault(); submitAddReg();">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <label>First Name <span style="color:var(--gold);">*</span>
-          <input type="text" id="addReg_FirstName" placeholder="First name" autocomplete="given-name">
-        </label>
-        <label>Last Name
-          <input type="text" id="addReg_LastName" placeholder="Last name" autocomplete="family-name">
+
+    <!-- Step 1: Search existing contacts -->
+    <div id="addRegStep1">
+      <p class="modal-subtitle">Search for an existing contact first.</p>
+      <div style="position:relative;margin-bottom:8px;">
+        <input type="text" id="addReg_Search" placeholder="Name or email…" oninput="regSearch()" autocomplete="off"
+          style="width:100%;box-sizing:border-box;">
+        <div id="addRegSuggest" style="display:none;max-height:200px;overflow-y:auto;border:1px solid var(--gold-line);border-radius:6px;margin-top:4px;background:var(--surface);position:absolute;width:100%;z-index:10;"></div>
+      </div>
+      <div id="addRegSelected" style="display:none;background:var(--surface-2,var(--surface));border:1px solid var(--gold-line);border-radius:8px;padding:10px 14px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <strong id="addRegSel_Name"></strong><br>
+            <small id="addRegSel_Email" style="color:var(--text-muted);"></small>
+            <small id="addRegSel_Phone" style="color:var(--text-muted);margin-left:8px;"></small>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="regClearContact()" style="flex-shrink:0;">Change</button>
+        </div>
+      </div>
+      <div id="addRegLinkFields" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label>Role
+            <input type="text" id="addReg_Role" placeholder="e.g. Setup Crew">
+          </label>
+          <label>Category
+            <select id="addReg_Category">
+              <option value="Attendee">Attendee</option>
+              <option value="Volunteer">Volunteer</option>
+            </select>
+          </label>
+        </div>
+        <label>Notes
+          <textarea id="addReg_Notes" rows="2" placeholder="Internal notes…"></textarea>
         </label>
       </div>
-      <label>Email <span style="color:var(--gold);">*</span>
-        <input type="email" id="addReg_Email" placeholder="email@example.com" autocomplete="email">
-      </label>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <label>Phone
-          <input type="tel" id="addReg_Phone" placeholder="(555) 000-0000" autocomplete="tel">
-        </label>
-        <label>Role
-          <input type="text" id="addReg_Role" placeholder="e.g. Setup Crew">
-        </label>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <label>Category
-          <select id="addReg_Category">
-            <option value="Attendee">Attendee</option>
-            <option value="Volunteer">Volunteer</option>
-          </select>
-        </label>
-      </div>
-      <label>Notes
-        <textarea id="addReg_Notes" rows="2" placeholder="Internal notes…"></textarea>
-      </label>
+      <p style="margin-top:10px;font-size:0.85rem;">
+        Can't find them?
+        <a href="#" onclick="regShowCreateNew();return false;">Create new contact →</a>
+      </p>
       <p class="form-error" id="addRegError" style="display:none;"></p>
       <div class="modal-nav">
         <button type="button" class="btn btn-outline" onclick="closeAddRegModal()">Cancel</button>
-        <button type="submit" class="btn btn-gold" id="addRegSubmitBtn">Add Registrant</button>
+        <button type="button" class="btn btn-gold" id="addRegSubmitBtn" onclick="submitAddReg()" disabled>Add Registrant</button>
       </div>
-    </form>
+    </div>
+
+    <!-- Step 2: Create new contact -->
+    <div id="addRegStep2" style="display:none;">
+      <p style="margin-bottom:12px;font-size:0.85rem;">
+        <a href="#" onclick="regBackToSearch();return false;">← Back to search</a>
+      </p>
+      <form id="addRegNewForm" onsubmit="event.preventDefault(); submitNewContact();">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label>First Name <span style="color:var(--gold);">*</span>
+            <input type="text" id="addRegNew_FirstName" placeholder="First name" autocomplete="given-name">
+          </label>
+          <label>Last Name
+            <input type="text" id="addRegNew_LastName" placeholder="Last name" autocomplete="family-name">
+          </label>
+        </div>
+        <label>Email <span style="color:var(--gold);">*</span>
+          <input type="email" id="addRegNew_Email" placeholder="email@example.com" autocomplete="email">
+        </label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label>Phone
+            <input type="tel" id="addRegNew_Phone" placeholder="(555) 000-0000" autocomplete="tel">
+          </label>
+          <label>Role
+            <input type="text" id="addRegNew_Role" placeholder="e.g. Setup Crew">
+          </label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label>Category
+            <select id="addRegNew_Category">
+              <option value="Attendee">Attendee</option>
+              <option value="Volunteer">Volunteer</option>
+            </select>
+          </label>
+        </div>
+        <label>Notes
+          <textarea id="addRegNew_Notes" rows="2" placeholder="Internal notes…"></textarea>
+        </label>
+        <p class="form-error" id="addRegNewError" style="display:none;"></p>
+        <div id="addRegNewDupeHint" style="display:none;background:rgba(255,200,0,0.08);border:1px solid var(--gold-line);border-radius:6px;padding:10px 14px;font-size:0.875rem;margin-top:8px;">
+          <strong>This contact already exists.</strong>
+          <span id="addRegNewDupeName"></span><br>
+          <a href="#" id="addRegNewDupeLink" style="font-size:0.85rem;">Link to existing contact →</a>
+        </div>
+        <div class="modal-nav">
+          <button type="button" class="btn btn-outline" onclick="regBackToSearch()">Cancel</button>
+          <button type="submit" class="btn btn-gold" id="addRegNewSubmitBtn">Create &amp; Register</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <!-- ── Registration Detail Panel (Board — click-to-edit) ───────────────────── -->
