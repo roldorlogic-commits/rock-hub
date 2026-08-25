@@ -180,6 +180,9 @@ sheetsLib.ensureColumns('EventRegistrations', ['Category', 'Source'])
 sheetsLib.ensureColumns('EventRegistrations', ['MemberID'])
   .catch(err => console.error('Could not add MemberID column to EventRegistrations:', err.message));
 
+sheetsLib.ensureColumns('VolunteerSignups', ['MemberID'])
+  .catch(err => console.error('Could not add MemberID column to VolunteerSignups:', err.message));
+
 sheetsLib.ensureColumns('YouthGroups', ['lat', 'lng', 'location_type'])
   .catch(err => console.error('Could not ensure lat/lng/location_type columns in YouthGroups:', err.message));
 
