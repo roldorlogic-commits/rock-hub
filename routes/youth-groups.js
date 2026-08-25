@@ -186,6 +186,11 @@ router.post('/youth-groups', requireBoard, async (req, res) => {
       }
     }
 
+    const igHandle = (b.instagram_handle || '').replace(/^@/, '').trim();
+    if (igHandle && !/^[\w.]+$/.test(igHandle)) {
+      return res.status(400).json({ error: 'Instagram handle may only contain letters, numbers, periods, and underscores.' });
+    }
+
     console.log(`[youth-groups] appending row id=${id} lat="${lat}" lng="${lng}" location_type="${location_type}"`);
     const row = await sheets.appendRow('YouthGroups', {
       id,
@@ -205,7 +210,8 @@ router.post('/youth-groups', requireBoard, async (req, res) => {
       notes:                 b.notes                 || '',
       location_type,
       created_at: now,
-      updated_at: now
+      updated_at: now,
+      instagram_handle:      igHandle
     });
     res.status(201).json(row);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -216,7 +222,8 @@ router.patch('/youth-groups/:id', requireBoard, async (req, res) => {
   try {
     const allowed = ['youth_group_name', 'church_name', 'address', 'city', 'state', 'zip',
                      'category', 'primary_contact_id', 'primary_contact_name',
-                     'primary_contact_phone', 'primary_contact_email', 'tags', 'notes'];
+                     'primary_contact_phone', 'primary_contact_email', 'tags', 'notes',
+                     'instagram_handle'];
     const fields = {};
     for (const k of allowed) {
       if (req.body[k] !== undefined) fields[k] = req.body[k];
@@ -224,6 +231,12 @@ router.patch('/youth-groups/:id', requireBoard, async (req, res) => {
     if (!Object.keys(fields).length) return res.status(400).json({ error: 'Nothing to update.' });
     if (fields.category && !['Prospect', 'Partner'].includes(fields.category)) {
       return res.status(400).json({ error: 'category must be Prospect or Partner.' });
+    }
+    if (fields.instagram_handle !== undefined) {
+      fields.instagram_handle = (fields.instagram_handle || '').replace(/^@/, '').trim();
+      if (fields.instagram_handle && !/^[\w.]+$/.test(fields.instagram_handle)) {
+        return res.status(400).json({ error: 'Instagram handle may only contain letters, numbers, periods, and underscores.' });
+      }
     }
 
     // Autocomplete path: form sent exact coords — write them directly, skip geocoder.

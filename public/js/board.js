@@ -14,7 +14,7 @@ let eventsById = {};
     loadStats(), loadTasks(), loadContacts(), loadFiles(), loadDriveDocs(),
     loadMembers(), loadYouthGroups(), loadVolunteersFull(), loadAnnouncements(),
     initNotifications(['All', 'Board']), loadPendingVolunteerBadge(),
-    loadNotifSummary()
+    loadNotifSummary(), loadMetricsTile()
   ]);
 })();
 
@@ -1267,6 +1267,7 @@ function ygCard(g, idx) {
       ${loc ? `<div class="yg-card-loc">${loc}</div>` : ''}
       ${pc  ? `<div class="yg-card-pc">Contact: ${pc}</div>` : ''}
       ${tags.length ? `<div class="yg-card-tags">${tags.map(t => `<span class="tag-chip-sm">${t}</span>`).join('')}</div>` : ''}
+      ${g.instagram_handle ? `<div class="yg-card-ig" title="@${g.instagram_handle}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:10px;height:10px;"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg> @${g.instagram_handle}</div>` : ''}
     </div>`;
 }
 
@@ -1332,7 +1333,21 @@ async function openYGPanel(g) {
         }).join('') : `<div style="color:var(--text-muted);font-size:13px;">No contacts linked yet. Edit a contact and assign this group.</div>`}
       </div>
 
-      <div style="display:flex;gap:8px;margin-top:20px;flex-wrap:wrap;">
+      ${detail.instagram_handle ? `
+      <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
+        <a class="btn btn-outline btn-sm" style="flex:1;justify-content:center;"
+           href="https://instagram.com/${encodeURIComponent(detail.instagram_handle)}" target="_blank" rel="noopener noreferrer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:11px;height:11px;margin-right:5px;"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+          View on Instagram
+        </a>
+        <a class="btn btn-outline btn-sm" style="flex:1;justify-content:center;"
+           href="https://ig.me/m/${encodeURIComponent(detail.instagram_handle)}" target="_blank" rel="noopener noreferrer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:11px;height:11px;margin-right:5px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Message on Instagram
+        </a>
+      </div>` : ''}
+
+      <div style="display:flex;gap:8px;margin-top:${detail.instagram_handle ? '8px' : '20px'};flex-wrap:wrap;">
         <button class="btn btn-gold btn-sm" style="flex:1;" onclick="openYGModal(_currentYG)">Edit Group</button>
         <button class="btn btn-outline btn-sm" style="color:#ff6363;border-color:#ff636344;" onclick="confirmDeleteYG()">Delete</button>
       </div>`;
@@ -1364,6 +1379,7 @@ function openYGModal(g) {
   document.getElementById('yg_pc_name').value    = g?.primary_contact_name  || '';
   document.getElementById('yg_pc_phone').value   = g?.primary_contact_phone || '';
   document.getElementById('yg_pc_email').value   = g?.primary_contact_email || '';
+  document.getElementById('yg_instagram').value  = g?.instagram_handle      || '';
   document.getElementById('yg_tags').value       = g?.tags                  || '';
   document.getElementById('yg_notes').value      = g?.notes                 || '';
   _populateYGContactDropdown();
@@ -1395,6 +1411,13 @@ async function submitYGForm() {
   const btn = document.getElementById('ygModalSubmit');
   btn.disabled = true; btn.textContent = 'Saving…';
 
+  const igRaw = document.getElementById('yg_instagram').value.trim().replace(/^@/, '');
+  if (igRaw && !/^[\w.]+$/.test(igRaw)) {
+    alert('Instagram handle may only contain letters, numbers, periods, and underscores.');
+    btn.disabled = false; btn.textContent = _ygModalGroup ? 'Save Changes' : 'Add Group';
+    return;
+  }
+
   const body = {
     youth_group_name:      name,
     church_name:           church,
@@ -1407,6 +1430,7 @@ async function submitYGForm() {
     primary_contact_name:  document.getElementById('yg_pc_name').value.trim(),
     primary_contact_phone: document.getElementById('yg_pc_phone').value.trim(),
     primary_contact_email: document.getElementById('yg_pc_email').value.trim(),
+    instagram_handle:      igRaw,
     tags:                  document.getElementById('yg_tags').value.trim(),
     notes:                 document.getElementById('yg_notes').value.trim()
   };

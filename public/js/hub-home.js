@@ -252,3 +252,114 @@ window.submitCalAddEvent = async function() {
     submitBtn.textContent = 'Add to Calendar';
   }
 };
+
+// ── Social Metrics Tile ───────────────────────────────────────────────────────
+let _metricsPeriod = 7;
+const _metricsDataCache = {};
+
+function _fmtNum(n) {
+  if (n == null || isNaN(n)) return '—';
+  if (Math.abs(n) >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (Math.abs(n) >= 1000)    return (n / 1000).toFixed(1) + 'K';
+  return n.toLocaleString();
+}
+
+function _changeChip(n) {
+  if (n == null || isNaN(n)) return '';
+  const cls  = n > 0 ? 'meti-up' : n < 0 ? 'meti-down' : 'meti-flat';
+  const sign = n > 0 ? '+' : '';
+  return `<span class="${cls}">${sign}${_fmtNum(n)}</span>`;
+}
+
+function _metVal(label, fbVal, igVal, fbChange, igChange) {
+  return `
+    <div class="meti-row">
+      <div class="meti-row-label">${label}</div>
+      <div class="meti-pair">
+        <div class="meti-col"><span class="meti-plat fb">FB</span><span class="meti-num">${_fmtNum(fbVal)}</span>${fbChange != null ? _changeChip(fbChange) : ''}</div>
+        <div class="meti-col"><span class="meti-plat ig">IG</span><span class="meti-num">${_fmtNum(igVal)}</span>${igChange != null ? _changeChip(igChange) : ''}</div>
+      </div>
+    </div>`;
+}
+
+function _renderMetrics(d) {
+  const el = document.getElementById('metricsBody');
+  if (!el) return;
+
+  if (!d.configured) {
+    el.innerHTML = `<div class="meti-notice warn">Metrics unavailable — set <code>META_ACCESS_TOKEN</code> and <code>META_PAGE_ID</code> in Railway env vars.</div>`;
+    return;
+  }
+
+  const { fb, ig } = d;
+  const fbOk = !!fb?.ok;
+  const igOk = !!ig?.ok;
+
+  // Surface any permission gaps prominently
+  const notices = [];
+  if (!fbOk && fb?.error) notices.push(`Facebook error (${fb.error.code}): ${fb.error.message}`);
+  if (fbOk && fb?.missingScopes) notices.push('Facebook Insights missing. Token needs: <strong>read_insights</strong>, <strong>pages_read_engagement</strong>');
+  if (fbOk && fb?.insightsError && !fb.missingScopes) notices.push(`Facebook Insights: ${fb.insightsError.message}`);
+  if (!igOk && ig?.notConfigured) notices.push('Instagram metrics disabled — add <strong>META_IG_BUSINESS_ID</strong> env var (IG Business Account ID from Meta Business Suite).');
+  if (!igOk && ig?.error) notices.push(`Instagram error (${ig.error.code}): ${ig.error.message}`);
+  if (igOk && ig?.missingScopes) notices.push('Instagram Insights missing. Token needs: <strong>instagram_manage_insights</strong>, <strong>instagram_basic</strong>');
+
+  const noticeBand = notices.length
+    ? `<div class="meti-notices">${notices.map(m => `<div class="meti-notice warn">⚠ ${m}</div>`).join('')}</div>`
+    : '';
+
+  // Only render groups if we have at least some data
+  const hasAny = fbOk || igOk;
+  if (!hasAny) {
+    el.innerHTML = noticeBand || `<div class="meti-notice warn">No metrics available. Check Meta token configuration.</div>`;
+    return;
+  }
+
+  const groups = `
+    <div class="meti-groups">
+      <div class="meti-group">
+        <div class="meti-group-title">Followers</div>
+        ${_metVal('Total', fbOk ? fb.followers : null, igOk ? ig.followers : null, fb?.fanAdds, ig?.followersGrowth)}
+      </div>
+      <div class="meti-group">
+        <div class="meti-group-title">Reach &amp; Impressions</div>
+        ${_metVal('Reach',       fbOk ? fb.reach       : null, igOk ? ig.reach       : null)}
+        ${_metVal('Impressions', fbOk ? fb.impressions  : null, igOk ? ig.impressions  : null)}
+      </div>
+      <div class="meti-group">
+        <div class="meti-group-title">Engagement</div>
+        ${_metVal('Engaged', fbOk ? fb.engagement : null, null)}
+      </div>
+      <div class="meti-group">
+        <div class="meti-group-title">Profile Activity</div>
+        ${_metVal('Page Views',   fbOk ? fb.pageViews    : null, igOk ? ig.profileViews : null)}
+      </div>
+    </div>`;
+
+  el.innerHTML = groups + noticeBand;
+}
+
+window.loadMetricsTile = async function(period) {
+  if (period !== undefined) _metricsPeriod = period;
+  const el = document.getElementById('metricsBody');
+  if (!el) return;
+  el.innerHTML = '<div class="loading-row"><div class="spinner"></div></div>';
+  try {
+    const data = await fetch(`/api/meta/insights?period=${_metricsPeriod}`).then(r => r.json());
+    _metricsDataCache[_metricsPeriod] = data;
+    _renderMetrics(data);
+  } catch (e) {
+    el.innerHTML = '<div class="meti-notice warn">Could not reach metrics API — check server logs.</div>';
+  }
+};
+
+window.setMetricsPeriod = function(p) {
+  _metricsPeriod = p;
+  document.getElementById('mpt7')?.classList.toggle('active', p === 7);
+  document.getElementById('mpt30')?.classList.toggle('active', p === 30);
+  if (_metricsDataCache[p]) {
+    _renderMetrics(_metricsDataCache[p]);
+  } else {
+    loadMetricsTile(p);
+  }
+};

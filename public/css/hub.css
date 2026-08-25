@@ -809,3 +809,112 @@ body.hub-page .welcome-banner .assignment-value { color: #FFFFFF; }
 }
 .yg-contact-row:hover { background: var(--gold-faint); }
 .yg-contact-row:last-child { border-bottom: none; }
+
+/* ── YG card Instagram handle badge ─────────────────────────────────────── */
+.yg-card-ig {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 5px;
+  font-size: 10.5px;
+  color: var(--gold);
+  opacity: .85;
+}
+
+/* ── Social Metrics tile ─────────────────────────────────────────────────── */
+.mpt-toggle {
+  display: flex;
+  border: 1px solid var(--gold-line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.mpt-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-family: 'Jost', sans-serif;
+  font-weight: 600;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: background var(--ease), color var(--ease);
+}
+.mpt-btn.active {
+  background: var(--gold-faint);
+  color: var(--gold);
+}
+.mpt-btn:hover:not(.active) { background: rgba(255,255,255,.04); }
+
+/* Groups strip */
+.meti-groups {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  padding: 0 0 4px;
+}
+.meti-group {
+  padding: 12px 20px 16px;
+  border-right: 1px solid var(--gold-line);
+}
+.meti-group:last-child { border-right: none; }
+.meti-group-title {
+  font-family: 'Cinzel', serif;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 10px;
+}
+
+/* Metric rows within a group */
+.meti-row { margin-bottom: 8px; }
+.meti-row:last-child { margin-bottom: 0; }
+.meti-row-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.meti-pair { display: flex; gap: 12px; }
+.meti-col  { display: flex; align-items: center; gap: 5px; }
+.meti-plat {
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 3px;
+  padding: 1px 4px;
+  flex-shrink: 0;
+  letter-spacing: .02em;
+}
+.meti-plat.fb { background: #1877F222; color: #4f9cf9; }
+.meti-plat.ig { background: #E1306C22; color: #e1607a; }
+.meti-num { font-size: 15px; font-weight: 700; color: var(--text-white); }
+.meti-up   { font-size: 10px; font-weight: 600; color: #5dcc8a; }
+.meti-down { font-size: 10px; font-weight: 600; color: #f07070; }
+.meti-flat { font-size: 10px; color: var(--text-muted); }
+
+/* Notice/permission banners */
+.meti-notices { padding: 0 20px 14px; display: flex; flex-direction: column; gap: 6px; }
+.meti-notice {
+  font-size: 12px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  line-height: 1.5;
+}
+.meti-notice.warn {
+  background: rgba(201,169,110,.10);
+  border-left: 3px solid var(--gold);
+  color: var(--text-dim);
+  margin: 12px 20px;
+}
+.meti-notice code, .meti-notice strong { color: var(--gold); font-style: normal; }
+
+@media (max-width: 900px) {
+  .meti-groups { grid-template-columns: 1fr 1fr; }
+  .meti-group  { border-right: none; border-bottom: 1px solid var(--gold-line); }
+  .meti-group:last-child { border-bottom: none; }
+}
+@media (max-width: 540px) {
+  .meti-groups { grid-template-columns: 1fr; }
+}
