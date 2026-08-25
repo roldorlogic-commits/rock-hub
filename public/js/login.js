@@ -152,8 +152,9 @@ async function handleForgotPassword(e) {
 (function () {
   const p = new URLSearchParams(location.search);
   const msgs = {
-    access_denied:  'Access denied. Use your @gorock.org Google account.',
-    login_required: 'Please sign in to access ROCK Hub.'
+    access_denied:    'Access denied. Use your @gorock.org Google account.',
+    login_required:   'Please sign in to access ROCK Hub.',
+    access_disabled:  'Your access to ROCK Hub has been disabled. Contact vicepresident@gorock.org for assistance.'
   };
   const msg = msgs[p.get('error')];
   if (msg) showError(msg);

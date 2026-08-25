@@ -183,6 +183,15 @@ sheetsLib.ensureColumns('YouthGroups', ['lat', 'lng', 'location_type'])
 sheetsLib.ensureColumns('YouthGroups', ['instagram_handle'])
   .catch(err => console.error('Could not ensure instagram_handle column in YouthGroups:', err.message));
 
+sheetsLib.ensureColumns('Members', ['is_volunteer'])
+  .catch(err => console.error('Could not add is_volunteer column to Members:', err.message));
+
+sheetsLib.ensureColumns('Tasks', ['AssigneeEmail', 'Description'])
+  .catch(err => console.error('Could not add AssigneeEmail/Description columns to Tasks:', err.message));
+
+sheetsLib.ensureColumns('VolunteerAuth', ['MustReset'])
+  .catch(err => console.error('Could not add MustReset column to VolunteerAuth:', err.message));
+
 // Geocode any YouthGroups rows that have addresses but no coordinates.
 // Runs after boot with a small delay to avoid hitting Nominatim before the
 // server is fully ready. Fire-and-forget; errors are logged but not fatal.

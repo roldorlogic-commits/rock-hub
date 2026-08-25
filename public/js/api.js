@@ -247,6 +247,7 @@ function interactiveTaskRow(t, eventsById) {
           ${t.DueDate ? `<span style="margin:0 4px;color:var(--gold-line);">·</span>${fmtDate(t.DueDate)}` : ''}
           ${eventLink ? `<span style="margin:0 4px;color:var(--gold-line);">·</span>${eventLink}` : ''}
         </div>
+        ${t.Description ? `<div class="task-notes" style="color:var(--text-dim);">${t.Description}</div>` : ''}
         ${t.Notes ? `<div class="task-notes">${t.Notes}</div>` : ''}
         <div class="task-controls">
           <select class="task-status-select" onchange="updateTaskStatus('${t.TaskID}', this.value)">

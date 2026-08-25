@@ -1,15 +1,18 @@
 'use strict';
 
-const express = require('express');
-const fs      = require('fs');
-const path    = require('path');
-const router  = express.Router();
-const sheets  = require('../lib/sheets');
-const drive   = require('../lib/drive');
+const express  = require('express');
+const fs       = require('fs');
+const path     = require('path');
+const crypto   = require('crypto');
+const bcrypt   = require('bcryptjs');
+const router   = express.Router();
+const sheets   = require('../lib/sheets');
+const drive    = require('../lib/drive');
 const documents = require('../lib/documents');
-const email   = require('../lib/email');
-const sms     = require('../lib/sms');
+const email    = require('../lib/email');
+const sms      = require('../lib/sms');
 const { requireAuth, requireBoard, requireBoardOrAdmin } = require('../middleware/auth');
+const dedupe   = require('../lib/dedupe');
 
 router.use(requireAuth);
 
@@ -34,15 +37,14 @@ function isUpcomingEvent(e) {
 
 router.get('/stats', async (req, res) => {
   try {
-    const [members, events, volunteers, tasks] = await Promise.all([
-      sheets.getMembers(),
-      sheets.getEvents(),
+    const [volunteers, tasks, youthGroups] = await Promise.all([
       sheets.getVolunteers(),
-      sheets.getTasks()
+      sheets.getTasks(),
+      sheets.getYouthGroups()
     ]);
     res.json({
-      totalMembers:     members.length,
-      activeEvents:     events.filter(isUpcomingEvent).length,
+      partners:         youthGroups.filter(g => g.category === 'Partner').length,
+      prospects:        youthGroups.filter(g => g.category === 'Prospect').length,
       activeVolunteers: volunteers.filter(v => v.Status === 'Active').length,
       openTasks:        tasks.filter(t => t.Status !== 'Completed').length
     });
@@ -89,6 +91,36 @@ router.get('/drive/file/:id', async (req, res) => {
   }
 });
 router.get('/userroles',     async (req, res) => { try { res.json(await sheets.getUserRoles());     } catch (e) { res.status(500).json({ error: e.message }); } });
+
+// ── Assignee picker — board members + active volunteers, deduplicated by email ─
+router.get('/assignees', requireBoard, async (req, res) => {
+  try {
+    const [roles, volunteers] = await Promise.all([
+      sheets.getUserRoles(),
+      sheets.getVolunteers()
+    ]);
+    const seen = new Set();
+    const list = [];
+    for (const r of roles) {
+      if (!r.Email) continue;
+      const em = r.Email.toLowerCase();
+      if (seen.has(em)) continue;
+      seen.add(em);
+      const name = [r.FirstName, r.LastName].filter(Boolean).join(' ') || r.Email;
+      list.push({ name, email: r.Email, role: r.Role || 'Board' });
+    }
+    for (const v of volunteers) {
+      if (v.Status !== 'Active' || !v.Email) continue;
+      const em = v.Email.toLowerCase();
+      if (seen.has(em)) continue;
+      seen.add(em);
+      const name = [v.FirstName, v.LastName].filter(Boolean).join(' ') || v.Email;
+      list.push({ name, email: v.Email, role: 'Volunteer' });
+    }
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    res.json(list);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 // ── Member detail (role-filtered) ───────────────────────────────────────────
 // Board sees every field; Volunteers see only the non-sensitive subset.
@@ -223,13 +255,53 @@ router.get('/volunteers/pending', requireBoardOrAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Approval flow — three modes via `action` body param:
+//   (none)   → run dedupe; if match found, return without activating so board can choose
+//   'create' → skip dedupe gate; create a new Members row + activate
+//   'link'   → link linkMemberID contact as volunteer + activate
 router.post('/volunteers/:id/confirm', requireBoardOrAdmin, async (req, res) => {
   try {
-    const authRow = await sheets.findRow('VolunteerAuth', 'VolunteerID', req.params.id);
+    const { action, linkMemberID } = req.body || {};
+    const [authRow, volRow] = await Promise.all([
+      sheets.findRow('VolunteerAuth', 'VolunteerID', req.params.id),
+      sheets.getVolunteerById(req.params.id)
+    ]);
     if (!authRow) return res.status(404).json({ error: 'Volunteer registration not found.' });
+    if (!volRow)  return res.status(404).json({ error: 'Volunteer record not found.' });
 
-    await sheets.updateRowFields('Volunteers', 'VolunteerID', req.params.id, { Status: 'Active' });
-    await sheets.updateRowFields('VolunteerAuth', 'Email', authRow.Email, { Status: 'Active', UpdatedAt: todayStr() });
+    if (action === 'link') {
+      if (!linkMemberID) return res.status(400).json({ error: 'linkMemberID is required.' });
+      const member = await sheets.getMemberById(linkMemberID);
+      if (!member) return res.status(404).json({ error: 'Contact not found.' });
+      await sheets.updateRowFields('Members', 'MemberID', linkMemberID, { is_volunteer: 'true' });
+    } else {
+      // Run dedupe unless the board explicitly chose to create
+      if (action !== 'create') {
+        const dupeResult = await dedupe.checkDupe(
+          volRow.FirstName, volRow.LastName, authRow.Email, volRow.Phone
+        );
+        if (dupeResult.type === 'exact') {
+          return res.status(409).json({ code: 'exact_match', matches: dupeResult.matches });
+        }
+        if (dupeResult.type === 'partial') {
+          return res.json({ code: 'partial_match', matches: dupeResult.matches });
+        }
+      }
+      // Create Members row for this volunteer
+      await sheets.appendRow('Members', {
+        MemberID: `M-${Date.now()}`,
+        FirstName: volRow.FirstName, LastName: volRow.LastName,
+        Email: authRow.Email, Phone: volRow.Phone || '',
+        Tags: '', MembershipType: '', MembershipStatus: 'Active',
+        JoinDate: todayStr(), Notes: volRow.Notes || '', is_volunteer: 'true'
+      });
+    }
+
+    // Activate both rows and notify the volunteer
+    await Promise.all([
+      sheets.updateRowFields('Volunteers', 'VolunteerID', req.params.id, { Status: 'Active' }),
+      sheets.updateRowFields('VolunteerAuth', 'Email', authRow.Email, { Status: 'Active', UpdatedAt: todayStr() })
+    ]);
     await email.send(authRow.Email, 'Your ROCK Hub account has been approved!',
       'Your account has been approved! Log in at hub.gorock.org to get started.');
     res.json({ ok: true });
@@ -280,6 +352,83 @@ router.delete('/volunteers/:id', requireBoard, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Board-initiated volunteer creation (with dedupe) ─────────────────────────
+// action not set  → run dedupe; block on exact, warn on partial (no record created)
+// action='create' → skip dedupe gate; create both Members+Volunteers rows
+// action='link'   → upgrade an existing contact (linkMemberID) to is_volunteer=true
+router.post('/volunteers', requireBoard, async (req, res) => {
+  try {
+    const { FirstName, LastName, Email, Phone, PreferredRole, AvailabilityDays, Skills, Notes, action, linkMemberID } = req.body || {};
+    if (!FirstName || !LastName) return res.status(400).json({ error: 'First and last name are required.' });
+
+    if (action === 'link') {
+      if (!linkMemberID) return res.status(400).json({ error: 'linkMemberID is required for link action.' });
+      const member = await sheets.getMemberById(linkMemberID);
+      if (!member) return res.status(404).json({ error: 'Contact not found.' });
+      if (member.is_volunteer === 'true') return res.status(400).json({ error: 'Contact is already flagged as a volunteer.' });
+      const volID = `VOL${Date.now()}`;
+      await Promise.all([
+        sheets.updateRowFields('Members', 'MemberID', linkMemberID, { is_volunteer: 'true' }),
+        sheets.appendRow('Volunteers', {
+          VolunteerID: volID, FirstName: member.FirstName, LastName: member.LastName,
+          Email: member.Email, Phone: member.Phone, Status: 'Active', JoinDate: todayStr(), HoursLogged: '0', Notes: Notes || ''
+        })
+      ]);
+      return res.json({ ok: true, action: 'linked', memberID: linkMemberID, volID });
+    }
+
+    if (action !== 'create') {
+      const dupeResult = await dedupe.checkDupe(FirstName, LastName, Email, Phone);
+      if (dupeResult.type === 'exact') {
+        return res.status(409).json({ code: 'exact_match', matches: dupeResult.matches });
+      }
+      if (dupeResult.type === 'partial') {
+        return res.json({ code: 'partial_match', matches: dupeResult.matches });
+      }
+    }
+
+    const memberID = `M-${Date.now()}`;
+    const volID    = `VOL${Date.now() + 1}`;
+    await Promise.all([
+      sheets.appendRow('Members', {
+        MemberID: memberID, FirstName, LastName, Email: Email || '', Phone: Phone || '',
+        Tags: '', MembershipType: '', MembershipStatus: 'Active',
+        JoinDate: todayStr(), Notes: Notes || '', is_volunteer: 'true'
+      }),
+      sheets.appendRow('Volunteers', {
+        VolunteerID: volID, FirstName, LastName, Email: Email || '', Phone: Phone || '',
+        Status: 'Active', JoinDate: todayStr(), HoursLogged: '0',
+        PreferredRole: PreferredRole || '', AvailabilityDays: AvailabilityDays || '',
+        Skills: Skills || '', Notes: Notes || ''
+      })
+    ]);
+    res.json({ ok: true, action: 'created', memberID, volID });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Upgrade an existing contact to volunteer ─────────────────────────────────
+router.post('/members/:id/make-volunteer', requireBoard, async (req, res) => {
+  try {
+    const member = await sheets.getMemberById(req.params.id);
+    if (!member) return res.status(404).json({ error: 'Contact not found.' });
+    if (member.is_volunteer === 'true') return res.status(400).json({ error: 'Contact is already a volunteer.' });
+
+    const volID = `VOL${Date.now()}`;
+    const existingVol = (await sheets.getVolunteers())
+      .find(v => v.Email?.toLowerCase() === member.Email?.toLowerCase());
+
+    await sheets.updateRowFields('Members', 'MemberID', req.params.id, { is_volunteer: 'true' });
+    if (!existingVol) {
+      await sheets.appendRow('Volunteers', {
+        VolunteerID: volID, FirstName: member.FirstName, LastName: member.LastName,
+        Email: member.Email || '', Phone: member.Phone || '',
+        Status: 'Active', JoinDate: todayStr(), HoursLogged: '0', Notes: ''
+      });
+    }
+    res.json({ ok: true, memberID: req.params.id });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Notification preferences ─────────────────────────────────────────────────
 const DEFAULT_PREFS = { EmailEvents: 'true', EmailTasks: 'true', EmailAnnouncements: 'true', SMSEvents: 'false', SMSTasks: 'false', SMSAnnouncements: 'false', Phone: '' };
 
@@ -317,8 +466,10 @@ router.put('/notification-prefs', async (req, res) => {
 // ── Tasks: interactive status/notes updates, written straight to the sheet ──
 function canEditTask(task, user) {
   if (user.role === 'Board') return true;
+  const userEmail = (user.email || '').toLowerCase();
+  if (task.AssigneeEmail && task.AssigneeEmail.toLowerCase() === userEmail) return true;
   const assignee = (task.AssignedTo || '').toLowerCase();
-  return assignee === (user.email || '').toLowerCase() || assignee === (user.name || '').toLowerCase();
+  return assignee === userEmail || assignee === (user.name || '').toLowerCase();
 }
 
 async function notifyTaskAssignment(task, assigneeEmail) {
@@ -350,15 +501,18 @@ router.post('/tasks', requireBoard, async (req, res) => {
     const row = await sheets.appendRow('Tasks', {
       TaskID:       `TSK-${Date.now()}`,
       Title:        b.Title,
-      AssignedTo:   b.AssignedTo  || '',
-      DueDate:      b.DueDate     || '',
-      Priority:     b.Priority    || 'Medium',
-      Status:       'Pending',
-      Notes:        b.Notes       || '',
-      Category:     b.Category    || '',
+      Description:  b.Description  || '',
+      AssignedTo:   b.AssignedTo   || '',
+      AssigneeEmail:b.AssigneeEmail || '',
+      DueDate:      b.DueDate      || '',
+      Priority:     b.Priority     || 'Medium',
+      Status:       b.Status       || 'Pending',
+      Notes:        b.Notes        || '',
+      Category:     b.Category     || '',
       CreatedAt:    todayStr()
     });
-    if (b.AssignedTo) setImmediate(() => notifyTaskAssignment(row, b.AssignedTo));
+    const notifyEmail = b.AssigneeEmail || b.AssignedTo;
+    if (notifyEmail) setImmediate(() => notifyTaskAssignment(row, notifyEmail));
     res.status(201).json(row);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -380,12 +534,16 @@ router.patch('/tasks/:id', async (req, res) => {
       const stamped = `[${todayStr()}] ${req.body.Note.trim()}.`;
       fields.Notes = task.Notes ? `${stamped} | ${task.Notes}` : stamped;
     }
-    // Board can reassign; notify new assignee when AssignedTo changes.
-    const newAssignee = req.body.AssignedTo;
-    if (newAssignee !== undefined && req.user.role === 'Board') {
-      fields.AssignedTo = newAssignee;
-      if (newAssignee && newAssignee !== task.AssignedTo) {
-        setImmediate(() => notifyTaskAssignment({ ...task, ...fields }, newAssignee));
+    // Board can reassign and update description.
+    if (req.user.role === 'Board') {
+      if (req.body.Description !== undefined) fields.Description = req.body.Description;
+      if (req.body.AssignedTo !== undefined) {
+        fields.AssignedTo = req.body.AssignedTo;
+        fields.AssigneeEmail = req.body.AssigneeEmail || '';
+        const notifyEmail = req.body.AssigneeEmail || req.body.AssignedTo;
+        if (notifyEmail && notifyEmail !== (task.AssigneeEmail || task.AssignedTo)) {
+          setImmediate(() => notifyTaskAssignment({ ...task, ...fields }, notifyEmail));
+        }
       }
     }
     if (!Object.keys(fields).length) return res.status(400).json({ error: 'Nothing to update.' });
@@ -531,6 +689,79 @@ router.get('/export/:type', requireBoard, async (req, res) => {
 });
 
 // ── Notification test route (Board only) ────────────────────────────────────
+// ── Volunteer login / access management (Board only) ─────────────────────────
+
+router.get('/volunteers/:id/login-status', requireBoard, async (req, res) => {
+  try {
+    const vol = await sheets.getVolunteerById(req.params.id);
+    if (!vol) return res.status(404).json({ error: 'Volunteer not found.' });
+    if (!vol.Email) return res.json({ status: 'no_account', email: null, noEmail: true });
+    const authRow = await sheets.findVolunteerAuthByEmail(vol.Email);
+    if (!authRow) return res.json({ status: 'no_account', email: vol.Email });
+    res.json({
+      status:    authRow.Status || 'Unknown',
+      email:     authRow.Email,
+      mustReset: authRow.MustReset === 'true',
+      createdAt: authRow.CreatedAt,
+      updatedAt: authRow.UpdatedAt
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Generate a temporary password (creates or replaces the auth record).
+// Returns the plaintext temp password exactly once — it is never stored or logged.
+router.post('/volunteers/:id/temp-password', requireBoard, async (req, res) => {
+  try {
+    const vol = await sheets.getVolunteerById(req.params.id);
+    if (!vol) return res.status(404).json({ error: 'Volunteer not found.' });
+    if (!vol.Email) return res.status(400).json({ error: 'This volunteer has no email address — add one before setting up login access.' });
+
+    const tempPassword = crypto.randomBytes(9).toString('base64url'); // 12 URL-safe chars, 72 bits of entropy
+    const hash = await bcrypt.hash(tempPassword, 10);
+    const now  = todayStr();
+
+    const existing = await sheets.findVolunteerAuthByEmail(vol.Email);
+    if (existing) {
+      await sheets.updateRowFields('VolunteerAuth', 'Email', vol.Email, {
+        PasswordHash: hash, MustReset: 'true', Status: 'Active',
+        ResetToken: '', ResetTokenExpiry: '', UpdatedAt: now
+      });
+    } else {
+      await sheets.appendRow('VolunteerAuth', {
+        Email: vol.Email.toLowerCase(), PasswordHash: hash,
+        VolunteerID: req.params.id, Status: 'Active',
+        MustReset: 'true', ResetToken: '', ResetTokenExpiry: '',
+        CreatedAt: now, UpdatedAt: now
+      });
+    }
+    res.json({ ok: true, tempPassword });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/volunteers/:id/enable-login', requireBoard, async (req, res) => {
+  try {
+    const vol = await sheets.getVolunteerById(req.params.id);
+    if (!vol) return res.status(404).json({ error: 'Volunteer not found.' });
+    if (!vol.Email) return res.status(400).json({ error: 'This volunteer has no email address.' });
+    const authRow = await sheets.findVolunteerAuthByEmail(vol.Email);
+    if (!authRow) return res.status(404).json({ error: 'No login account found. Use "Set Temporary Password" to create one.' });
+    await sheets.updateRowFields('VolunteerAuth', 'Email', vol.Email, { Status: 'Active', UpdatedAt: todayStr() });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/volunteers/:id/disable-login', requireBoard, async (req, res) => {
+  try {
+    const vol = await sheets.getVolunteerById(req.params.id);
+    if (!vol) return res.status(404).json({ error: 'Volunteer not found.' });
+    if (!vol.Email) return res.status(400).json({ error: 'This volunteer has no email address.' });
+    const authRow = await sheets.findVolunteerAuthByEmail(vol.Email);
+    if (!authRow) return res.status(404).json({ error: 'No login account found.' });
+    await sheets.updateRowFields('VolunteerAuth', 'Email', vol.Email, { Status: 'Disabled', UpdatedAt: todayStr() });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.get('/test-notification', requireBoard, async (req, res) => {
   const [smsResult, emailResult] = await Promise.all([
     sms.send('+14078798972', 'ROCK Hub test SMS — notification system check.'),
