@@ -350,6 +350,11 @@ function renderMyProfile(vol) {
   const churchMatch = (vol.Notes || '').match(/Church\/Org:\s*([^.]+)\.?/);
   const church = churchMatch ? churchMatch[1].trim() : '';
 
+  const ecName  = vol.EmergencyContactName || '';
+  const ecPhone = vol.EmergencyContactPhone || '';
+  const ecRel   = vol.EmergencyContactRelationship || '';
+  const ecLine  = [ecName, ecRel ? `(${ecRel})` : '', ecPhone].filter(Boolean).join(' · ');
+
   function row(label, value) {
     if (!value) return '';
     return `<div style="display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--gold-line);">
@@ -381,6 +386,7 @@ function renderMyProfile(vol) {
       ${row('Church / Org', church)}
       ${row('Skills', vol.Skills)}
       ${row('Availability', vol.AvailabilityDays)}
+      ${row('Emergency Contact', ecLine)}
     </div>`;
 }
 
@@ -397,6 +403,9 @@ async function openProfileEdit() {
   document.getElementById('profileChurch').value       = churchMatch ? churchMatch[1].trim() : '';
   document.getElementById('profileSkills').value       = vol?.Skills || '';
   document.getElementById('profileAvailability').value = vol?.AvailabilityDays || '';
+  document.getElementById('profileEcName').value       = vol?.EmergencyContactName || '';
+  document.getElementById('profileEcPhone').value      = vol?.EmergencyContactPhone || '';
+  document.getElementById('profileEcRel').value        = vol?.EmergencyContactRelationship || '';
 
   const errEl = document.getElementById('profileError');
   if (errEl) errEl.style.display = 'none';
@@ -422,11 +431,14 @@ async function submitProfileEdit(e) {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        Phone:            document.getElementById('profilePhone').value.trim(),
-        PreferredRole:    document.getElementById('profileRole_').value.trim(),
-        Church:           document.getElementById('profileChurch').value.trim(),
-        Skills:           document.getElementById('profileSkills').value.trim(),
-        AvailabilityDays: document.getElementById('profileAvailability').value.trim()
+        Phone:                        document.getElementById('profilePhone').value.trim(),
+        PreferredRole:                document.getElementById('profileRole_').value.trim(),
+        Church:                       document.getElementById('profileChurch').value.trim(),
+        Skills:                       document.getElementById('profileSkills').value.trim(),
+        AvailabilityDays:             document.getElementById('profileAvailability').value.trim(),
+        EmergencyContactName:         document.getElementById('profileEcName').value.trim(),
+        EmergencyContactPhone:        document.getElementById('profileEcPhone').value.trim(),
+        EmergencyContactRelationship: document.getElementById('profileEcRel').value.trim()
       })
     });
     const data = await res.json();

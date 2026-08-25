@@ -460,7 +460,8 @@ router.patch('/volunteers/me', async (req, res) => {
       : (await sheets.getVolunteers()).find(v => v.Email?.toLowerCase() === (user.email || '').toLowerCase());
     if (!vol) return res.status(404).json({ error: 'No volunteer profile found.' });
 
-    const allowed = ['Phone', 'PreferredRole', 'AvailabilityDays', 'Skills'];
+    const allowed = ['Phone', 'PreferredRole', 'AvailabilityDays', 'Skills',
+                     'EmergencyContactName', 'EmergencyContactPhone', 'EmergencyContactRelationship'];
     const fields = {};
     for (const k of allowed) {
       if (req.body[k] !== undefined) fields[k] = req.body[k];
@@ -487,7 +488,9 @@ router.get('/volunteers/:id', async (req, res) => {
 
 router.patch('/volunteers/:id', requireBoard, async (req, res) => {
   try {
-    const allowed = ['FirstName', 'LastName', 'Email', 'Phone', 'PreferredRole', 'AvailabilityDays', 'Skills', 'Status', 'Notes'];
+    const allowed = ['FirstName', 'LastName', 'Email', 'Phone', 'PreferredRole', 'AvailabilityDays', 'Skills', 'Status', 'Notes',
+                     'BackgroundCheckStatus', 'BackgroundCheckDate',
+                     'EmergencyContactName', 'EmergencyContactPhone', 'EmergencyContactRelationship'];
     const fields = {};
     for (const k of allowed) {
       if (req.body[k] !== undefined) fields[k] = req.body[k];

@@ -215,6 +215,14 @@
       <label>Church / Organization <input type="text" id="profileChurch" placeholder="e.g. First Baptist"></label>
       <label>Skills <input type="text" id="profileSkills" placeholder="e.g. Mentoring, Setup, AV"></label>
       <label>Availability <input type="text" id="profileAvailability" placeholder="e.g. Saturday, Sunday"></label>
+      <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--gold-line);">
+        <div style="font-size:0.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Emergency Contact</div>
+        <label>Name <input type="text" id="profileEcName" placeholder="Full name"></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label>Phone <input type="tel" id="profileEcPhone" placeholder="(555) 000-0000"></label>
+          <label>Relationship <input type="text" id="profileEcRel" placeholder="e.g. Spouse, Parent"></label>
+        </div>
+      </div>
       <p class="form-error" id="profileError" style="display:none;margin-bottom:8px;"></p>
       <button type="submit" class="btn btn-gold" style="width:100%;justify-content:center;margin-top:4px;">Save Changes</button>
     </form>

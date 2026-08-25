@@ -183,6 +183,9 @@ sheetsLib.ensureColumns('EventRegistrations', ['MemberID'])
 sheetsLib.ensureColumns('VolunteerSignups', ['MemberID'])
   .catch(err => console.error('Could not add MemberID column to VolunteerSignups:', err.message));
 
+sheetsLib.ensureColumns('Volunteers', ['EmergencyContactName', 'EmergencyContactPhone', 'EmergencyContactRelationship'])
+  .catch(err => console.error('Could not add emergency contact columns to Volunteers:', err.message));
+
 sheetsLib.ensureColumns('YouthGroups', ['lat', 'lng', 'location_type'])
   .catch(err => console.error('Could not ensure lat/lng/location_type columns in YouthGroups:', err.message));
 
