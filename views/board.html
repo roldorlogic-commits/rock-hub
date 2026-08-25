@@ -47,8 +47,8 @@
 
           <!-- Stat tiles (contained to left column) -->
           <div class="metrics-row" id="metricsRow">
-            <div class="metric-card clickable" role="button" tabindex="0" aria-label="View all contacts" onclick="goToSection('members')" onkeydown="if(event.key==='Enter')goToSection('members')"><div class="metric-label">Total Contacts</div><div class="metric-value" id="mMembers">—</div><div class="metric-sub">registered contacts</div></div>
-            <div class="metric-card clickable" role="button" tabindex="0" aria-label="View all events" onclick="goToSection('events')" onkeydown="if(event.key==='Enter')goToSection('events')"><div class="metric-label">Active Events</div><div class="metric-value" id="mEvents">—</div><div class="metric-sub">upcoming &amp; in-progress</div></div>
+            <div class="metric-card clickable" role="button" tabindex="0" aria-label="View all partners" onclick="goToSection('members');switchContactsView('youthgroups')" onkeydown="if(event.key==='Enter'){goToSection('members');switchContactsView('youthgroups')}"><div class="metric-label">Partners</div><div class="metric-value" id="mPartners">—</div><div class="metric-sub">partner youth groups</div></div>
+            <div class="metric-card clickable" role="button" tabindex="0" aria-label="View all prospects" onclick="goToSection('members');switchContactsView('youthgroups')" onkeydown="if(event.key==='Enter'){goToSection('members');switchContactsView('youthgroups')}"><div class="metric-label">Prospects</div><div class="metric-value" id="mProspects">—</div><div class="metric-sub">prospect youth groups</div></div>
             <div class="metric-card clickable" role="button" tabindex="0" aria-label="View all volunteers" onclick="goToSection('volunteers')" onkeydown="if(event.key==='Enter')goToSection('volunteers')"><div class="metric-label">Active Volunteers</div><div class="metric-value" id="mVolunteers">—</div><div class="metric-sub">ready to serve</div></div>
             <div class="metric-card clickable" role="button" tabindex="0" aria-label="View all action items" onclick="selectBoard('tasks')" onkeydown="if(event.key==='Enter')selectBoard('tasks')"><div class="metric-label">Open Tasks</div><div class="metric-value" id="mTasks">—</div><div class="metric-sub">action items pending</div></div>
           </div>
@@ -262,6 +262,7 @@
         <div class="card-header">
           <span class="card-title">All Action Items</span>
           <div style="display:flex;align-items:center;gap:10px;">
+            <button class="btn btn-gold btn-sm" onclick="openCreateTaskModal()">+ Create Task</button>
             <a class="btn btn-outline btn-sm" href="/api/export/tasks" download>Export CSV</a>
             <span class="role-badge">Board View</span>
           </div>
@@ -302,10 +303,23 @@
 
     <!-- ── VOLUNTEERS ─────────────────────────────────────────────────────── -->
     <section id="volunteers" class="content-section">
+      <!-- Pending registration queue — hidden when empty -->
+      <div class="card" id="pendingQueueCard" style="display:none;margin-bottom:16px;">
+        <div class="card-header">
+          <span class="card-title" style="display:flex;align-items:center;gap:8px;">
+            Pending Registrations
+            <span id="pendingQueueCount" style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;background:var(--gold);color:#fff;border-radius:10px;font-size:11px;font-weight:700;padding:0 6px;">0</span>
+          </span>
+        </div>
+        <div id="pendingQueueList"><div class="loading-row"><div class="spinner"></div></div></div>
+      </div>
+
+      <!-- Active volunteers -->
       <div class="card">
         <div class="card-header">
           <span class="card-title">Volunteers</span>
           <div style="display:flex;align-items:center;gap:10px;">
+            <button class="btn btn-gold btn-sm" onclick="openAddVolModal()">+ Add Volunteer</button>
             <a class="btn btn-outline btn-sm" href="/api/export/volunteers" download>Export CSV</a>
             <span class="role-badge">Board View</span>
           </div>
@@ -655,6 +669,117 @@
       <button class="btn btn-gold btn-sm" id="vol_submit" onclick="submitVolEdit()">Save Changes</button>
     </div>
     <div class="modal-success" id="volEditSuccess" style="display:none;"></div>
+  </div>
+
+  <!-- ── Create Task modal ────────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="createTaskOverlay" onclick="closeCreateTaskModal()"></div>
+  <div class="modal-box" id="createTaskModal" style="width:520px;">
+    <button class="icon-btn slide-panel-close" onclick="closeCreateTaskModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Create Task</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px;">
+      <label>Title <span style="color:var(--gold);">*</span><input type="text" id="ct_title" placeholder="What needs to be done?"></label>
+      <label>Description<textarea id="ct_desc" rows="2" placeholder="Optional details…" style="resize:vertical;"></textarea></label>
+      <label>Assign To
+        <select id="ct_assignee">
+          <option value="">— Unassigned —</option>
+        </select>
+      </label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label>Due Date<input type="date" id="ct_due"></label>
+        <label>Priority
+          <select id="ct_priority">
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            <option value="Low">Low</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div class="modal-nav" id="createTaskNav">
+      <button class="btn btn-outline btn-sm" onclick="closeCreateTaskModal()">Cancel</button>
+      <button class="btn btn-gold btn-sm" id="createTaskSubmit" onclick="submitCreateTask()">Create Task</button>
+    </div>
+    <div class="modal-success" id="createTaskSuccess" style="display:none;"></div>
+  </div>
+
+  <!-- ── Add Volunteer modal ──────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="addVolOverlay" onclick="closeAddVolModal()"></div>
+  <div class="modal-box" id="addVolModal" style="width:520px;">
+    <button class="icon-btn slide-panel-close" onclick="closeAddVolModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Add Volunteer</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px;" id="addVolForm">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label>First Name <span style="color:var(--gold);">*</span><input type="text" id="av_first" placeholder="Jane"></label>
+        <label>Last Name <span style="color:var(--gold);">*</span><input type="text" id="av_last" placeholder="Smith"></label>
+      </div>
+      <label>Email<input type="email" id="av_email" placeholder="jane@example.com"></label>
+      <label>Phone<input type="tel" id="av_phone" placeholder="(555) 000-0000"></label>
+      <label>Preferred Role<input type="text" id="av_role" placeholder="e.g. Worship, Setup"></label>
+      <label>Availability<input type="text" id="av_avail" placeholder="e.g. Weekends, Fridays"></label>
+      <label>Notes<textarea id="av_notes" rows="2" placeholder="Optional notes…" style="resize:vertical;"></textarea></label>
+    </div>
+
+    <!-- Partial match warning (hidden until needed) -->
+    <div id="addVolWarn" style="display:none;margin-top:14px;padding:12px 14px;background:var(--gold-faint);border:1px solid var(--gold-line);border-radius:8px;">
+      <div style="font-weight:600;font-size:13px;color:var(--navy);margin-bottom:8px;">Possible duplicate detected</div>
+      <div id="addVolWarnList" style="font-size:12px;color:var(--text-dim);margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-outline btn-sm" onclick="closeAddVolModal()">Cancel</button>
+        <button class="btn btn-gold btn-sm" onclick="submitAddVol('create')">Add Anyway</button>
+      </div>
+    </div>
+
+    <!-- Exact match dialog (hidden until needed) -->
+    <div id="addVolExact" style="display:none;margin-top:14px;padding:12px 14px;background:#fff3f3;border:1px solid #ffb3b3;border-radius:8px;">
+      <div style="font-weight:600;font-size:13px;color:#c00;margin-bottom:8px;">Existing contact found</div>
+      <div id="addVolExactMsg" style="font-size:12px;color:var(--text-dim);margin-bottom:10px;"></div>
+      <div id="addVolExactBtns" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+
+    <!-- Normal nav -->
+    <div class="modal-nav" id="addVolNav">
+      <button class="btn btn-outline btn-sm" onclick="closeAddVolModal()">Cancel</button>
+      <button class="btn btn-gold btn-sm" id="addVolSubmit" onclick="submitAddVol()">Add Volunteer</button>
+    </div>
+    <div class="modal-success" id="addVolSuccess" style="display:none;"></div>
+  </div>
+
+  <!-- ── Confirm Volunteer approval modal (with dedupe) ───────────────────── -->
+  <div class="modal-overlay" id="confirmVolOverlay" onclick="closeConfirmVolModal()"></div>
+  <div class="modal-box" id="confirmVolModal" style="width:520px;">
+    <button class="icon-btn slide-panel-close" onclick="closeConfirmVolModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Confirm Volunteer</div>
+    <div id="confirmVolInfo" style="padding:14px 0 2px;font-size:13px;color:var(--text-dim);"></div>
+
+    <!-- Partial match warning -->
+    <div id="confirmVolWarn" style="display:none;margin-top:14px;padding:12px 14px;background:var(--gold-faint);border:1px solid var(--gold-line);border-radius:8px;">
+      <div style="font-weight:600;font-size:13px;color:var(--navy);margin-bottom:8px;">Possible duplicate detected</div>
+      <div id="confirmVolWarnList" style="font-size:12px;color:var(--text-dim);margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-outline btn-sm" onclick="closeConfirmVolModal()">Cancel</button>
+        <button class="btn btn-gold btn-sm" onclick="submitConfirmVol('create')">Confirm Anyway</button>
+      </div>
+    </div>
+
+    <!-- Exact match dialog -->
+    <div id="confirmVolExact" style="display:none;margin-top:14px;padding:12px 14px;background:#fff3f3;border:1px solid #ffb3b3;border-radius:8px;">
+      <div style="font-weight:600;font-size:13px;color:#c00;margin-bottom:8px;">Existing contact found</div>
+      <div id="confirmVolExactMsg" style="font-size:12px;color:var(--text-dim);margin-bottom:10px;"></div>
+      <div id="confirmVolExactBtns" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+    </div>
+
+    <!-- Normal nav -->
+    <div class="modal-nav" id="confirmVolNav">
+      <button class="btn btn-outline btn-sm" onclick="closeConfirmVolModal()">Cancel</button>
+      <button class="btn btn-gold btn-sm" id="confirmVolSubmit" onclick="submitConfirmVol()">Approve</button>
+    </div>
+    <div class="modal-success" id="confirmVolSuccess" style="display:none;"></div>
   </div>
 
   <!-- ── Bulk action confirm modal ─────────────────────────────────────────── -->

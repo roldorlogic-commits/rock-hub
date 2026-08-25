@@ -133,19 +133,26 @@ module.exports = function (passport) {
         userAgent: (req.headers['user-agent'] || '').slice(0, 200)
       });
 
+      // Status checks happen AFTER password match so we don't reveal account existence.
+      if (authRow.Status === 'Disabled') {
+        return res.status(403).json({ error: `Your access to ROCK Hub has been disabled. Contact ${VP_EMAIL} for assistance.` });
+      }
       if (authRow.Status === 'Declined') {
         return res.status(403).json({ error: `We're unable to confirm your volunteer registration at this time. Contact ${VP_EMAIL} for more information.` });
       }
 
       const volunteer = await sheets.getVolunteerById(authRow.VolunteerID);
       const name = [volunteer?.FirstName, volunteer?.LastName].filter(Boolean).join(' ') || emailNorm;
+      const mustReset = authRow.MustReset === 'true';
 
       const token = signVolunteerToken({
         email: authRow.Email, name, firstName: volunteer?.FirstName || '',
-        volunteerId: authRow.VolunteerID, authStatus: authRow.Status
+        volunteerId: authRow.VolunteerID, authStatus: authRow.Status, mustReset
       });
       res.cookie(VOLUNTEER_COOKIE, token, volunteerCookieOptions());
-      res.json({ ok: true, redirect: authRow.Status === 'Active' ? '/volunteer' : '/volunteer/pending-approval' });
+      const redirect = mustReset ? '/reset-password?forced=1'
+        : (authRow.Status === 'Active' ? '/volunteer' : '/volunteer/pending-approval');
+      res.json({ ok: true, redirect });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -179,20 +186,50 @@ module.exports = function (passport) {
 
   router.post('/volunteer/reset-password', async (req, res) => {
     try {
-      const emailNorm = (req.body?.email || '').trim().toLowerCase();
-      const { token, newPassword, confirmPassword } = req.body || {};
-      if (!emailNorm || !token || !newPassword) return res.status(400).json({ error: 'Missing required fields.' });
-      if (newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+      const { newPassword, confirmPassword } = req.body || {};
+      const forced = req.body?.forced === true || req.body?.forced === 'true';
+
+      if (!newPassword || newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
       if (newPassword !== confirmPassword) return res.status(400).json({ error: 'Passwords do not match.' });
 
-      const authRow = await sheets.findVolunteerAuthByEmail(emailNorm);
-      const invalid = !authRow || authRow.ResetToken !== token || !authRow.ResetTokenExpiry || Date.now() > parseInt(authRow.ResetTokenExpiry, 10);
-      if (invalid) return res.status(400).json({ error: 'This reset link is invalid or has expired. Please request a new one.' });
+      let authRow;
+
+      if (forced) {
+        // Forced reset: volunteer is already authenticated via JWT cookie.
+        const { getJwtVolunteer } = require('../middleware/auth');
+        const jv = getJwtVolunteer(req);
+        if (!jv?.email) return res.status(401).json({ error: 'Not authenticated.' });
+        authRow = await sheets.findVolunteerAuthByEmail(jv.email);
+        if (!authRow) return res.status(400).json({ error: 'Auth record not found.' });
+        if (authRow.MustReset !== 'true') return res.status(400).json({ error: 'No forced reset is required for this account.' });
+      } else {
+        const emailNorm = (req.body?.email || '').trim().toLowerCase();
+        const { token } = req.body || {};
+        if (!emailNorm || !token) return res.status(400).json({ error: 'Missing required fields.' });
+        authRow = await sheets.findVolunteerAuthByEmail(emailNorm);
+        const invalid = !authRow || authRow.ResetToken !== token || !authRow.ResetTokenExpiry || Date.now() > parseInt(authRow.ResetTokenExpiry, 10);
+        if (invalid) return res.status(400).json({ error: 'This reset link is invalid or has expired. Please request a new one.' });
+      }
 
       const passwordHash = await bcrypt.hash(newPassword, 10);
       await sheets.updateRowFields('VolunteerAuth', 'Email', authRow.Email, {
-        PasswordHash: passwordHash, ResetToken: '', ResetTokenExpiry: '', UpdatedAt: today()
+        PasswordHash: passwordHash, MustReset: 'false',
+        ResetToken: '', ResetTokenExpiry: '', UpdatedAt: today()
       });
+
+      if (forced) {
+        // Re-issue JWT without mustReset so subsequent requests aren't redirected.
+        const { signVolunteerToken, volunteerCookieOptions, VOLUNTEER_COOKIE } = require('../middleware/auth');
+        const volunteer = await sheets.getVolunteerById(authRow.VolunteerID);
+        const name = [volunteer?.FirstName, volunteer?.LastName].filter(Boolean).join(' ') || authRow.Email;
+        const newToken = signVolunteerToken({
+          email: authRow.Email, name, firstName: volunteer?.FirstName || '',
+          volunteerId: authRow.VolunteerID, authStatus: authRow.Status, mustReset: false
+        });
+        res.cookie(VOLUNTEER_COOKIE, newToken, volunteerCookieOptions());
+        return res.json({ ok: true, message: 'Your password has been updated.', redirect: '/volunteer' });
+      }
+
       res.json({ ok: true, message: 'Your password has been reset. You can now log in.' });
     } catch (err) {
       res.status(500).json({ error: err.message });

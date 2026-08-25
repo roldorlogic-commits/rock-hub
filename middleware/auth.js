@@ -1,7 +1,8 @@
 'use strict';
 
-const path = require('path');
-const jwt  = require('jsonwebtoken');
+const path   = require('path');
+const jwt    = require('jsonwebtoken');
+const sheets = require('../lib/sheets');
 
 const VP_EMAIL = 'vicepresident@gorock.org';
 
@@ -51,6 +52,7 @@ function attachUser(req, res, next) {
     req.user = {
       email: jv.email, name: jv.name, firstName: jv.firstName,
       role: 'Volunteer', volunteerId: jv.volunteerId, authStatus: jv.authStatus,
+      mustReset: jv.mustReset === true,
       photo: null
     };
     req.isAuthenticated = () => true;
@@ -83,14 +85,32 @@ function requireBoardOrAdmin(req, res, next) {
 }
 
 // Volunteer dashboard/API routes: must be logged in via the volunteer JWT
-// (or be Board, who can see anything) AND, if a volunteer, have an Active
-// VolunteerAuth status — Pending accounts get redirected to the
-// awaiting-approval page instead of a hard 403.
+// (or be Board, who can see anything) AND have an Active VolunteerAuth status.
+// We check the DB on every request (30s cache) so that disabling a volunteer's
+// access takes effect immediately without waiting for their 7-day JWT to expire.
 function requireActiveVolunteer(req, res, next) {
-  attachUser(req, res, () => {
+  attachUser(req, res, async () => {
     if (!req.isAuthenticated() || !req.user) return res.redirect('/?error=login_required');
     if (req.user.role === 'Board') return next();
-    if (req.user.authStatus && req.user.authStatus !== 'Active') return res.redirect('/volunteer/pending-approval');
+
+    // DB check for immediate revocation; also picks up MustReset flag set by board.
+    if (req.user.email) {
+      try {
+        const authRow = await sheets.findVolunteerAuthByEmail(req.user.email);
+        if (authRow?.Status === 'Disabled') {
+          res.clearCookie(VOLUNTEER_COOKIE);
+          return res.redirect('/?error=access_disabled');
+        }
+        if (authRow?.Status === 'Pending') return res.redirect('/volunteer/pending-approval');
+        if (authRow?.MustReset === 'true') return res.redirect('/reset-password?forced=1');
+      } catch (_) {
+        // If the DB check fails, fall through to JWT-based check below rather than locking everyone out.
+      }
+    }
+
+    if (req.user.authStatus && !['Active'].includes(req.user.authStatus)) {
+      return res.redirect('/volunteer/pending-approval');
+    }
     next();
   });
 }

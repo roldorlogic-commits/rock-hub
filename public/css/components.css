@@ -94,6 +94,24 @@
 
 .btn-sm { padding: 5px 12px; font-size: 11px; }
 
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: opacity var(--ease);
+}
+.btn-action:disabled { opacity: .45; cursor: not-allowed; }
+.btn-action.btn-primary  { background: var(--gold); color: #141729; }
+.btn-action.btn-secondary { background: rgba(255,255,255,.08); color: var(--text-white); border: 0.5px solid var(--gold-line); }
+.btn-action.btn-danger   { background: rgba(231,76,60,.15); color: #e74c3c; border: 0.5px solid rgba(231,76,60,.4); }
+.btn-action:not(:disabled):hover { opacity: .85; }
+
 /* ── Role Badge ────────────────────────────────────────────────────────────── */
 .role-badge {
   display: inline-flex;

@@ -12,7 +12,7 @@ let eventsById = {};
   await loadEvents(); // populates eventsById before tasks render
   await Promise.all([
     loadStats(), loadTasks(), loadContacts(), loadFiles(), loadDriveDocs(),
-    loadMembers(), loadYouthGroups(), loadVolunteersFull(), loadAnnouncements(),
+    loadMembers(), loadYouthGroups(), loadVolunteersFull(), loadPendingQueue(), loadAnnouncements(),
     initNotifications(['All', 'Board']), loadPendingVolunteerBadge(),
     loadNotifSummary(), loadMetricsTile()
   ]);
@@ -21,8 +21,8 @@ let eventsById = {};
 async function loadStats() {
   try {
     const s = await apiFetch('/api/stats');
-    document.getElementById('mMembers').textContent   = s.totalMembers     || '0';
-    document.getElementById('mEvents').textContent    = s.activeEvents      || '0';
+    document.getElementById('mPartners').textContent  = s.partners          || '0';
+    document.getElementById('mProspects').textContent = s.prospects         || '0';
     document.getElementById('mVolunteers').textContent= s.activeVolunteers  || '0';
     document.getElementById('mTasks').textContent     = s.openTasks         || '0';
   } catch (e) { console.error('Stats:', e); }
@@ -152,7 +152,90 @@ function renderTasksFull(tasks) {
   const el = document.getElementById('tasksFull');
   el.innerHTML = tasks.length
     ? renderTaskListHtml(tasks, eventsById)
-    : emptyState('No tasks yet — add your first action item to the Tasks sheet.');
+    : emptyState('No tasks yet — use "+ Create Task" to add your first action item.');
+}
+
+// ── Create Task modal ────────────────────────────────────────────────────────
+let _assigneesCache = [];
+
+async function openCreateTaskModal() {
+  document.getElementById('ct_title').value    = '';
+  document.getElementById('ct_desc').value     = '';
+  document.getElementById('ct_due').value      = '';
+  document.getElementById('ct_priority').value = 'Medium';
+  document.getElementById('createTaskSuccess').style.display = 'none';
+  document.getElementById('createTaskNav').style.display     = 'flex';
+  document.getElementById('createTaskSubmit').disabled = false;
+  document.getElementById('createTaskSubmit').textContent = 'Create Task';
+  document.getElementById('createTaskOverlay').classList.add('open');
+  document.getElementById('createTaskModal').classList.add('open');
+
+  const sel = document.getElementById('ct_assignee');
+  sel.innerHTML = '<option value="">— Unassigned —</option>';
+  try {
+    _assigneesCache = await apiFetch('/api/assignees');
+    const groups = { Board: [], Volunteer: [] };
+    for (const a of _assigneesCache) {
+      (groups[a.role] || groups['Volunteer']).push(a);
+    }
+    for (const [group, people] of Object.entries(groups)) {
+      if (!people.length) continue;
+      const og = document.createElement('optgroup');
+      og.label = group === 'Board' ? 'Board Members' : 'Volunteers';
+      for (const p of people) {
+        const opt = document.createElement('option');
+        opt.value = p.email;
+        opt.dataset.name = p.name;
+        opt.textContent = p.name;
+        og.appendChild(opt);
+      }
+      sel.appendChild(og);
+    }
+  } catch (_) {}
+
+  setTimeout(() => document.getElementById('ct_title').focus(), 80);
+}
+
+function closeCreateTaskModal() {
+  document.getElementById('createTaskOverlay')?.classList.remove('open');
+  document.getElementById('createTaskModal')?.classList.remove('open');
+}
+
+async function submitCreateTask() {
+  const title = document.getElementById('ct_title').value.trim();
+  if (!title) { alert('Title is required.'); return; }
+
+  const sel   = document.getElementById('ct_assignee');
+  const email = sel.value;
+  const name  = sel.selectedOptions[0]?.dataset.name || '';
+  const btn   = document.getElementById('createTaskSubmit');
+  btn.disabled = true; btn.textContent = 'Creating…';
+
+  try {
+    const res = await fetch('/api/tasks', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        Title:         title,
+        Description:   document.getElementById('ct_desc').value.trim(),
+        AssignedTo:    name,
+        AssigneeEmail: email,
+        DueDate:       document.getElementById('ct_due').value,
+        Priority:      document.getElementById('ct_priority').value
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not create task.'); return; }
+
+    const ok = document.getElementById('createTaskSuccess');
+    ok.style.display = 'block'; ok.textContent = 'Task created.';
+    document.getElementById('createTaskNav').style.display = 'none';
+    await Promise.all([loadTasks(), loadStats()]);
+    setTimeout(() => closeCreateTaskModal(), 1200);
+  } catch (err) {
+    alert('Network error — could not create task.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Create Task';
+  }
 }
 
 // ── Contacts ─────────────────────────────────────────────────────────────────
@@ -697,6 +780,9 @@ function renderMembersFull(members) {
             </div>
             <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
               <span class="status-pill ${m.MembershipStatus?.toLowerCase() === 'active' ? 'active' : 'inactive'}">${m.MembershipStatus || '—'}</span>
+              ${m.is_volunteer === 'true'
+                ? `<span class="status-pill" style="background:var(--navy-faint,#e8ecf5);color:var(--gold);border-color:var(--gold-line);font-size:10px;padding:2px 7px;">Volunteer</span>`
+                : `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();makeContactVolunteer('${m.MemberID}',this)" title="Upgrade to volunteer">+ Volunteer</button>`}
               <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openContactModal(_allMembersCache[${cacheIdx}])" title="Edit contact">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:11px;height:11px;margin-right:2px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit
               </button>
@@ -978,6 +1064,136 @@ async function confirmDeleteVol(idx) {
   }
 }
 
+// ── Add Volunteer (board-initiated, with dedupe) ─────────────────────────────
+function openAddVolModal() {
+  ['av_first','av_last','av_email','av_phone','av_role','av_avail','av_notes']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('addVolWarn').style.display    = 'none';
+  document.getElementById('addVolExact').style.display   = 'none';
+  document.getElementById('addVolNav').style.display     = 'flex';
+  document.getElementById('addVolSuccess').style.display = 'none';
+  document.getElementById('addVolOverlay').classList.add('open');
+  document.getElementById('addVolModal').classList.add('open');
+  setTimeout(() => document.getElementById('av_first').focus(), 80);
+}
+
+function closeAddVolModal() {
+  document.getElementById('addVolOverlay')?.classList.remove('open');
+  document.getElementById('addVolModal')?.classList.remove('open');
+}
+
+function _addVolPayload() {
+  return {
+    FirstName: document.getElementById('av_first').value.trim(),
+    LastName:  document.getElementById('av_last').value.trim(),
+    Email:     document.getElementById('av_email').value.trim(),
+    Phone:     document.getElementById('av_phone').value.trim(),
+    PreferredRole:    document.getElementById('av_role').value.trim(),
+    AvailabilityDays: document.getElementById('av_avail').value.trim(),
+    Notes:     document.getElementById('av_notes').value.trim()
+  };
+}
+
+async function submitAddVol(action, linkMemberID) {
+  const payload = _addVolPayload();
+  if (!payload.FirstName || !payload.LastName) {
+    alert('First and last name are required.');
+    return;
+  }
+  if (action) payload.action = action;
+  if (linkMemberID) payload.linkMemberID = linkMemberID;
+
+  const btn = document.getElementById('addVolSubmit');
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+
+  try {
+    const res  = await fetch('/api/volunteers', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+
+    if (res.status === 409 && data.code === 'exact_match') {
+      _showAddVolExact(data.matches);
+      return;
+    }
+    if (res.ok && data.code === 'partial_match') {
+      _showAddVolWarn(data.matches);
+      return;
+    }
+    if (!res.ok) {
+      alert(data.error || 'Could not add volunteer.');
+      return;
+    }
+
+    const ok = document.getElementById('addVolSuccess');
+    ok.style.display = 'block';
+    ok.textContent   = data.action === 'linked' ? 'Contact upgraded to volunteer.' : 'Volunteer added.';
+    document.getElementById('addVolNav').style.display   = 'none';
+    document.getElementById('addVolWarn').style.display  = 'none';
+    document.getElementById('addVolExact').style.display = 'none';
+    await Promise.all([loadVolunteersFull(), loadMembers(), loadStats()]);
+    setTimeout(() => closeAddVolModal(), 1400);
+  } catch (err) {
+    alert('Network error — could not add volunteer.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Add Volunteer'; }
+  }
+}
+
+function _showAddVolWarn(matches) {
+  document.getElementById('addVolNav').style.display   = 'none';
+  document.getElementById('addVolExact').style.display = 'none';
+  const listEl = document.getElementById('addVolWarnList');
+  listEl.innerHTML = matches.slice(0, 3).map(m => {
+    const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || '—';
+    return `<div style="margin-bottom:4px;">• ${name}${m.Email ? ` · ${m.Email}` : ''}${m.Phone ? ` · ${m.Phone}` : ''}</div>`;
+  }).join('');
+  document.getElementById('addVolWarn').style.display = '';
+}
+
+function _showAddVolExact(matches) {
+  document.getElementById('addVolNav').style.display  = 'none';
+  document.getElementById('addVolWarn').style.display = 'none';
+  const msgEl  = document.getElementById('addVolExactMsg');
+  const btnsEl = document.getElementById('addVolExactBtns');
+  msgEl.innerHTML = matches.slice(0, 3).map(m => {
+    const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || '—';
+    return `<div style="margin-bottom:4px;">• ${name}${m.Email ? ` · ${m.Email}` : ''}${m.is_volunteer === 'true' ? ' <em>(already a volunteer)</em>' : ''}</div>`;
+  }).join('') + '<div style="margin-top:6px;">What would you like to do?</div>';
+
+  btnsEl.innerHTML = [
+    `<div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-outline btn-sm" onclick="closeAddVolModal()">Cancel</button>
+      ${matches.map(m => {
+        const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || m.MemberID;
+        const alreadyVol = m.is_volunteer === 'true';
+        return alreadyVol
+          ? `<button class="btn btn-ghost btn-sm" disabled title="Already a volunteer">Link "${name}" (already volunteer)</button>`
+          : `<button class="btn btn-outline btn-sm" onclick="submitAddVol('link','${m.MemberID}')">Link "${name}"</button>`;
+      }).join('')}
+      <button class="btn btn-gold btn-sm" onclick="submitAddVol('create')">Create New</button>
+    </div>`
+  ].join('');
+  document.getElementById('addVolExact').style.display = '';
+}
+
+// ── Make contact a volunteer (from Contacts list) ────────────────────────────
+async function makeContactVolunteer(memberID, btn) {
+  if (!confirm('Upgrade this contact to a volunteer? They will appear in the Volunteers section.')) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Upgrading…'; }
+  try {
+    const res  = await fetch(`/api/members/${encodeURIComponent(memberID)}/make-volunteer`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not upgrade contact.'); return; }
+    await Promise.all([loadMembers(), loadVolunteersFull(), loadStats()]);
+  } catch (err) {
+    alert('Network error — could not upgrade contact.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '+ Volunteer'; }
+  }
+}
+
 // ── Pending volunteers sidebar badge ─────────────────────────────────────────
 async function loadPendingVolunteerBadge() {
   const badge = document.getElementById('pendingVolunteersBadge');
@@ -986,6 +1202,179 @@ async function loadPendingVolunteerBadge() {
     const pending = await apiFetch('/api/volunteers/pending');
     if (pending.length) { badge.textContent = pending.length; badge.style.display = 'flex'; }
   } catch (e) { /* badge just stays hidden if this fails */ }
+}
+
+// ── Pending queue (in Volunteers tab) ────────────────────────────────────────
+let _pendingQueueCache = [];
+
+async function loadPendingQueue() {
+  try {
+    _pendingQueueCache = await apiFetch('/api/volunteers/pending');
+  } catch (e) {
+    _pendingQueueCache = [];
+  }
+  renderPendingQueue();
+}
+
+function renderPendingQueue() {
+  const card   = document.getElementById('pendingQueueCard');
+  const listEl = document.getElementById('pendingQueueList');
+  const countEl= document.getElementById('pendingQueueCount');
+  if (!card) return;
+
+  if (!_pendingQueueCache.length) {
+    card.style.display = 'none';
+    return;
+  }
+
+  card.style.display = '';
+  if (countEl) countEl.textContent = _pendingQueueCache.length;
+
+  listEl.innerHTML = _pendingQueueCache.map(p => {
+    const name = [p.FirstName, p.LastName].filter(Boolean).join(' ') || p.Email;
+    const sub  = [p.Email, p.Phone, p.Church].filter(Boolean).join(' · ');
+    const since = p.RegisteredAt ? ` · Registered ${fmtDate(p.RegisteredAt)}` : '';
+    return `
+      <div class="list-item" id="pq-${p.VolunteerID}">
+        ${avatarHtml(name, null)}
+        <div class="item-info" style="flex:1;min-width:0;">
+          <div class="item-title">${name}</div>
+          <div class="item-sub">${sub}${since}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+          <button class="btn btn-outline btn-sm" onclick="declinePending('${p.VolunteerID}')">Decline</button>
+          <button class="btn btn-gold btn-sm" onclick="openConfirmVolModal('${p.VolunteerID}')">Review &amp; Approve</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── Confirm Volunteer modal ───────────────────────────────────────────────────
+let _confirmVolID = null;
+
+function openConfirmVolModal(volID) {
+  _confirmVolID = volID;
+  const p = _pendingQueueCache.find(x => x.VolunteerID === volID);
+  if (!p) return;
+
+  const name = [p.FirstName, p.LastName].filter(Boolean).join(' ') || p.Email;
+  const info = document.getElementById('confirmVolInfo');
+  if (info) {
+    info.innerHTML = `
+      <strong style="color:var(--navy);font-size:14px;">${name}</strong><br>
+      ${p.Email ? `<span>${p.Email}</span>` : ''}
+      ${p.Phone ? ` &middot; <span>${p.Phone}</span>` : ''}
+      ${p.Church ? ` &middot; <span>${p.Church}</span>` : ''}`;
+  }
+
+  document.getElementById('confirmVolWarn').style.display    = 'none';
+  document.getElementById('confirmVolExact').style.display   = 'none';
+  document.getElementById('confirmVolNav').style.display     = 'flex';
+  document.getElementById('confirmVolSuccess').style.display = 'none';
+  document.getElementById('confirmVolSubmit').disabled = false;
+  document.getElementById('confirmVolSubmit').textContent = 'Approve';
+  document.getElementById('confirmVolOverlay').classList.add('open');
+  document.getElementById('confirmVolModal').classList.add('open');
+}
+
+function closeConfirmVolModal() {
+  document.getElementById('confirmVolOverlay')?.classList.remove('open');
+  document.getElementById('confirmVolModal')?.classList.remove('open');
+  _confirmVolID = null;
+}
+
+async function submitConfirmVol(action, linkMemberID) {
+  if (!_confirmVolID) return;
+  const btn = document.getElementById('confirmVolSubmit');
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+
+  const body = {};
+  if (action)       body.action       = action;
+  if (linkMemberID) body.linkMemberID = linkMemberID;
+
+  try {
+    const res  = await fetch(`/api/volunteers/${encodeURIComponent(_confirmVolID)}/confirm`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+
+    if (res.status === 409 && data.code === 'exact_match') {
+      _showConfirmExact(data.matches);
+      return;
+    }
+    if (res.ok && data.code === 'partial_match') {
+      _showConfirmWarn(data.matches);
+      return;
+    }
+    if (!res.ok) {
+      alert(data.error || 'Could not confirm volunteer.');
+      return;
+    }
+
+    const ok = document.getElementById('confirmVolSuccess');
+    ok.style.display = 'block';
+    ok.textContent   = 'Volunteer approved!';
+    document.getElementById('confirmVolNav').style.display   = 'none';
+    document.getElementById('confirmVolWarn').style.display  = 'none';
+    document.getElementById('confirmVolExact').style.display = 'none';
+    await Promise.all([loadPendingQueue(), loadVolunteersFull(), loadStats(), loadPendingVolunteerBadge()]);
+    setTimeout(() => closeConfirmVolModal(), 1400);
+  } catch (err) {
+    alert('Network error — could not confirm volunteer.');
+  } finally {
+    if (btn && document.getElementById('confirmVolSuccess')?.style.display === 'none') {
+      btn.disabled = false; btn.textContent = 'Approve';
+    }
+  }
+}
+
+function _showConfirmWarn(matches) {
+  document.getElementById('confirmVolNav').style.display   = 'none';
+  document.getElementById('confirmVolExact').style.display = 'none';
+  const listEl = document.getElementById('confirmVolWarnList');
+  listEl.innerHTML = matches.slice(0, 3).map(m => {
+    const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || '—';
+    return `<div style="margin-bottom:4px;">• ${name}${m.Email ? ` · ${m.Email}` : ''}${m.Phone ? ` · ${m.Phone}` : ''}</div>`;
+  }).join('');
+  document.getElementById('confirmVolWarn').style.display = '';
+}
+
+function _showConfirmExact(matches) {
+  document.getElementById('confirmVolNav').style.display  = 'none';
+  document.getElementById('confirmVolWarn').style.display = 'none';
+  const msgEl  = document.getElementById('confirmVolExactMsg');
+  const btnsEl = document.getElementById('confirmVolExactBtns');
+  msgEl.innerHTML = matches.slice(0, 3).map(m => {
+    const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || '—';
+    return `<div style="margin-bottom:4px;">• ${name}${m.Email ? ` · ${m.Email}` : ''}${m.is_volunteer === 'true' ? ' <em>(already volunteer)</em>' : ''}</div>`;
+  }).join('') + '<div style="margin-top:6px;">What would you like to do?</div>';
+  btnsEl.innerHTML = `
+    <button class="btn btn-outline btn-sm" onclick="closeConfirmVolModal()">Cancel</button>
+    ${matches.map(m => {
+      const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || m.MemberID;
+      const alreadyVol = m.is_volunteer === 'true';
+      return alreadyVol
+        ? `<button class="btn btn-ghost btn-sm" disabled>Link "${name}" (already volunteer)</button>`
+        : `<button class="btn btn-outline btn-sm" onclick="submitConfirmVol('link','${m.MemberID}')">Link "${name}"</button>`;
+    }).join('')}
+    <button class="btn btn-gold btn-sm" onclick="submitConfirmVol('create')">Create New</button>`;
+  document.getElementById('confirmVolExact').style.display = '';
+}
+
+async function declinePending(volID) {
+  if (!confirm('Decline this volunteer registration? They will receive a notice email.')) return;
+  const row = document.getElementById(`pq-${volID}`);
+  if (row) row.style.opacity = '0.5';
+  try {
+    const res  = await fetch(`/api/volunteers/${encodeURIComponent(volID)}/decline`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not decline volunteer.'); if (row) row.style.opacity = ''; return; }
+    await Promise.all([loadPendingQueue(), loadPendingVolunteerBadge()]);
+  } catch (err) {
+    alert('Network error — could not decline.');
+    if (row) row.style.opacity = '';
+  }
 }
 
 // ── Announcements ────────────────────────────────────────────────────────────

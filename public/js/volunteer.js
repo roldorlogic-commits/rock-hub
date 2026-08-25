@@ -89,7 +89,8 @@ async function loadVStats() {
     const myEmail = (currentUser?.email ?? '').toLowerCase();
     const myName  = (currentUser?.name ?? '').toLowerCase();
     const myTasks = tasks.filter(t => {
-      const assignee = t.AssignedTo?.toLowerCase() ?? '';
+      if (t.AssigneeEmail) return t.AssigneeEmail.toLowerCase() === myEmail && t.Status !== 'Completed';
+      const assignee = (t.AssignedTo ?? '').toLowerCase();
       return (assignee === myEmail || assignee === myName) && t.Status !== 'Completed';
     });
     document.getElementById('vTasks').textContent = myTasks.length || '0';
@@ -237,11 +238,11 @@ async function submitSignup(e) {
 async function loadVTasks() {
   try {
     const tasks = await apiFetch('/api/tasks');
-    // Tasks sheet stores AssignedTo as a person's name, not an email — match either.
     const myEmail = (currentUser?.email ?? '').toLowerCase();
     const myName  = (currentUser?.name ?? '').toLowerCase();
     const mine = tasks.filter(t => {
-      const assignee = t.AssignedTo?.toLowerCase() ?? '';
+      if (t.AssigneeEmail) return t.AssigneeEmail.toLowerCase() === myEmail;
+      const assignee = (t.AssignedTo ?? '').toLowerCase();
       return assignee === myEmail || assignee === myName;
     });
     renderVTasksPreview(mine);
