@@ -151,6 +151,21 @@
             </a>
 
           </div>
+
+          <!-- Social Metrics tile -->
+          <div class="card" id="metricsTileCard">
+            <div class="card-header">
+              <span class="card-title">Social Metrics</span>
+              <div style="display:flex;align-items:center;gap:10px;">
+                <div class="mpt-toggle">
+                  <button class="mpt-btn active" id="mpt7"  onclick="setMetricsPeriod(7)">7d</button>
+                  <button class="mpt-btn"        id="mpt30" onclick="setMetricsPeriod(30)">30d</button>
+                </div>
+                <a class="btn btn-ghost btn-sm" href="https://business.facebook.com" target="_blank" rel="noopener" style="font-size:11px;">Business Suite ↗</a>
+              </div>
+            </div>
+            <div id="metricsBody"><div class="loading-row"><div class="spinner"></div></div></div>
+          </div>
         </div>
 
         <!-- ── RIGHT COLUMN ────────────────────────────────────────────────── -->
@@ -748,6 +763,7 @@
       </div>
       <label>Email<input type="email" id="yg_pc_email" placeholder="jane@example.com"></label>
       <hr style="border:none;border-top:1px solid var(--gold-line);margin:4px 0;">
+      <label>Instagram Handle <span style="color:var(--text-muted);font-weight:400;">(no @)</span><input type="text" id="yg_instagram" placeholder="zionsangelyouth" autocomplete="off" spellcheck="false"></label>
       <label>Tags <span style="color:var(--text-muted);font-weight:400;">(comma-separated)</span><input type="text" id="yg_tags" placeholder="e.g. Active, East Side"></label>
       <label>Notes<textarea id="yg_notes" rows="2" style="resize:vertical;" placeholder="Any additional notes…"></textarea></label>
     </div>

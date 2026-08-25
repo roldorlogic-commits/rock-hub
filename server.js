@@ -121,6 +121,7 @@ app.use('/api',        require('./routes/volunteer'));
 app.use('/api',        require('./routes/youth-groups'));
 app.use('/api',        require('./routes/calendar'));
 app.use('/api/admin',  require('./routes/admin'));
+app.use('/api/meta',   require('./routes/meta-insights'));
 app.use('/webhooks',   require('./routes/email-inbound'));
 
 const { requireAuth, requireBoard, requireBoardOrAdmin, requireActiveVolunteer, requireVP, getJwtVolunteer } = require('./middleware/auth');
@@ -178,6 +179,9 @@ sheetsLib.ensureColumns('EventRegistrations', ['Category', 'Source'])
 
 sheetsLib.ensureColumns('YouthGroups', ['lat', 'lng', 'location_type'])
   .catch(err => console.error('Could not ensure lat/lng/location_type columns in YouthGroups:', err.message));
+
+sheetsLib.ensureColumns('YouthGroups', ['instagram_handle'])
+  .catch(err => console.error('Could not ensure instagram_handle column in YouthGroups:', err.message));
 
 // Geocode any YouthGroups rows that have addresses but no coordinates.
 // Runs after boot with a small delay to avoid hitting Nominatim before the
