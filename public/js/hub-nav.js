@@ -32,7 +32,6 @@
         { label: 'Meeting Minutes',   section: 'minutes',  href: '/board?s=minutes' },
         { label: 'Action Items',      section: 'tasks',    href: '/board?s=tasks' },
         { label: 'Pending Volunteers', href: '/volunteers/pending', badgeId: 'pendingVolunteersBadge' },
-        { label: 'Social Media',      href: '/social-feed' },
         { label: 'Usage Report',      href: '/admin/usage', id: 'adminUsageLink', vpOnly: true }
     ]},
     { label: 'Reach Map', href: '/reach-map', activeKey: 'reach-map' },
