@@ -266,9 +266,16 @@
         <div class="reg-panel-vol-status" id="regPanel_VolStatus"></div>
       </div>
       <p class="form-error" id="regPanelError" style="display:none;"></p>
-      <div class="modal-nav">
-        <button type="button" class="btn btn-outline" onclick="closeRegPanel()">Cancel</button>
-        <button type="submit" class="btn btn-gold" id="regPanelSaveBtn">Save Changes</button>
+      <div class="modal-nav" style="justify-content:space-between;">
+        <button type="button" class="btn btn-outline btn-sm" id="regPanelRemoveBtn"
+                onclick="removeFromEvent()"
+                style="color:#CF6E6E;border-color:rgba(207,110,110,.4);">
+          Remove from Event
+        </button>
+        <div style="display:flex;gap:10px;">
+          <button type="button" class="btn btn-outline" onclick="closeRegPanel()">Cancel</button>
+          <button type="submit" class="btn btn-gold" id="regPanelSaveBtn">Save Changes</button>
+        </div>
       </div>
     </form>
   </aside>

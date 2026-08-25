@@ -324,6 +324,16 @@ router.put('/events/:eventId/registrations/:regId', requireBoard, async (req, re
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Permanently removes a registration for this event only. The contact record
+// and any registrations/history for other events are untouched.
+router.delete('/events/:eventId/registrations/:regId', requireBoard, async (req, res) => {
+  try {
+    const ok = await sheets.deleteRow('EventRegistrations', 'RegistrationID', req.params.regId);
+    if (!ok) return res.status(404).json({ error: 'Registration not found.' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.post('/events/:eventId/registrations/:regId/checkin', requireBoard, async (req, res) => {
   try {
     const checkedIn = req.body?.checkedIn !== false;

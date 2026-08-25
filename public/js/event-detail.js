@@ -717,6 +717,34 @@ async function saveRegPanel() {
   }
 }
 
+async function removeFromEvent() {
+  const regId = (document.getElementById('regPanel_ID')?.value ?? '').trim();
+  if (!regId) return;
+  const r = _regCache[regId];
+  const name = r ? [r.FirstName, r.LastName].filter(Boolean).join(' ') || r.Email || 'this person' : 'this person';
+  const evName = currentEvent?.EventName || 'this event';
+  if (!confirm(`Remove ${name} from ${evName}?\n\nThis unregisters them from this event only — their contact record and other event history are kept.`)) return;
+  const btn = document.getElementById('regPanelRemoveBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const res = await fetch(
+      `/api/events/${encodeURIComponent(currentEvent.EventID)}/registrations/${encodeURIComponent(regId)}`,
+      { method: 'DELETE' }
+    );
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      alert(d.error || 'Could not remove registrant.');
+      return;
+    }
+    closeRegPanel();
+    await loadRegistrations();
+  } catch (err) {
+    alert('Network error — please try again.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Remove from Event'; }
+  }
+}
+
 async function updateRegStatus(regId, status, selectEl) {
   try {
     const res = await fetch(
