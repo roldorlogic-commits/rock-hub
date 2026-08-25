@@ -283,6 +283,7 @@
             </div>
             <button class="btn btn-gold btn-sm" id="addContactBtn" onclick="openContactModal()">+ Add Contact</button>
             <button class="btn btn-gold btn-sm" id="addYGBtn" style="display:none;" onclick="openYGModal()">+ Add Group</button>
+            <button class="btn btn-outline btn-sm" id="mergeContactsBtn" onclick="openMergeModal()">⇄ Merge</button>
             <a class="btn btn-outline btn-sm" id="exportContactsBtn" href="/api/export/members" download>Export CSV</a>
             <span class="role-badge">Board View</span>
           </div>
@@ -723,16 +724,6 @@
       <label>Notes<textarea id="av_notes" rows="2" placeholder="Optional notes…" style="resize:vertical;"></textarea></label>
     </div>
 
-    <!-- Partial match warning (hidden until needed) -->
-    <div id="addVolWarn" style="display:none;margin-top:14px;padding:12px 14px;background:var(--gold-faint);border:1px solid var(--gold-line);border-radius:8px;">
-      <div style="font-weight:600;font-size:13px;color:var(--navy);margin-bottom:8px;">Possible duplicate detected</div>
-      <div id="addVolWarnList" style="font-size:12px;color:var(--text-dim);margin-bottom:10px;"></div>
-      <div style="display:flex;gap:8px;">
-        <button class="btn btn-outline btn-sm" onclick="closeAddVolModal()">Cancel</button>
-        <button class="btn btn-gold btn-sm" onclick="submitAddVol('create')">Add Anyway</button>
-      </div>
-    </div>
-
     <!-- Exact match dialog (hidden until needed) -->
     <div id="addVolExact" style="display:none;margin-top:14px;padding:12px 14px;background:#fff3f3;border:1px solid #ffb3b3;border-radius:8px;">
       <div style="font-weight:600;font-size:13px;color:#c00;margin-bottom:8px;">Existing contact found</div>
@@ -757,16 +748,6 @@
     <div class="modal-title">Confirm Volunteer</div>
     <div id="confirmVolInfo" style="padding:14px 0 2px;font-size:13px;color:var(--text-dim);"></div>
 
-    <!-- Partial match warning -->
-    <div id="confirmVolWarn" style="display:none;margin-top:14px;padding:12px 14px;background:var(--gold-faint);border:1px solid var(--gold-line);border-radius:8px;">
-      <div style="font-weight:600;font-size:13px;color:var(--navy);margin-bottom:8px;">Possible duplicate detected</div>
-      <div id="confirmVolWarnList" style="font-size:12px;color:var(--text-dim);margin-bottom:10px;"></div>
-      <div style="display:flex;gap:8px;">
-        <button class="btn btn-outline btn-sm" onclick="closeConfirmVolModal()">Cancel</button>
-        <button class="btn btn-gold btn-sm" onclick="submitConfirmVol('create')">Confirm Anyway</button>
-      </div>
-    </div>
-
     <!-- Exact match dialog -->
     <div id="confirmVolExact" style="display:none;margin-top:14px;padding:12px 14px;background:#fff3f3;border:1px solid #ffb3b3;border-radius:8px;">
       <div style="font-weight:600;font-size:13px;color:#c00;margin-bottom:8px;">Existing contact found</div>
@@ -780,6 +761,64 @@
       <button class="btn btn-gold btn-sm" id="confirmVolSubmit" onclick="submitConfirmVol()">Approve</button>
     </div>
     <div class="modal-success" id="confirmVolSuccess" style="display:none;"></div>
+  </div>
+
+  <!-- ── Contact Merge modal ───────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="mergeOverlay" onclick="closeMergeModal()"></div>
+  <div class="modal-box" id="mergeModal" style="width:640px;max-width:96vw;">
+    <button class="icon-btn slide-panel-close" onclick="closeMergeModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Merge Contacts</div>
+    <p style="color:var(--text-dim);font-size:12px;margin:4px 0 14px;">Search for two contacts to merge into one record. The merge is irreversible — review carefully before confirming.</p>
+
+    <!-- Step 1: Pick two contacts -->
+    <div id="mergeStep1">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text-dim);display:block;margin-bottom:4px;">Contact A</label>
+          <input type="text" id="mergeSearchA" placeholder="Search by name or email…" autocomplete="off"
+            oninput="mergeSuggest('A')" style="width:100%;box-sizing:border-box;">
+          <div id="mergeSuggestA" style="display:none;max-height:180px;overflow-y:auto;border:1px solid var(--gold-line);border-radius:6px;margin-top:4px;background:var(--surface);"></div>
+          <div id="mergeSelectedA" style="display:none;margin-top:8px;padding:8px 10px;background:var(--gold-faint);border:1px solid var(--gold-line);border-radius:6px;font-size:12px;"></div>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text-dim);display:block;margin-bottom:4px;">Contact B</label>
+          <input type="text" id="mergeSearchB" placeholder="Search by name or email…" autocomplete="off"
+            oninput="mergeSuggest('B')" style="width:100%;box-sizing:border-box;">
+          <div id="mergeSuggestB" style="display:none;max-height:180px;overflow-y:auto;border:1px solid var(--gold-line);border-radius:6px;margin-top:4px;background:var(--surface);"></div>
+          <div id="mergeSelectedB" style="display:none;margin-top:8px;padding:8px 10px;background:var(--gold-faint);border:1px solid var(--gold-line);border-radius:6px;font-size:12px;"></div>
+        </div>
+      </div>
+      <div class="modal-nav" style="margin-top:18px;">
+        <button class="btn btn-outline btn-sm" onclick="closeMergeModal()">Cancel</button>
+        <button class="btn btn-gold btn-sm" id="mergePreviewBtn" onclick="loadMergePreview()" disabled>Preview Merge →</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Side-by-side confirmation -->
+    <div id="mergeStep2" style="display:none;">
+      <div id="mergeCompare" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;"></div>
+      <div style="padding:12px;background:var(--gold-faint);border:1px solid var(--gold-line);border-radius:8px;font-size:12px;margin-bottom:14px;">
+        <strong>Primary record</strong> — this record's MemberID and email are kept. The other record is deleted after all history is transferred.
+        <div style="display:flex;gap:16px;margin-top:8px;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="radio" name="mergePrimary" value="a" id="mergePrimaryA" onchange="updateMergeWarning()"> Keep <span id="mergePrimaryLabelA" style="font-weight:600;"></span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="radio" name="mergePrimary" value="b" id="mergePrimaryB" onchange="updateMergeWarning()"> Keep <span id="mergePrimaryLabelB" style="font-weight:600;"></span>
+          </label>
+        </div>
+      </div>
+      <p id="mergeWarning" style="display:none;color:#e74c3c;font-size:12px;margin-bottom:10px;"></p>
+      <p id="mergeError" style="display:none;color:#e74c3c;font-size:12px;margin-bottom:10px;"></p>
+      <div class="modal-nav">
+        <button class="btn btn-outline btn-sm" onclick="mergeGoBack()">← Back</button>
+        <button class="btn btn-ghost btn-sm" onclick="markNotDuplicate()" style="color:var(--text-dim);">Not a duplicate</button>
+        <button class="btn btn-gold btn-sm" id="mergeExecuteBtn" onclick="executeMerge()" disabled>Execute Merge</button>
+      </div>
+      <div class="modal-success" id="mergeSuccess" style="display:none;"></div>
+    </div>
   </div>
 
   <!-- ── Bulk action confirm modal ─────────────────────────────────────────── -->
