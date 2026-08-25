@@ -192,6 +192,49 @@ sheetsLib.ensureColumns('Tasks', ['AssigneeEmail', 'Description'])
 sheetsLib.ensureColumns('VolunteerAuth', ['MustReset'])
   .catch(err => console.error('Could not add MustReset column to VolunteerAuth:', err.message));
 
+// Ensure every Active volunteer has a corresponding Members row.
+// Idempotent: skips rows that already exist; sets is_volunteer=true on
+// matches found by email. Runs after a short delay so ensureColumns above
+// has time to finish adding the is_volunteer column before we write to it.
+setTimeout(async () => {
+  try {
+    const [volunteers, members] = await Promise.all([
+      sheetsLib.getVolunteers(),
+      sheetsLib.getMembers()
+    ]);
+    const memberByEmail = new Map(
+      members.filter(m => m.Email).map(m => [m.Email.toLowerCase(), m])
+    );
+    let synced = 0;
+    let counter = 0;
+    for (const vol of volunteers) {
+      if (vol.Status !== 'Active' || !vol.Email) continue;
+      const emailLower = vol.Email.toLowerCase();
+      const member = memberByEmail.get(emailLower);
+      if (member) {
+        if (member.is_volunteer !== 'true') {
+          await sheetsLib.updateRowFields('Members', 'MemberID', member.MemberID, { is_volunteer: 'true' });
+          synced++;
+        }
+      } else {
+        const memberID = `M-${Date.now() + counter++}`;
+        await sheetsLib.appendRow('Members', {
+          MemberID: memberID,
+          FirstName: vol.FirstName || '', LastName: vol.LastName || '',
+          Email: emailLower, Phone: vol.Phone || '',
+          Tags: '', MembershipType: '', MembershipStatus: 'Active',
+          JoinDate: vol.JoinDate || new Date().toISOString().slice(0, 10),
+          Notes: vol.Notes || '', is_volunteer: 'true'
+        });
+        synced++;
+      }
+    }
+    if (synced > 0) console.log(`Volunteer-contact sync: ${synced} record(s) updated or created.`);
+  } catch (err) {
+    console.error('Volunteer-contact sync failed:', err.message);
+  }
+}, 8000);
+
 // Geocode any YouthGroups rows that have addresses but no coordinates.
 // Runs after boot with a small delay to avoid hitting Nominatim before the
 // server is fully ready. Fire-and-forget; errors are logged but not fatal.

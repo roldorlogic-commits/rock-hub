@@ -16,8 +16,10 @@ function bgCheckClass(status) {
   return 'notstarted';
 }
 
+let currentUser = null;
+
 (async () => {
-  await initUser();
+  currentUser = await initUser();
   await loadVolunteerDetail();
   if (currentUser?.role === 'Board') {
     const id = volunteerIdFromPath();
