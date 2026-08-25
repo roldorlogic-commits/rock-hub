@@ -451,6 +451,31 @@ router.post('/volunteers/:id/decline', requireBoardOrAdmin, async (req, res) => 
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Volunteer self-edit — must precede /:id ──────────────────────────────────
+router.patch('/volunteers/me', async (req, res) => {
+  try {
+    const user = req.user;
+    const vol = user.volunteerId
+      ? await sheets.getVolunteerById(user.volunteerId)
+      : (await sheets.getVolunteers()).find(v => v.Email?.toLowerCase() === (user.email || '').toLowerCase());
+    if (!vol) return res.status(404).json({ error: 'No volunteer profile found.' });
+
+    const allowed = ['Phone', 'PreferredRole', 'AvailabilityDays', 'Skills'];
+    const fields = {};
+    for (const k of allowed) {
+      if (req.body[k] !== undefined) fields[k] = req.body[k];
+    }
+    if (req.body.Church !== undefined) {
+      const withoutChurch = (vol.Notes || '').replace(/Church\/Org:\s*[^.]+\.?\s*/g, '').trim();
+      fields.Notes = req.body.Church ? `Church/Org: ${req.body.Church}. ${withoutChurch}`.trim() : withoutChurch;
+    }
+    if (!Object.keys(fields).length) return res.status(400).json({ error: 'Nothing to update.' });
+    const updated = await sheets.updateRowFields('Volunteers', 'VolunteerID', vol.VolunteerID, fields);
+    if (!updated) return res.status(404).json({ error: 'Volunteer not found.' });
+    res.json(updated);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Volunteer detail ─────────────────────────────────────────────────────────
 router.get('/volunteers/:id', async (req, res) => {
   try {

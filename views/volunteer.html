@@ -82,7 +82,7 @@
               <span class="card-title">My Profile</span>
               <div style="display:flex;gap:12px;">
                 <a class="card-action" href="#" onclick="openNotifPrefs();return false;">Notifications</a>
-                <a class="card-action" href="#" onclick="openProfileEdit();return false;">Edit</a>
+                <a class="card-action" href="#" onclick="goToSection('myprofile');return false;">View full →</a>
               </div>
             </div>
             <div class="role-card-inner">
@@ -166,6 +166,20 @@
         </div>
       </section>
 
+      <!-- ── MY PROFILE ─────────────────────────────────────────────────────── -->
+      <section id="myprofile" class="content-section">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">My Profile</span>
+            <div style="display:flex;gap:12px;">
+              <a class="card-action" href="#" onclick="openNotifPrefs();return false;">Notifications</a>
+              <a class="card-action" href="#" onclick="openProfileEdit();return false;">Edit</a>
+            </div>
+          </div>
+          <div id="myProfileContent"><div class="loading-row"><div class="spinner"></div></div></div>
+        </div>
+      </section>
+
       <footer class="app-footer">© 2026 The ROCK Association · hub.gorock.org · v1.1.0</footer>
     </main>
 
@@ -196,10 +210,12 @@
     </button>
     <div class="modal-title">Edit My Profile</div>
     <form id="profileForm" onsubmit="submitProfileEdit(event)">
-      <label>Phone <input type="tel" id="profilePhone"></label>
-      <label>Church / Organization <input type="text" id="profileChurch"></label>
-      <label>Availability <input type="text" id="profileAvailability" placeholder="e.g. Saturday,Sunday"></label>
-      <label>Skills <input type="text" id="profileSkills" placeholder="e.g. Mentoring, Setup"></label>
+      <label>Phone <input type="tel" id="profilePhone" placeholder="(555) 000-0000"></label>
+      <label>Preferred Role <input type="text" id="profileRole_" placeholder="e.g. Mentoring, Transportation"></label>
+      <label>Church / Organization <input type="text" id="profileChurch" placeholder="e.g. First Baptist"></label>
+      <label>Skills <input type="text" id="profileSkills" placeholder="e.g. Mentoring, Setup, AV"></label>
+      <label>Availability <input type="text" id="profileAvailability" placeholder="e.g. Saturday, Sunday"></label>
+      <p class="form-error" id="profileError" style="display:none;margin-bottom:8px;"></p>
       <button type="submit" class="btn btn-gold" style="width:100%;justify-content:center;margin-top:4px;">Save Changes</button>
     </form>
     <div class="modal-success" id="profileSuccess" style="display:none;"></div>
