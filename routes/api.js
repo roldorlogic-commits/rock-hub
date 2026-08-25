@@ -197,6 +197,136 @@ router.post('/members/bulk', requireBoard, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Contact merge tool (Board only) ──────────────────────────────────────────
+// Must be defined before /members/:id to avoid :id catching 'merge-preview'.
+
+router.get('/members/merge-preview', requireBoard, async (req, res) => {
+  const { a, b } = req.query;
+  if (!a || !b) return res.status(400).json({ error: 'Both a and b member IDs are required.' });
+  try {
+    const [memberA, memberB] = await Promise.all([sheets.getMemberById(a), sheets.getMemberById(b)]);
+    if (!memberA) return res.status(404).json({ error: 'Contact A not found.' });
+    if (!memberB) return res.status(404).json({ error: 'Contact B not found.' });
+    const [authA, authB] = await Promise.all([
+      memberA.Email ? sheets.findVolunteerAuthByEmail(memberA.Email) : null,
+      memberB.Email ? sheets.findVolunteerAuthByEmail(memberB.Email) : null
+    ]);
+    res.json({ a: memberA, b: memberB, aHasLogin: !!authA, bHasLogin: !!authB });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/members/merge', requireBoard, async (req, res) => {
+  const { primaryId, secondaryId } = req.body || {};
+  if (!primaryId || !secondaryId) return res.status(400).json({ error: 'primaryId and secondaryId are required.' });
+  if (primaryId === secondaryId) return res.status(400).json({ error: 'Cannot merge a record with itself.' });
+  try {
+    const [primary, secondary] = await Promise.all([
+      sheets.getMemberById(primaryId), sheets.getMemberById(secondaryId)
+    ]);
+    if (!primary)   return res.status(404).json({ error: 'Primary contact not found.' });
+    if (!secondary) return res.status(404).json({ error: 'Secondary contact not found.' });
+
+    // Field merge: primary wins on non-empty; secondary fills blanks.
+    const SCALAR_FIELDS = ['FirstName', 'LastName', 'Email', 'Phone', 'MembershipType', 'MembershipStatus', 'JoinDate', 'youth_group_id'];
+    const merged = {};
+    for (const f of SCALAR_FIELDS) merged[f] = primary[f] || secondary[f] || '';
+    // Tags: union of both tag sets.
+    const tagsA = (primary.Tags   || '').split(',').map(t => t.trim()).filter(Boolean);
+    const tagsB = (secondary.Tags || '').split(',').map(t => t.trim()).filter(Boolean);
+    merged.Tags = [...new Set([...tagsA, ...tagsB])].join(',');
+    // Notes: concatenate if distinct.
+    const noteA = (primary.Notes   || '').trim();
+    const noteB = (secondary.Notes || '').trim();
+    merged.Notes = (noteA && noteB && noteA !== noteB)
+      ? `${noteA}\n[Merged from ${secondary.Email || secondary.MemberID}]: ${noteB}`
+      : (noteA || noteB);
+    // Volunteer flag: either true → true.
+    if (primary.is_volunteer === 'true' || secondary.is_volunteer === 'true') merged.is_volunteer = 'true';
+
+    const transferred = [];
+
+    // Re-point related records from secondary email to primary email.
+    if (secondary.Email && primary.Email &&
+        secondary.Email.toLowerCase() !== primary.Email.toLowerCase()) {
+      const secEmail = secondary.Email.toLowerCase();
+      const primEmail = primary.Email;
+
+      const [regs, signups, hoursRows, allVols] = await Promise.all([
+        sheets.getEventRegistrations(),
+        sheets.getVolunteerSignups(),
+        sheets.getHoursLog(),
+        sheets.getVolunteers()
+      ]);
+      for (const r of regs) {
+        if (r.Email?.toLowerCase() === secEmail) {
+          await sheets.updateRowFields('EventRegistrations', 'RegistrationID', r.RegistrationID, { Email: primEmail });
+          transferred.push(`Reg:${r.RegistrationID}`);
+        }
+      }
+      for (const s of signups) {
+        if (s.Email?.toLowerCase() === secEmail) {
+          await sheets.updateRowFields('VolunteerSignups', 'SignupID', s.SignupID, { Email: primEmail });
+          transferred.push(`Signup:${s.SignupID}`);
+        }
+      }
+      for (const h of hoursRows) {
+        if (h.Email?.toLowerCase() === secEmail) {
+          await sheets.updateRowFields('HoursLog', 'HoursID', h.HoursID, { Email: primEmail });
+        }
+      }
+
+      // Volunteers row: reparent or merge hours.
+      const secVol  = allVols.find(v => v.Email?.toLowerCase() === secEmail);
+      const primVol = allVols.find(v => v.Email?.toLowerCase() === primary.Email.toLowerCase());
+      if (secVol && !primVol) {
+        await sheets.updateRowFields('Volunteers', 'VolunteerID', secVol.VolunteerID, { Email: primEmail });
+        transferred.push(`VolRow:${secVol.VolunteerID}`);
+      } else if (secVol && primVol) {
+        const addHours = parseFloat(secVol.HoursLogged) || 0;
+        if (addHours > 0) {
+          const newHours = (parseFloat(primVol.HoursLogged) || 0) + addHours;
+          await sheets.updateRowFields('Volunteers', 'VolunteerID', primVol.VolunteerID, { HoursLogged: String(newHours) });
+        }
+        await sheets.deleteRow('Volunteers', 'VolunteerID', secVol.VolunteerID);
+        transferred.push(`VolMerge:${secVol.VolunteerID}`);
+      }
+
+      // VolunteerAuth: give primary the auth row if they don't have one.
+      const [secAuth, primAuth] = await Promise.all([
+        sheets.findVolunteerAuthByEmail(secEmail),
+        sheets.findVolunteerAuthByEmail(primary.Email.toLowerCase())
+      ]);
+      if (secAuth && !primAuth) {
+        await sheets.updateRowFields('VolunteerAuth', 'Email', secAuth.Email, { Email: primEmail });
+        transferred.push('VolunteerAuth');
+      }
+    }
+
+    await sheets.updateRowFields('Members', 'MemberID', primaryId, merged);
+    await sheets.deleteRow('Members', 'MemberID', secondaryId);
+    await sheets.appendRow('MergeLog', {
+      MergeID: `MERGE-${Date.now()}`,
+      PrimaryMemberID: primaryId, SecondaryMemberID: secondaryId,
+      MergedBy: req.user.email, MergedAt: todayStr(),
+      FieldsTransferred: transferred.join('; '), Notes: ''
+    });
+
+    res.json({ ok: true, primaryId, transferred: transferred.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/members/not-duplicate', requireBoard, async (req, res) => {
+  const { memberIdA, memberIdB, note } = req.body || {};
+  if (!memberIdA || !memberIdB) return res.status(400).json({ error: 'memberIdA and memberIdB are required.' });
+  try {
+    await sheets.appendRow('DedupeReviews', {
+      PairID: `PAIR-${Date.now()}`, MemberID_A: memberIdA, MemberID_B: memberIdB,
+      ReviewedBy: req.user.email, ReviewedAt: todayStr(), Note: note || ''
+    });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.patch('/members/:id', requireBoard, async (req, res) => {
   try {
     const allowed = ['FirstName', 'LastName', 'Email', 'Phone', 'Tags', 'MembershipType', 'MembershipStatus', 'Notes', 'youth_group_id'];
@@ -321,6 +451,32 @@ router.post('/volunteers/:id/decline', requireBoardOrAdmin, async (req, res) => 
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Volunteer self-edit — must precede /:id ──────────────────────────────────
+router.patch('/volunteers/me', async (req, res) => {
+  try {
+    const user = req.user;
+    const vol = user.volunteerId
+      ? await sheets.getVolunteerById(user.volunteerId)
+      : (await sheets.getVolunteers()).find(v => v.Email?.toLowerCase() === (user.email || '').toLowerCase());
+    if (!vol) return res.status(404).json({ error: 'No volunteer profile found.' });
+
+    const allowed = ['Phone', 'PreferredRole', 'AvailabilityDays', 'Skills',
+                     'EmergencyContactName', 'EmergencyContactPhone', 'EmergencyContactRelationship'];
+    const fields = {};
+    for (const k of allowed) {
+      if (req.body[k] !== undefined) fields[k] = req.body[k];
+    }
+    if (req.body.Church !== undefined) {
+      const withoutChurch = (vol.Notes || '').replace(/Church\/Org:\s*[^.]+\.?\s*/g, '').trim();
+      fields.Notes = req.body.Church ? `Church/Org: ${req.body.Church}. ${withoutChurch}`.trim() : withoutChurch;
+    }
+    if (!Object.keys(fields).length) return res.status(400).json({ error: 'Nothing to update.' });
+    const updated = await sheets.updateRowFields('Volunteers', 'VolunteerID', vol.VolunteerID, fields);
+    if (!updated) return res.status(404).json({ error: 'Volunteer not found.' });
+    res.json(updated);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Volunteer detail ─────────────────────────────────────────────────────────
 router.get('/volunteers/:id', async (req, res) => {
   try {
@@ -332,7 +488,9 @@ router.get('/volunteers/:id', async (req, res) => {
 
 router.patch('/volunteers/:id', requireBoard, async (req, res) => {
   try {
-    const allowed = ['FirstName', 'LastName', 'Email', 'Phone', 'PreferredRole', 'AvailabilityDays', 'Skills', 'Status', 'Notes'];
+    const allowed = ['FirstName', 'LastName', 'Email', 'Phone', 'PreferredRole', 'AvailabilityDays', 'Skills', 'Status', 'Notes',
+                     'BackgroundCheckStatus', 'BackgroundCheckDate',
+                     'EmergencyContactName', 'EmergencyContactPhone', 'EmergencyContactRelationship'];
     const fields = {};
     for (const k of allowed) {
       if (req.body[k] !== undefined) fields[k] = req.body[k];

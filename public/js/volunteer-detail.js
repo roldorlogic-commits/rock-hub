@@ -9,6 +9,8 @@ const VOL_FIELD_ORDER = ['VolunteerID', 'PreferredRole', 'AvailabilityDays', 'Sk
 const VOL_DATE_FIELDS = new Set(['BackgroundCheckDate', 'JoinDate']);
 const VOL_FULL_SPAN   = new Set(['Skills', 'Notes']);
 
+const BG_CHECK_STATUSES = ['Not Started', 'Pending', 'Cleared'];
+
 function bgCheckClass(status) {
   const s = (status || '').toLowerCase();
   if (s === 'cleared') return 'cleared';
@@ -22,8 +24,7 @@ let currentUser = null;
   currentUser = await initUser();
   await loadVolunteerDetail();
   if (currentUser?.role === 'Board') {
-    const id = volunteerIdFromPath();
-    loadAccessManagement(id);
+    loadAccessManagement(volunteerIdFromPath());
   }
 })();
 
@@ -37,6 +38,10 @@ async function loadVolunteerDetail() {
   try {
     const v = await apiFetch(`/api/volunteers/${encodeURIComponent(id)}`);
     el.innerHTML = renderVolunteerDetail(v);
+    if (currentUser?.role === 'Board') {
+      appendEmergencyContactCard(id, v);
+      appendBackgroundCheckCard(id, v);
+    }
   } catch (e) {
     el.innerHTML = `<div class="card">${emptyState('Could not find that volunteer. They may have been removed from the Volunteers sheet.')}</div>`;
   }
@@ -161,6 +166,157 @@ function amCopyTempPw() {
     btn.textContent = 'Copied!';
     setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
   });
+}
+
+// ── Emergency Contact card (Board only) ──────────────────────────────────────
+
+function appendEmergencyContactCard(volId, v) {
+  const container = document.getElementById('volunteerDetail');
+  const card = document.createElement('div');
+  card.id = 'emergencyContactCard';
+  card.className = 'card';
+  card.style.marginTop = '16px';
+
+  const name = v.EmergencyContactName || '';
+  const phone = v.EmergencyContactPhone || '';
+  const rel   = v.EmergencyContactRelationship || '';
+  const hasData = name || phone || rel;
+
+  card.innerHTML = `
+    <div class="card-header">
+      <span class="card-title">Emergency Contact</span>
+      <button class="btn btn-ghost btn-sm" onclick="toggleEcEdit()">Edit</button>
+    </div>
+    <div id="ecDisplay" style="padding:12px 16px 16px;">
+      ${hasData ? `
+        <div class="detail-field-grid">
+          <div class="detail-field"><div class="detail-field-label">Name</div><div class="detail-field-value${name ? '' : ' empty'}">${_esc(name) || '—'}</div></div>
+          <div class="detail-field"><div class="detail-field-label">Phone</div><div class="detail-field-value${phone ? '' : ' empty'}">${_esc(phone) || '—'}</div></div>
+          <div class="detail-field"><div class="detail-field-label">Relationship</div><div class="detail-field-value${rel ? '' : ' empty'}">${_esc(rel) || '—'}</div></div>
+        </div>` :
+        `<p style="color:var(--text-muted);font-size:13px;">No emergency contact on file. Click Edit to add one.</p>`}
+    </div>
+    <div id="ecForm" style="display:none;padding:0 16px 16px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <label style="grid-column:1/-1;">Name
+          <input type="text" id="ec_Name" value="${_esc(name)}" placeholder="Full name">
+        </label>
+        <label>Phone
+          <input type="tel" id="ec_Phone" value="${_esc(phone)}" placeholder="(555) 000-0000">
+        </label>
+        <label>Relationship
+          <input type="text" id="ec_Rel" value="${_esc(rel)}" placeholder="e.g. Spouse, Parent">
+        </label>
+      </div>
+      <p class="form-error" id="ecError" style="display:none;margin-bottom:8px;"></p>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-gold btn-sm" onclick="saveEmergencyContact('${volId}')">Save</button>
+        <button class="btn btn-outline btn-sm" onclick="toggleEcEdit()">Cancel</button>
+      </div>
+    </div>`;
+  container.appendChild(card);
+}
+
+function toggleEcEdit() {
+  const display = document.getElementById('ecDisplay');
+  const form    = document.getElementById('ecForm');
+  if (!display || !form) return;
+  const editing = form.style.display !== 'none';
+  display.style.display = editing ? '' : 'none';
+  form.style.display    = editing ? 'none' : '';
+  if (!editing) document.getElementById('ec_Name')?.focus();
+}
+
+async function saveEmergencyContact(volId) {
+  const errEl = document.getElementById('ecError');
+  errEl.style.display = 'none';
+  const btn = document.querySelector('#ecForm .btn-gold');
+  btn.disabled = true;
+  try {
+    const body = {
+      EmergencyContactName:         (document.getElementById('ec_Name')?.value ?? '').trim(),
+      EmergencyContactPhone:        (document.getElementById('ec_Phone')?.value ?? '').trim(),
+      EmergencyContactRelationship: (document.getElementById('ec_Rel')?.value ?? '').trim()
+    };
+    const res = await fetch(`/api/volunteers/${encodeURIComponent(volId)}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || 'Save failed.'; errEl.style.display = 'block'; return; }
+    // Refresh the card display
+    const display = document.getElementById('ecDisplay');
+    const hasData = body.EmergencyContactName || body.EmergencyContactPhone || body.EmergencyContactRelationship;
+    display.innerHTML = hasData ? `
+      <div class="detail-field-grid">
+        <div class="detail-field"><div class="detail-field-label">Name</div><div class="detail-field-value">${_esc(body.EmergencyContactName) || '—'}</div></div>
+        <div class="detail-field"><div class="detail-field-label">Phone</div><div class="detail-field-value">${_esc(body.EmergencyContactPhone) || '—'}</div></div>
+        <div class="detail-field"><div class="detail-field-label">Relationship</div><div class="detail-field-value">${_esc(body.EmergencyContactRelationship) || '—'}</div></div>
+      </div>` : `<p style="color:var(--text-muted);font-size:13px;">No emergency contact on file.</p>`;
+    toggleEcEdit();
+  } catch (err) {
+    errEl.textContent = 'Network error — please try again.'; errEl.style.display = 'block';
+  } finally { btn.disabled = false; }
+}
+
+// ── Background Check card (Board only) ───────────────────────────────────────
+
+function appendBackgroundCheckCard(volId, v) {
+  const container = document.getElementById('volunteerDetail');
+  const card = document.createElement('div');
+  card.id = 'bgCheckCard';
+  card.className = 'card';
+  card.style.marginTop = '16px';
+
+  const status  = v.BackgroundCheckStatus || 'Not Started';
+  const date    = v.BackgroundCheckDate   || '';
+  const statusOptions = BG_CHECK_STATUSES
+    .map(s => `<option value="${s}"${s === status ? ' selected' : ''}>${s}</option>`).join('');
+
+  card.innerHTML = `
+    <div class="card-header">
+      <span class="card-title">Background Check</span>
+      <span class="status-pill ${bgCheckClass(status)}">${_esc(status)}</span>
+    </div>
+    <div style="padding:12px 16px 16px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <label>Status
+          <select id="bgStatus">${statusOptions}</select>
+        </label>
+        <label>Date
+          <input type="date" id="bgDate" value="${_esc(date)}">
+        </label>
+      </div>
+      <p class="form-error" id="bgError" style="display:none;margin-bottom:8px;"></p>
+      <button class="btn btn-gold btn-sm" id="bgSaveBtn" onclick="saveBackgroundCheck('${volId}')">Save</button>
+    </div>`;
+  container.appendChild(card);
+}
+
+async function saveBackgroundCheck(volId) {
+  const errEl = document.getElementById('bgError');
+  const btn   = document.getElementById('bgSaveBtn');
+  const hdr   = document.querySelector('#bgCheckCard .card-header .status-pill');
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  try {
+    const status = document.getElementById('bgStatus').value;
+    const date   = document.getElementById('bgDate').value;
+    const res = await fetch(`/api/volunteers/${encodeURIComponent(volId)}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ BackgroundCheckStatus: status, BackgroundCheckDate: date })
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || 'Save failed.'; errEl.style.display = 'block'; return; }
+    // Update the status pill in the card header and in the main detail header
+    if (hdr) { hdr.className = `status-pill ${bgCheckClass(status)}`; hdr.textContent = status; }
+    const mainPill = document.querySelector('.detail-header-meta .status-pill:nth-child(2)');
+    if (mainPill) { mainPill.className = `status-pill ${bgCheckClass(status)}`; mainPill.textContent = status; }
+    btn.textContent = 'Saved ✓';
+    setTimeout(() => { btn.textContent = 'Save'; }, 2000);
+  } catch (err) {
+    errEl.textContent = 'Network error — please try again.'; errEl.style.display = 'block';
+  } finally { btn.disabled = false; }
 }
 
 function renderVolunteerDetail(v) {

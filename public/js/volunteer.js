@@ -17,7 +17,7 @@ let mySignups = [];
   await Promise.all([
     loadVStats(), loadVTasks(),
     loadAnnouncements(), loadResources(), loadTeam(),
-    loadVHours(),
+    loadVHours(), loadMyProfile(),
     initNotifications(['All', 'Volunteers'])
   ]);
 })();
@@ -317,22 +317,98 @@ async function loadTeam() {
   }
 }
 
-// ── Editable profile (phone, church, availability, skills) ─────────────────
+// ── My Profile section ────────────────────────────────────────────────────────
+
 let myVolunteerCache = null;
+let _profileLoaded = false;
+
+async function loadMyProfile() {
+  if (_profileLoaded) return;
+  _profileLoaded = true;
+  const el = document.getElementById('myProfileContent');
+  if (!el) return;
+  try {
+    myVolunteerCache = await apiFetch('/api/volunteers/me').catch(() => null);
+    renderMyProfile(myVolunteerCache);
+  } catch (e) {
+    el.innerHTML = emptyState('Could not load your profile right now.');
+  }
+}
+
+function renderMyProfile(vol) {
+  const el = document.getElementById('myProfileContent');
+  if (!el) return;
+  if (!vol) { el.innerHTML = emptyState('No volunteer profile found. Contact a board member for assistance.'); return; }
+
+  const name      = [vol.FirstName, vol.LastName].filter(Boolean).join(' ') || currentUser?.name || '—';
+  const email_    = vol.Email || currentUser?.email || '—';
+  const statusCls = (vol.Status || 'active').toLowerCase() === 'active' ? 'active' : 'inactive';
+  const joinDate  = vol.JoinDate ? fmtDate(vol.JoinDate) : '—';
+  const hours     = parseFloat(vol.HoursLogged) || 0;
+  const attended  = mySignups.filter(r => r.Status === 'Confirmed').length;
+
+  const churchMatch = (vol.Notes || '').match(/Church\/Org:\s*([^.]+)\.?/);
+  const church = churchMatch ? churchMatch[1].trim() : '';
+
+  const ecName  = vol.EmergencyContactName || '';
+  const ecPhone = vol.EmergencyContactPhone || '';
+  const ecRel   = vol.EmergencyContactRelationship || '';
+  const ecLine  = [ecName, ecRel ? `(${ecRel})` : '', ecPhone].filter(Boolean).join(' · ');
+
+  function row(label, value) {
+    if (!value) return '';
+    return `<div style="display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--gold-line);">
+      <span style="min-width:140px;color:var(--text-muted);font-size:0.875rem;">${label}</span>
+      <span style="flex:1;">${_esc(value)}</span>
+    </div>`;
+  }
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:20px;padding-bottom:20px;border-bottom:1px solid var(--gold-line);margin-bottom:20px;flex-wrap:wrap;">
+      <div class="avatar-initials" style="width:72px;height:72px;font-size:24px;flex-shrink:0;">${initials(name)}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:1.25rem;font-weight:700;">${_esc(name)}</div>
+        <div style="color:var(--text-muted);font-size:0.875rem;margin-top:2px;">${_esc(email_)}</div>
+        <div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <span class="status-pill ${statusCls}">${vol.Status || 'Active'}</span>
+          ${joinDate !== '—' ? `<span style="font-size:0.8rem;color:var(--text-muted);">Member since ${joinDate}</span>` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="metrics-row three" style="margin-bottom:20px;">
+      <div class="metric-card"><div class="metric-label">Hours Logged</div><div class="metric-value">${hours}</div></div>
+      <div class="metric-card"><div class="metric-label">Events Attended</div><div class="metric-value">${attended}</div></div>
+      <div class="metric-card"><div class="metric-label">Member Since</div><div class="metric-value" style="font-size:14px;">${joinDate}</div></div>
+    </div>
+    <div>
+      ${row('Phone', vol.Phone)}
+      ${row('Preferred Role', vol.PreferredRole)}
+      ${row('Church / Org', church)}
+      ${row('Skills', vol.Skills)}
+      ${row('Availability', vol.AvailabilityDays)}
+      ${row('Emergency Contact', ecLine)}
+    </div>`;
+}
+
+// ── Editable profile modal ────────────────────────────────────────────────────
 
 async function openProfileEdit() {
-  try {
-    const vols = await apiFetch('/api/volunteers');
-    const myEmail = (currentUser?.email ?? '').toLowerCase();
-    myVolunteerCache = vols.find(v => v.Email?.toLowerCase() === myEmail) || null;
-  } catch (e) { myVolunteerCache = null; }
+  if (!myVolunteerCache) {
+    try { myVolunteerCache = await apiFetch('/api/volunteers/me'); } catch (e) { myVolunteerCache = null; }
+  }
+  const vol = myVolunteerCache;
+  const churchMatch = (vol?.Notes || '').match(/Church\/Org:\s*([^.]+)\.?/);
+  document.getElementById('profilePhone').value        = vol?.Phone || '';
+  document.getElementById('profileRole_').value        = vol?.PreferredRole || '';
+  document.getElementById('profileChurch').value       = churchMatch ? churchMatch[1].trim() : '';
+  document.getElementById('profileSkills').value       = vol?.Skills || '';
+  document.getElementById('profileAvailability').value = vol?.AvailabilityDays || '';
+  document.getElementById('profileEcName').value       = vol?.EmergencyContactName || '';
+  document.getElementById('profileEcPhone').value      = vol?.EmergencyContactPhone || '';
+  document.getElementById('profileEcRel').value        = vol?.EmergencyContactRelationship || '';
 
-  const churchMatch = (myVolunteerCache?.Notes || '').match(/Church\/Org:\s*([^.]+)\.?/);
-  document.getElementById('profilePhone').value        = myVolunteerCache?.Phone || '';
-  document.getElementById('profileChurch').value        = churchMatch ? churchMatch[1].trim() : '';
-  document.getElementById('profileAvailability').value  = myVolunteerCache?.AvailabilityDays || '';
-  document.getElementById('profileSkills').value        = myVolunteerCache?.Skills || '';
-
+  const errEl = document.getElementById('profileError');
+  if (errEl) errEl.style.display = 'none';
   document.getElementById('profileForm').style.display = 'flex';
   document.getElementById('profileSuccess').style.display = 'none';
   document.getElementById('profileOverlay').classList.add('open');
@@ -346,29 +422,53 @@ function closeProfileEdit() {
 
 async function submitProfileEdit(e) {
   e.preventDefault();
-  const btn = e.target.querySelector('button[type="submit"]');
+  const btn    = e.target.querySelector('button[type="submit"]');
+  const errEl  = document.getElementById('profileError');
+  if (errEl) errEl.style.display = 'none';
   btn.disabled = true;
   try {
     const res = await fetch('/api/volunteers/me', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        Phone: document.getElementById('profilePhone').value.trim(),
-        Church: document.getElementById('profileChurch').value.trim(),
-        AvailabilityDays: document.getElementById('profileAvailability').value.trim(),
-        Skills: document.getElementById('profileSkills').value.trim()
+        Phone:                        document.getElementById('profilePhone').value.trim(),
+        PreferredRole:                document.getElementById('profileRole_').value.trim(),
+        Church:                       document.getElementById('profileChurch').value.trim(),
+        Skills:                       document.getElementById('profileSkills').value.trim(),
+        AvailabilityDays:             document.getElementById('profileAvailability').value.trim(),
+        EmergencyContactName:         document.getElementById('profileEcName').value.trim(),
+        EmergencyContactPhone:        document.getElementById('profileEcPhone').value.trim(),
+        EmergencyContactRelationship: document.getElementById('profileEcRel').value.trim()
       })
     });
     const data = await res.json();
-    if (!res.ok) { alert(data.error || 'Could not save your profile.'); return; }
+    if (!res.ok) {
+      if (errEl) { errEl.textContent = data.error || 'Could not save your profile.'; errEl.style.display = 'block'; }
+      else alert(data.error || 'Could not save your profile.');
+      return;
+    }
+    myVolunteerCache = data;
+    _profileLoaded = false; // force re-render next time section opens
 
     document.getElementById('profileForm').style.display = 'none';
     const successEl = document.getElementById('profileSuccess');
     successEl.style.display = 'block';
     successEl.innerHTML = '<p>✅ Your profile has been updated.</p>';
+
+    // Refresh profile section if it's currently visible
+    const profileSection = document.getElementById('myprofile');
+    if (profileSection?.classList.contains('active')) {
+      myVolunteerCache = data;
+      renderMyProfile(data);
+    }
+    // Refresh the dashboard role dept line
+    const pd = document.getElementById('profileDept');
+    if (pd && data.PreferredRole) pd.textContent = data.PreferredRole;
+
     setTimeout(closeProfileEdit, 1200);
   } catch (err) {
-    alert('Network error — could not save your profile. Please try again.');
+    if (errEl) { errEl.textContent = 'Network error — please try again.'; errEl.style.display = 'block'; }
+    else alert('Network error — could not save your profile. Please try again.');
   } finally {
     btn.disabled = false;
   }

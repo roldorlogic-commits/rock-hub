@@ -41,13 +41,14 @@
   ];
 
   const VOLUNTEER_LINKS = [
-    { label: 'Dashboard',   section: 'dashboard', href: '/volunteer' },
-    { label: 'Events',      section: 'events',    href: '/volunteer?s=events' },
-    { label: 'My Sign-Ups', section: 'mysignups', href: '/volunteer?s=mysignups' },
-    { label: 'My Tasks',    section: 'mytasks',   href: '/volunteer?s=mytasks' },
-    { label: 'My Hours',    section: 'myhours',   href: '/volunteer?s=myhours' },
-    { label: 'Resources',   section: 'resources', href: '/volunteer?s=resources' },
-    { label: 'My Team',     section: 'myteam',    href: '/volunteer?s=myteam' }
+    { label: 'Dashboard',   section: 'dashboard',  href: '/volunteer' },
+    { label: 'Events',      section: 'events',     href: '/volunteer?s=events' },
+    { label: 'My Sign-Ups', section: 'mysignups',  href: '/volunteer?s=mysignups' },
+    { label: 'My Tasks',    section: 'mytasks',    href: '/volunteer?s=mytasks' },
+    { label: 'My Hours',    section: 'myhours',    href: '/volunteer?s=myhours' },
+    { label: 'Resources',   section: 'resources',  href: '/volunteer?s=resources' },
+    { label: 'My Team',     section: 'myteam',     href: '/volunteer?s=myteam' },
+    { label: 'My Profile',  section: 'myprofile',  href: '/volunteer?s=myprofile' }
   ];
 
   const ICON = {

@@ -760,37 +760,178 @@ async function confirmAllPending() {
   } catch (err) { alert('Network error — please try again.'); }
 }
 
-function openAddRegModal()  { document.getElementById('addRegForm')?.reset(); _modalError('addRegError',''); _openModal('addRegOverlay','addRegModal'); }
-function closeAddRegModal() { _closeModal('addRegOverlay','addRegModal'); }
+// ── Shared member cache (used by Add Registrant + Assign Volunteer modals) ──
+
+let _evtMembersCache = null;
+
+async function _loadEvtMembers() {
+  if (_evtMembersCache) return _evtMembersCache;
+  try { _evtMembersCache = await apiFetch('/api/members'); } catch (_) { _evtMembersCache = []; }
+  return _evtMembersCache;
+}
+
+// ── Add Registrant — search-first modal ────────────────────────────────────
+
+let _regSelectedMember = null;
+
+function openAddRegModal() {
+  _regSelectedMember = null;
+  document.getElementById('addRegStep1').style.display = '';
+  document.getElementById('addRegStep2').style.display = 'none';
+  const searchEl = document.getElementById('addReg_Search');
+  if (searchEl) searchEl.value = '';
+  document.getElementById('addRegSuggest').style.display = 'none';
+  document.getElementById('addRegSelected').style.display = 'none';
+  document.getElementById('addRegLinkFields').style.display = 'none';
+  document.getElementById('addRegSubmitBtn').disabled = true;
+  document.getElementById('addReg_Role').value = '';
+  document.getElementById('addReg_Category').value = 'Attendee';
+  document.getElementById('addReg_Notes').value = '';
+  _modalError('addRegError', '');
+  _openModal('addRegOverlay', 'addRegModal');
+  _loadEvtMembers();
+}
+
+function closeAddRegModal() { _closeModal('addRegOverlay', 'addRegModal'); }
+
+async function regSearch() {
+  const q = (document.getElementById('addReg_Search')?.value ?? '').toLowerCase().trim();
+  const suggest = document.getElementById('addRegSuggest');
+  if (!q || q.length < 2) { suggest.style.display = 'none'; return; }
+  const members = await _loadEvtMembers();
+  const hits = members.filter(m => {
+    const name = `${m.FirstName || ''} ${m.LastName || ''}`.toLowerCase();
+    const em   = (m.Email || '').toLowerCase();
+    return name.includes(q) || em.includes(q);
+  }).slice(0, 8);
+  if (!hits.length) {
+    suggest.innerHTML = '<div style="padding:10px 14px;color:var(--text-muted);font-size:0.875rem;">No contacts found</div>';
+  } else {
+    suggest.innerHTML = hits.map(m => {
+      const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || '(no name)';
+      const em   = m.Email ? `<span style="color:var(--text-muted);font-size:0.8rem;margin-left:6px;">${_esc(m.Email)}</span>` : '';
+      return `<div style="padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--gold-line);"
+        onclick="regSelectContact('${_esc(m.MemberID)}')"
+        onmouseover="this.style.background='var(--surface-hover,rgba(255,255,255,0.05))'"
+        onmouseout="this.style.background=''">
+        <strong>${_esc(name)}</strong>${em}
+      </div>`;
+    }).join('');
+  }
+  suggest.style.display = '';
+}
+
+function regSelectContact(memberID) {
+  const members = _evtMembersCache || [];
+  const m = members.find(x => x.MemberID === memberID);
+  if (!m) return;
+  _regSelectedMember = m;
+  const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || '(no name)';
+  document.getElementById('addRegSel_Name').textContent  = name;
+  document.getElementById('addRegSel_Email').textContent = m.Email || '';
+  document.getElementById('addRegSel_Phone').textContent = m.Phone || '';
+  document.getElementById('addRegSuggest').style.display  = 'none';
+  document.getElementById('addReg_Search').value          = '';
+  document.getElementById('addRegSelected').style.display = '';
+  document.getElementById('addRegLinkFields').style.display = '';
+  document.getElementById('addRegSubmitBtn').disabled = false;
+  _modalError('addRegError', '');
+}
+
+function regClearContact() {
+  _regSelectedMember = null;
+  document.getElementById('addRegSelected').style.display  = 'none';
+  document.getElementById('addRegLinkFields').style.display = 'none';
+  document.getElementById('addRegSubmitBtn').disabled = true;
+  document.getElementById('addReg_Search').value = '';
+  document.getElementById('addReg_Search').focus();
+}
+
+function regShowCreateNew() {
+  document.getElementById('addRegStep1').style.display = 'none';
+  document.getElementById('addRegStep2').style.display = '';
+  document.getElementById('addRegNewForm')?.reset();
+  _modalError('addRegNewError', '');
+  document.getElementById('addRegNewDupeHint').style.display = 'none';
+}
+
+function regBackToSearch() {
+  document.getElementById('addRegStep2').style.display = 'none';
+  document.getElementById('addRegStep1').style.display = '';
+  _modalError('addRegError', '');
+}
 
 async function submitAddReg() {
+  if (!_regSelectedMember) { _modalError('addRegError', 'Select a contact first.'); return; }
   const g = id => (document.getElementById(id)?.value ?? '').trim();
-  const first = g('addReg_FirstName'), email_ = g('addReg_Email');
-  if (!first || !email_) { _modalError('addRegError','First name and email are required.'); return; }
-  _modalError('addRegError','');
+  _modalError('addRegError', '');
   _btnLoading('addRegSubmitBtn', true, 'Add Registrant');
   try {
-    const res  = await fetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/registrations`, {
+    const res = await fetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/registrations`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ FirstName: first, LastName: g('addReg_LastName'), Email: email_,
-        Phone: g('addReg_Phone'), Role: g('addReg_Role'), Notes: g('addReg_Notes'),
-        Category: g('addReg_Category') || 'Attendee' })
+      body: JSON.stringify({
+        MemberID: _regSelectedMember.MemberID,
+        Role: g('addReg_Role'), Notes: g('addReg_Notes'),
+        Category: g('addReg_Category') || 'Attendee'
+      })
     });
     const data = await res.json();
     if (!res.ok) { _modalError('addRegError', data.error || 'Failed.'); return; }
     closeAddRegModal();
     await loadRegistrations();
   } catch (err) {
-    _modalError('addRegError','Network error — please try again.');
+    _modalError('addRegError', 'Network error — please try again.');
   } finally {
     _btnLoading('addRegSubmitBtn', false, 'Add Registrant');
+  }
+}
+
+async function submitNewContact() {
+  const g = id => (document.getElementById(id)?.value ?? '').trim();
+  const first = g('addRegNew_FirstName'), email_ = g('addRegNew_Email');
+  if (!first || !email_) { _modalError('addRegNewError', 'First name and email are required.'); return; }
+  _modalError('addRegNewError', '');
+  _btnLoading('addRegNewSubmitBtn', true, 'Create & Register');
+  try {
+    const res = await fetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/registrations`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        createNew: true,
+        FirstName: first, LastName: g('addRegNew_LastName'),
+        Email: email_, Phone: g('addRegNew_Phone'),
+        Role: g('addRegNew_Role'), Notes: g('addRegNew_Notes'),
+        Category: g('addRegNew_Category') || 'Attendee'
+      })
+    });
+    const data = await res.json();
+    if (res.status === 409 && data.error === 'exact_match') {
+      const m = data.matches[0];
+      const name = [m.FirstName, m.LastName].filter(Boolean).join(' ');
+      document.getElementById('addRegNewDupeName').textContent = ` ${name} (${m.Email || ''})`;
+      const link = document.getElementById('addRegNewDupeLink');
+      link.onclick = (e) => {
+        e.preventDefault();
+        _evtMembersCache = null;
+        _loadEvtMembers().then(() => { regBackToSearch(); regSelectContact(m.MemberID); });
+      };
+      document.getElementById('addRegNewDupeHint').style.display = '';
+      return;
+    }
+    document.getElementById('addRegNewDupeHint').style.display = 'none';
+    if (!res.ok) { _modalError('addRegNewError', data.error || 'Failed.'); return; }
+    _evtMembersCache = null; // invalidate so next open re-fetches the new member
+    closeAddRegModal();
+    await loadRegistrations();
+  } catch (err) {
+    _modalError('addRegNewError', 'Network error — please try again.');
+  } finally {
+    _btnLoading('addRegNewSubmitBtn', false, 'Create & Register');
   }
 }
 
 // ── Volunteers tab ────────────────────────────────────────────────────────────
 
 let _volPositions = [];
-let _volContactMap = {};        // datalist value → { name, email, phone }
 const _volSignupsByPos = {};    // posId → signups[] (board, lazy-loaded)
 const _volExpanded = new Set(); // posIds whose signup table is open
 
@@ -859,6 +1000,7 @@ function _positionCard(p, isBoard) {
   let action;
   if (isBoard) {
     action = `<div class="vol-card-actions">
+      <button class="btn btn-gold btn-sm" onclick="openAssignModal('${p.PositionID}')">+ Assign</button>
       <button class="btn btn-outline btn-sm" onclick="toggleSignups('${p.PositionID}', this)">Manage Signups</button>
       <button class="icon-btn" title="Edit" onclick="openEditPositionModal('${p.PositionID}')">${editIco}</button>
       <button class="icon-btn" title="Delete" onclick="deletePosition('${p.PositionID}')">${trashIco}</button>
@@ -960,37 +1102,69 @@ async function setSignupStatus(posId, signupId, status) {
 
 // ── Position add / edit modal ────────────────────────────────────────────────
 
-async function _loadContactsDatalist() {
-  const dl = document.getElementById('pos_ContactList');
-  if (!dl || Object.keys(_volContactMap).length) return; // load once
-  try {
-    const members = await apiFetch('/api/members');
-    _volContactMap = {};
-    dl.innerHTML = members.map(m => {
-      const name = [m.FirstName, m.LastName].filter(Boolean).join(' ');
-      if (!m.Email && !name) return '';
-      const label = `${name}${m.Email ? ` <${m.Email}>` : ''}`;
-      _volContactMap[label] = { name, email: m.Email || '', phone: m.Phone || '' };
-      return `<option value="${_esc(label)}"></option>`;
-    }).join('');
-  } catch (e) { /* assign-to just won't autocomplete */ }
+let _posAssignMember = null;
+
+function posAssignSearch() {
+  const q = (document.getElementById('pos_AssignSearch')?.value ?? '').toLowerCase().trim();
+  const suggest = document.getElementById('pos_AssignSuggest');
+  if (!q || q.length < 2) { suggest.style.display = 'none'; return; }
+  const members = _evtMembersCache || [];
+  const hits = members.filter(m => {
+    const name = `${m.FirstName || ''} ${m.LastName || ''}`.toLowerCase();
+    return name.includes(q) || (m.Email || '').toLowerCase().includes(q);
+  }).slice(0, 8);
+  suggest.innerHTML = hits.length
+    ? hits.map(m => {
+        const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || '(no name)';
+        const em   = m.Email ? `<span style="color:var(--text-muted);font-size:0.8rem;margin-left:6px;">${_esc(m.Email)}</span>` : '';
+        return `<div style="padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--gold-line);"
+          onclick="posAssignSelect('${_esc(m.MemberID)}')"
+          onmouseover="this.style.background='var(--surface-hover,rgba(255,255,255,0.05))'"
+          onmouseout="this.style.background=''">
+          <strong>${_esc(name)}</strong>${em}
+        </div>`;
+      }).join('')
+    : '<div style="padding:10px 14px;color:var(--text-muted);font-size:0.875rem;">No contacts found</div>';
+  suggest.style.display = '';
+}
+
+function posAssignSelect(memberID) {
+  const m = (_evtMembersCache || []).find(x => x.MemberID === memberID);
+  if (!m) return;
+  _posAssignMember = m;
+  const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || '(no name)';
+  document.getElementById('pos_AssignSel_Name').textContent  = name;
+  document.getElementById('pos_AssignSel_Email').textContent = m.Email || '';
+  document.getElementById('pos_AssignSuggest').style.display  = 'none';
+  document.getElementById('pos_AssignSearch').value           = '';
+  document.getElementById('pos_AssignSelected').style.display = '';
+}
+
+function posAssignClear() {
+  _posAssignMember = null;
+  document.getElementById('pos_AssignSelected').style.display = 'none';
+  document.getElementById('pos_AssignSearch').value = '';
 }
 
 function openAddPositionModal() {
+  _posAssignMember = null;
   document.getElementById('posForm')?.reset();
   document.getElementById('pos_ID').value = '';
   document.getElementById('pos_Slots').value = '1';
   document.getElementById('posModalTitle').textContent = 'Add Position';
   document.getElementById('posSubmitBtn').textContent = 'Add Position';
   document.getElementById('pos_AssignWrap').style.display = '';
+  document.getElementById('pos_AssignSelected').style.display = 'none';
+  document.getElementById('pos_AssignSuggest').style.display = 'none';
   _modalError('posError', '');
-  _loadContactsDatalist();
+  _loadEvtMembers();
   _openModal('posOverlay', 'posModal');
 }
 
 function openEditPositionModal(posId) {
   const p = _volPositions.find(x => x.PositionID === posId);
   if (!p) return;
+  _posAssignMember = null;
   document.getElementById('posForm')?.reset();
   document.getElementById('pos_ID').value = posId;
   document.getElementById('pos_Title').value = p.Title || '';
@@ -998,7 +1172,6 @@ function openEditPositionModal(posId) {
   document.getElementById('pos_Slots').value = p.SlotsTotal || '1';
   document.getElementById('posModalTitle').textContent = 'Edit Position';
   document.getElementById('posSubmitBtn').textContent = 'Save Changes';
-  // Assign-To only applies when first creating a position.
   document.getElementById('pos_AssignWrap').style.display = 'none';
   _modalError('posError', '');
   _openModal('posOverlay', 'posModal');
@@ -1018,9 +1191,8 @@ async function submitPosition() {
     Title: title, Description: g('pos_Description'),
     SlotsTotal: g('pos_Slots') || '1'
   };
-  if (!id) {
-    const assign = _volContactMap[g('pos_Assign')];
-    if (assign) { body.AssignName = assign.name; body.AssignEmail = assign.email; body.AssignPhone = assign.phone; }
+  if (!id && _posAssignMember) {
+    body.AssignMemberID = _posAssignMember.MemberID;
   }
 
   try {
@@ -1033,7 +1205,7 @@ async function submitPosition() {
     const data = await res.json();
     if (!res.ok) { _modalError('posError', data.error || 'Failed.'); return; }
     closePositionModal();
-    if (!id && (body.AssignEmail)) _tabLoaded.registrations = false; // assigned contact becomes a registrant
+    if (!id && body.AssignMemberID) _tabLoaded.registrations = false; // assigned contact becomes a registrant
     await loadVolunteers();
   } catch (err) {
     _modalError('posError', 'Network error — please try again.');
@@ -1091,6 +1263,102 @@ async function submitVolSignup() {
     _modalError('volSignupError', 'Network error — please try again.');
   } finally {
     _btnLoading('volSignupSubmitBtn', false, 'Sign Up');
+  }
+}
+
+// ── Manually Assign Volunteer modal (Board only) ─────────────────────────────
+
+let _assignPosId = null;
+let _assignSelectedMember = null;
+
+function openAssignModal(posId) {
+  const p = _volPositions.find(x => x.PositionID === posId);
+  _assignPosId = posId;
+  _assignSelectedMember = null;
+  document.getElementById('assignPosTitle').textContent = p ? p.Title : '—';
+  document.getElementById('assign_Search').value = '';
+  document.getElementById('assignSuggest').style.display = 'none';
+  document.getElementById('assignSelected').style.display = 'none';
+  document.getElementById('assignFields').style.display = 'none';
+  document.getElementById('assignSubmitBtn').disabled = true;
+  document.getElementById('assign_Notes').value = '';
+  _modalError('assignError', '');
+  _loadEvtMembers();
+  _openModal('assignOverlay', 'assignModal');
+}
+
+function closeAssignModal() { _closeModal('assignOverlay', 'assignModal'); }
+
+async function assignSearch() {
+  const q = (document.getElementById('assign_Search')?.value ?? '').toLowerCase().trim();
+  const suggest = document.getElementById('assignSuggest');
+  if (!q || q.length < 2) { suggest.style.display = 'none'; return; }
+  const members = await _loadEvtMembers();
+  const hits = members.filter(m => {
+    const name = `${m.FirstName || ''} ${m.LastName || ''}`.toLowerCase();
+    return name.includes(q) || (m.Email || '').toLowerCase().includes(q);
+  }).slice(0, 8);
+  suggest.innerHTML = hits.length
+    ? hits.map(m => {
+        const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || '(no name)';
+        const em   = m.Email ? `<span style="color:var(--text-muted);font-size:0.8rem;margin-left:6px;">${_esc(m.Email)}</span>` : '';
+        return `<div style="padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--gold-line);"
+          onclick="assignSelectContact('${_esc(m.MemberID)}')"
+          onmouseover="this.style.background='var(--surface-hover,rgba(255,255,255,0.05))'"
+          onmouseout="this.style.background=''">
+          <strong>${_esc(name)}</strong>${em}
+        </div>`;
+      }).join('')
+    : '<div style="padding:10px 14px;color:var(--text-muted);font-size:0.875rem;">No contacts found</div>';
+  suggest.style.display = '';
+}
+
+function assignSelectContact(memberID) {
+  const m = (_evtMembersCache || []).find(x => x.MemberID === memberID);
+  if (!m) return;
+  _assignSelectedMember = m;
+  const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || '(no name)';
+  document.getElementById('assignSel_Name').textContent  = name;
+  document.getElementById('assignSel_Email').textContent = m.Email || '';
+  document.getElementById('assignSel_Phone').textContent = m.Phone || '';
+  document.getElementById('assignSuggest').style.display  = 'none';
+  document.getElementById('assign_Search').value          = '';
+  document.getElementById('assignSelected').style.display = '';
+  document.getElementById('assignFields').style.display   = '';
+  document.getElementById('assignSubmitBtn').disabled = false;
+  _modalError('assignError', '');
+}
+
+function assignClearContact() {
+  _assignSelectedMember = null;
+  document.getElementById('assignSelected').style.display = 'none';
+  document.getElementById('assignFields').style.display   = 'none';
+  document.getElementById('assignSubmitBtn').disabled = true;
+  document.getElementById('assign_Search').value = '';
+  document.getElementById('assign_Search').focus();
+}
+
+async function submitAssign() {
+  if (!_assignSelectedMember || !_assignPosId) return;
+  _modalError('assignError', '');
+  _btnLoading('assignSubmitBtn', true, 'Assign');
+  try {
+    const notes = (document.getElementById('assign_Notes')?.value ?? '').trim();
+    const res = await fetch(
+      `/api/events/${encodeURIComponent(currentEvent.EventID)}/positions/${encodeURIComponent(_assignPosId)}/assign`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ MemberID: _assignSelectedMember.MemberID, Notes: notes }) }
+    );
+    const data = await res.json();
+    if (!res.ok) { _modalError('assignError', data.error || 'Failed.'); return; }
+    _evtMembersCache = null; // invalidate so new contacts are picked up
+    closeAssignModal();
+    _tabLoaded.registrations = false;
+    await loadVolunteers();
+  } catch (err) {
+    _modalError('assignError', 'Network error — please try again.');
+  } finally {
+    _btnLoading('assignSubmitBtn', false, 'Assign');
   }
 }
 

@@ -7,6 +7,7 @@
 const express   = require('express');
 const router    = express.Router();
 const volunteer = require('../lib/volunteer');
+const sheets    = require('../lib/sheets');
 const { requireAuth, requireBoard } = require('../middleware/auth');
 
 router.use(requireAuth);
@@ -24,17 +25,16 @@ router.post('/events/:id/positions', requireBoard, async (req, res) => {
     const b = req.body || {};
     if (!(b.Title || '').trim()) return res.status(400).json({ error: 'Position title is required.' });
     const pos = await volunteer.createPosition(req.params.id, b);
+    const approvedBy = req.user.name || req.user.email;
 
-    // "Assign To" — optionally seed an approved signup for an existing contact,
-    // which also enrolls them as a confirmed registrant.
-    if (b.AssignName || b.AssignEmail) {
-      await volunteer.createSignup(req.params.id, pos.PositionID, {
-        ContactName: b.AssignName || '', Email: b.AssignEmail || '', Phone: b.AssignPhone || '',
-        Status: 'approved', ApprovedBy: req.user.name || req.user.email
-      });
-      const [refreshed] = (await volunteer.getPositionsByEvent(req.params.id))
-        .filter(p => p.PositionID === pos.PositionID);
-      return res.json(refreshed || pos);
+    if (b.AssignMemberID) {
+      const member = await sheets.getMemberById(b.AssignMemberID);
+      if (member) {
+        await volunteer.assignMember(req.params.id, pos.PositionID, member, approvedBy, '');
+        const [refreshed] = (await volunteer.getPositionsByEvent(req.params.id))
+          .filter(p => p.PositionID === pos.PositionID);
+        return res.json(refreshed || pos);
+      }
     }
     res.json(pos);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
@@ -54,6 +54,24 @@ router.delete('/events/:id/positions/:posId', requireBoard, async (req, res) => 
     if (!ok) return res.status(404).json({ error: 'Position not found.' });
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Board manually assigns an existing contact to a position — creates a
+// pre-approved signup and auto-enrolls them as a confirmed registrant.
+router.post('/events/:id/positions/:posId/assign', requireBoard, async (req, res) => {
+  try {
+    const { MemberID, Notes } = req.body || {};
+    if (!MemberID) return res.status(400).json({ error: 'MemberID is required.' });
+    const member = await sheets.getMemberById(MemberID);
+    if (!member) return res.status(404).json({ error: 'Contact not found.' });
+    const signup = await volunteer.assignMember(
+      req.params.id, req.params.posId, member,
+      req.user.name || req.user.email, Notes || ''
+    );
+    const [position] = (await volunteer.getPositionsByEvent(req.params.id))
+      .filter(p => p.PositionID === req.params.posId);
+    res.json({ ok: true, signup, position });
+  } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
 // ── Signups ──────────────────────────────────────────────────────────────────

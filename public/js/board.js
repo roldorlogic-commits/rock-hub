@@ -1117,10 +1117,6 @@ async function submitAddVol(action, linkMemberID) {
       _showAddVolExact(data.matches);
       return;
     }
-    if (res.ok && data.code === 'partial_match') {
-      _showAddVolWarn(data.matches);
-      return;
-    }
     if (!res.ok) {
       alert(data.error || 'Could not add volunteer.');
       return;
@@ -1130,7 +1126,6 @@ async function submitAddVol(action, linkMemberID) {
     ok.style.display = 'block';
     ok.textContent   = data.action === 'linked' ? 'Contact upgraded to volunteer.' : 'Volunteer added.';
     document.getElementById('addVolNav').style.display   = 'none';
-    document.getElementById('addVolWarn').style.display  = 'none';
     document.getElementById('addVolExact').style.display = 'none';
     await Promise.all([loadVolunteersFull(), loadMembers(), loadStats()]);
     setTimeout(() => closeAddVolModal(), 1400);
@@ -1139,17 +1134,6 @@ async function submitAddVol(action, linkMemberID) {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Add Volunteer'; }
   }
-}
-
-function _showAddVolWarn(matches) {
-  document.getElementById('addVolNav').style.display   = 'none';
-  document.getElementById('addVolExact').style.display = 'none';
-  const listEl = document.getElementById('addVolWarnList');
-  listEl.innerHTML = matches.slice(0, 3).map(m => {
-    const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || '—';
-    return `<div style="margin-bottom:4px;">• ${name}${m.Email ? ` · ${m.Email}` : ''}${m.Phone ? ` · ${m.Phone}` : ''}</div>`;
-  }).join('');
-  document.getElementById('addVolWarn').style.display = '';
 }
 
 function _showAddVolExact(matches) {
@@ -1303,10 +1287,6 @@ async function submitConfirmVol(action, linkMemberID) {
       _showConfirmExact(data.matches);
       return;
     }
-    if (res.ok && data.code === 'partial_match') {
-      _showConfirmWarn(data.matches);
-      return;
-    }
     if (!res.ok) {
       alert(data.error || 'Could not confirm volunteer.');
       return;
@@ -1316,7 +1296,6 @@ async function submitConfirmVol(action, linkMemberID) {
     ok.style.display = 'block';
     ok.textContent   = 'Volunteer approved!';
     document.getElementById('confirmVolNav').style.display   = 'none';
-    document.getElementById('confirmVolWarn').style.display  = 'none';
     document.getElementById('confirmVolExact').style.display = 'none';
     await Promise.all([loadPendingQueue(), loadVolunteersFull(), loadStats(), loadPendingVolunteerBadge()]);
     setTimeout(() => closeConfirmVolModal(), 1400);
@@ -1327,17 +1306,6 @@ async function submitConfirmVol(action, linkMemberID) {
       btn.disabled = false; btn.textContent = 'Approve';
     }
   }
-}
-
-function _showConfirmWarn(matches) {
-  document.getElementById('confirmVolNav').style.display   = 'none';
-  document.getElementById('confirmVolExact').style.display = 'none';
-  const listEl = document.getElementById('confirmVolWarnList');
-  listEl.innerHTML = matches.slice(0, 3).map(m => {
-    const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || '—';
-    return `<div style="margin-bottom:4px;">• ${name}${m.Email ? ` · ${m.Email}` : ''}${m.Phone ? ` · ${m.Phone}` : ''}</div>`;
-  }).join('');
-  document.getElementById('confirmVolWarn').style.display = '';
 }
 
 function _showConfirmExact(matches) {
@@ -1876,5 +1844,198 @@ async function confirmDeleteYG() {
     await loadYouthGroups();
   } catch (err) {
     alert('Network error — could not delete youth group.');
+  }
+}
+
+// ── Contact Merge Modal ───────────────────────────────────────────────────────
+
+let _mergeSelA = null; // selected member object for A
+let _mergeSelB = null; // selected member object for B
+let _mergePreview = null; // { a, b, aHasLogin, bHasLogin }
+
+function openMergeModal() {
+  _mergeSelA = _mergeSelB = _mergePreview = null;
+  ['mergeSearchA','mergeSearchB'].forEach(id => { document.getElementById(id).value = ''; });
+  ['mergeSuggestA','mergeSuggestB','mergeSelectedA','mergeSelectedB'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  document.getElementById('mergeStep1').style.display = '';
+  document.getElementById('mergeStep2').style.display = 'none';
+  document.getElementById('mergePreviewBtn').disabled = true;
+  document.getElementById('mergeSuccess').style.display = 'none';
+  document.getElementById('mergeOverlay').classList.add('open');
+  document.getElementById('mergeModal').classList.add('open');
+}
+
+function closeMergeModal() {
+  document.getElementById('mergeOverlay').classList.remove('open');
+  document.getElementById('mergeModal').classList.remove('open');
+}
+
+function mergeSuggest(side) {
+  const inputId   = `mergeSearch${side}`;
+  const suggestId = `mergeSuggest${side}`;
+  const query = document.getElementById(inputId).value.trim().toLowerCase();
+  const box   = document.getElementById(suggestId);
+
+  if (query.length < 2) { box.style.display = 'none'; return; }
+  const results = (_allMembersCache || []).filter(m => {
+    const name  = `${m.FirstName || ''} ${m.LastName || ''}`.toLowerCase();
+    const email = (m.Email || '').toLowerCase();
+    return name.includes(query) || email.includes(query);
+  }).slice(0, 8);
+
+  if (!results.length) { box.style.display = 'none'; return; }
+  box.innerHTML = results.map(m => {
+    const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || '—';
+    return `<div class="merge-suggest-row" onclick="mergeSelect('${side}','${m.MemberID}')"
+      style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--gold-line);"
+      onmouseover="this.style.background='var(--gold-faint)'" onmouseout="this.style.background=''">
+      <strong>${name}</strong>${m.Email ? ` <span style="color:var(--text-dim);font-size:11px;">${m.Email}</span>` : ''}
+    </div>`;
+  }).join('');
+  box.style.display = 'block';
+}
+
+function mergeSelect(side, memberId) {
+  const m = (_allMembersCache || []).find(x => x.MemberID === memberId);
+  if (!m) return;
+  if (side === 'A') _mergeSelA = m; else _mergeSelB = m;
+
+  const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || '—';
+  document.getElementById(`mergeSearch${side}`).value   = '';
+  document.getElementById(`mergeSuggest${side}`).style.display = 'none';
+  const selEl = document.getElementById(`mergeSelected${side}`);
+  selEl.innerHTML = `<strong>${name}</strong>${m.Email ? ` · ${m.Email}` : ''} <button onclick="mergeClear('${side}')" style="float:right;background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:11px;">✕ Clear</button>`;
+  selEl.style.display = 'block';
+
+  document.getElementById('mergePreviewBtn').disabled = !(_mergeSelA && _mergeSelB);
+}
+
+function mergeClear(side) {
+  if (side === 'A') _mergeSelA = null; else _mergeSelB = null;
+  document.getElementById(`mergeSelected${side}`).style.display = 'none';
+  document.getElementById('mergePreviewBtn').disabled = true;
+}
+
+async function loadMergePreview() {
+  if (!_mergeSelA || !_mergeSelB) return;
+  if (_mergeSelA.MemberID === _mergeSelB.MemberID) {
+    alert('Please select two different contacts.');
+    return;
+  }
+  document.getElementById('mergePreviewBtn').disabled = true;
+  document.getElementById('mergePreviewBtn').textContent = 'Loading…';
+  try {
+    const data = await apiFetch(
+      `/api/members/merge-preview?a=${encodeURIComponent(_mergeSelA.MemberID)}&b=${encodeURIComponent(_mergeSelB.MemberID)}`
+    );
+    _mergePreview = data;
+    _renderMergeCompare(data);
+    document.getElementById('mergeStep1').style.display = 'none';
+    document.getElementById('mergeStep2').style.display = '';
+    document.getElementById('mergeError').style.display   = 'none';
+    document.getElementById('mergeWarning').style.display = 'none';
+    document.getElementById('mergeSuccess').style.display = 'none';
+    document.getElementById('mergePrimaryA').checked = false;
+    document.getElementById('mergePrimaryB').checked = false;
+    document.getElementById('mergeExecuteBtn').disabled = true;
+    const nameA = [data.a.FirstName, data.a.LastName].filter(Boolean).join(' ') || data.a.Email || 'Contact A';
+    const nameB = [data.b.FirstName, data.b.LastName].filter(Boolean).join(' ') || data.b.Email || 'Contact B';
+    document.getElementById('mergePrimaryLabelA').textContent = nameA;
+    document.getElementById('mergePrimaryLabelB').textContent = nameB;
+  } catch (e) {
+    alert(e.message || 'Could not load preview.');
+  } finally {
+    document.getElementById('mergePreviewBtn').disabled = false;
+    document.getElementById('mergePreviewBtn').textContent = 'Preview Merge →';
+  }
+}
+
+function _renderMergeCompare(data) {
+  const FIELDS = [
+    ['FirstName','First Name'],['LastName','Last Name'],['Email','Email'],
+    ['Phone','Phone'],['MembershipType','Membership Type'],['MembershipStatus','Membership Status'],
+    ['Tags','Tags'],['Notes','Notes'],['is_volunteer','Volunteer'],['youth_group_id','Youth Group']
+  ];
+  const colStyle = 'padding:10px 12px;background:var(--surface-raised,#1c1c2e);border-radius:8px;';
+  function card(m, hasLogin, label) {
+    const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || m.Email || '—';
+    let rows = FIELDS.map(([k, lbl]) => {
+      const val = m[k] || '';
+      return `<div style="display:flex;gap:6px;padding:4px 0;border-bottom:1px solid var(--gold-line)11;">
+        <span style="width:110px;font-size:11px;color:var(--text-dim);flex-shrink:0;">${lbl}</span>
+        <span style="font-size:12px;word-break:break-word;">${val || '<em style="color:var(--text-dim);">—</em>'}</span>
+      </div>`;
+    }).join('');
+    const loginNote = hasLogin
+      ? `<div style="margin-top:8px;font-size:11px;color:var(--gold);">Has login account</div>`
+      : `<div style="margin-top:8px;font-size:11px;color:var(--text-dim);">No login account</div>`;
+    return `<div style="${colStyle}"><div style="font-size:13px;font-weight:700;margin-bottom:10px;">${label}: ${name}</div>${rows}${loginNote}</div>`;
+  }
+  document.getElementById('mergeCompare').innerHTML =
+    card(data.a, data.aHasLogin, 'Contact A') + card(data.b, data.bHasLogin, 'Contact B');
+}
+
+function updateMergeWarning() {
+  const choice = document.querySelector('input[name="mergePrimary"]:checked')?.value;
+  document.getElementById('mergeExecuteBtn').disabled = !choice;
+  const warn = document.getElementById('mergeWarning');
+  if (!choice || !_mergePreview) { warn.style.display = 'none'; return; }
+  const secondary = choice === 'a' ? _mergePreview.b : _mergePreview.a;
+  const msg = `The "${[secondary.FirstName, secondary.LastName].filter(Boolean).join(' ') || secondary.Email}" record will be permanently deleted after all history is transferred.`;
+  warn.textContent = msg;
+  warn.style.display = '';
+}
+
+function mergeGoBack() {
+  document.getElementById('mergeStep1').style.display = '';
+  document.getElementById('mergeStep2').style.display = 'none';
+  document.getElementById('mergePreviewBtn').disabled = !(_mergeSelA && _mergeSelB);
+}
+
+async function executeMerge() {
+  const choice = document.querySelector('input[name="mergePrimary"]:checked')?.value;
+  if (!choice || !_mergePreview) return;
+  const primaryId   = choice === 'a' ? _mergePreview.a.MemberID : _mergePreview.b.MemberID;
+  const secondaryId = choice === 'a' ? _mergePreview.b.MemberID : _mergePreview.a.MemberID;
+
+  const btn = document.getElementById('mergeExecuteBtn');
+  btn.disabled = true; btn.textContent = 'Merging…';
+  document.getElementById('mergeError').style.display = 'none';
+
+  try {
+    const data = await apiFetch('/api/members/merge', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ primaryId, secondaryId })
+    });
+    document.getElementById('mergeStep2').style.display = 'none';
+    const ok = document.getElementById('mergeSuccess');
+    ok.textContent = `Merge complete — ${data.transferred} record${data.transferred === 1 ? '' : 's'} transferred.`;
+    ok.style.display = 'block';
+    await Promise.all([loadMembers(), loadVolunteersFull(), loadStats()]);
+    setTimeout(() => closeMergeModal(), 2000);
+  } catch (e) {
+    const errEl = document.getElementById('mergeError');
+    errEl.textContent = e.message || 'Merge failed. Please try again.';
+    errEl.style.display = '';
+    btn.disabled = false; btn.textContent = 'Execute Merge';
+  }
+}
+
+async function markNotDuplicate() {
+  if (!_mergePreview) return;
+  try {
+    await apiFetch('/api/members/not-duplicate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberIdA: _mergePreview.a.MemberID, memberIdB: _mergePreview.b.MemberID })
+    });
+    const ok = document.getElementById('mergeSuccess');
+    ok.textContent = 'Marked as "not a duplicate" — this pair will be noted for review.';
+    ok.style.display = 'block';
+    document.getElementById('mergeStep2').style.display = 'none';
+    setTimeout(() => closeMergeModal(), 2000);
+  } catch (e) {
+    alert(e.message || 'Could not save review.');
   }
 }

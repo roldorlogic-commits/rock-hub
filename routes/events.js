@@ -251,13 +251,44 @@ async function addRegistration(eventId, fields, defaultStatus) {
 router.post('/events/:id/registrations', requireBoard, async (req, res) => {
   try {
     const b = req.body || {};
-    if (!b.FirstName || !b.Email) return res.status(400).json({ error: 'Name and email are required.' });
+    const { checkDupe } = require('../lib/dedupe');
+    let memberID = b.MemberID || '';
+    let firstName, lastName, regEmail, phone;
+
+    if (memberID) {
+      // Link to existing contact — pull identity from the Members row
+      const member = await sheets.getMemberById(memberID);
+      if (!member) return res.status(404).json({ error: 'Contact not found.' });
+      firstName = member.FirstName; lastName = member.LastName;
+      regEmail = member.Email;      phone    = member.Phone;
+    } else if (b.createNew) {
+      // Create new contact — exact-match dedupe check first
+      if (!b.FirstName || !b.Email) return res.status(400).json({ error: 'Name and email are required.' });
+      const dupe = await checkDupe(b.FirstName, b.LastName || '', b.Email, b.Phone || '');
+      if (dupe.type === 'exact') {
+        return res.status(409).json({ error: 'exact_match', matches: dupe.matches });
+      }
+      const newMember = await sheets.appendRow('Members', {
+        MemberID: `MBR${Date.now()}`,
+        FirstName: b.FirstName, LastName: b.LastName || '',
+        Email: b.Email.toLowerCase(), Phone: b.Phone || '',
+        MembershipStatus: 'Active',
+        CreatedAt: todayStr()
+      });
+      memberID  = newMember.MemberID;
+      firstName = b.FirstName; lastName  = b.LastName || '';
+      regEmail  = b.Email;     phone     = b.Phone || '';
+    } else {
+      return res.status(400).json({ error: 'Provide MemberID to link an existing contact, or createNew:true to add a new one.' });
+    }
+
     const { row, waitlisted } = await addRegistration(req.params.id, {
-      FirstName: b.FirstName, LastName: b.LastName || '', Email: b.Email,
-      Phone: b.Phone || '', Role: b.Role || '', Notes: b.Notes || '',
-      Category: b.Category || (b.Role ? 'Volunteer' : 'Attendee')
+      MemberID: memberID, FirstName: firstName, LastName: lastName,
+      Email: regEmail, Phone: phone,
+      Role: b.Role || '', Notes: b.Notes || '',
+      Category: b.Category || 'Attendee'
     }, 'Confirmed');
-    res.json({ ok: true, registration: row, waitlisted });
+    res.json({ ok: true, registration: row, waitlisted, memberID });
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 

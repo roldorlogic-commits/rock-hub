@@ -53,7 +53,8 @@ function showSection(id, navEl) {
     dashboard:'Dashboard', events:'Events & Programs', tasks:'Action Items',
     contacts:'Board Directory', files:'Files & Docs', minutes:'Meeting Minutes',
     reports:'Reports', settings:'Settings', members:'Contacts', volunteers:'Volunteers',
-    mytasks:'My Tasks', mysignups:'My Sign-Ups', resources:'Resources', myteam:'My Team'
+    mytasks:'My Tasks', mysignups:'My Sign-Ups', resources:'Resources', myteam:'My Team',
+    myprofile:'My Profile', myhours:'My Hours'
   };
   const pt = document.getElementById('pageTitle');
   if (pt) pt.textContent = titles[id] || id;
@@ -115,6 +116,10 @@ function priorityPill(p) {
   if (!p) return '';
   const cls = p.toLowerCase() === 'high' ? 'high' : p.toLowerCase() === 'medium' ? 'pending' : 'completed';
   return `<span class="status-pill ${cls}">${p}</span>`;
+}
+
+function _esc(v) {
+  return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function initials(name) {
