@@ -121,7 +121,6 @@ app.use('/api',        require('./routes/volunteer'));
 app.use('/api',        require('./routes/youth-groups'));
 app.use('/api',        require('./routes/calendar'));
 app.use('/api/admin',  require('./routes/admin'));
-app.use('/social',     require('./routes/social'));
 app.use('/webhooks',   require('./routes/email-inbound'));
 
 const { requireAuth, requireBoard, requireBoardOrAdmin, requireActiveVolunteer, requireVP, getJwtVolunteer } = require('./middleware/auth');
@@ -140,7 +139,6 @@ app.get('/reset-password', (req, res) => res.sendFile(path.join(__dirname, 'view
 
 app.get('/board',        requireBoard, (req, res) => res.sendFile(path.join(__dirname, 'views/board.html')));
 app.get('/volunteer',    requireActiveVolunteer, (req, res) => res.sendFile(path.join(__dirname, 'views/volunteer.html')));
-app.get('/social-feed',  requireBoard, (req, res) => res.sendFile(path.join(__dirname, 'views/social.html')));
 app.get('/reach-map',    requireBoard, (req, res) => res.sendFile(path.join(__dirname, 'views/reach-map.html')));
 
 app.get('/volunteer/pending-approval', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'views/pending-approval.html')));
