@@ -1,7 +1,7 @@
 /* Shared API helpers */
 
-async function apiFetch(path) {
-  const res = await fetch(path);
+async function apiFetch(path, options = {}) {
+  const res = await fetch(path, options);
   if (!res.ok) throw new Error(`API error ${res.status}`);
   return res.json();
 }
