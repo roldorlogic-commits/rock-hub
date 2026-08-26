@@ -139,14 +139,25 @@ router.get('/youth-groups', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// GET /api/youth-groups/:id — group detail + linked contacts
+// GET /api/youth-groups/:id — group detail + linked contacts (with resolved names)
 router.get('/youth-groups/:id', async (req, res) => {
   try {
     const group = await sheets.getYouthGroupById(req.params.id);
     if (!group) return res.status(404).json({ error: 'Youth group not found.' });
     const members  = await sheets.getMembers();
     const contacts = members.filter(m => m.youth_group_id === req.params.id);
-    res.json({ ...group, contacts });
+
+    // Resolve primary_contact_id → display name so the UI never shows a raw M- ID
+    let resolvedGroup = { ...group };
+    if (group.primary_contact_id) {
+      const pc = members.find(m => m.MemberID === group.primary_contact_id);
+      if (pc) {
+        const name = [pc.FirstName, pc.LastName].filter(Boolean).join(' ') || pc.Email || '';
+        if (name) resolvedGroup.primary_contact_name = name;
+      }
+    }
+
+    res.json({ ...resolvedGroup, contacts });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

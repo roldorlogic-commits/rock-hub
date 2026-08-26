@@ -23,13 +23,17 @@ async function loadMemberDetail() {
   const id = memberIdFromPath();
   try {
     const m = await apiFetch(`/api/members/${encodeURIComponent(id)}`);
-    el.innerHTML = renderMemberDetail(m);
+    let yg = null;
+    if (m.youth_group_id) {
+      yg = await apiFetch(`/api/youth-groups/${encodeURIComponent(m.youth_group_id)}`).catch(() => null);
+    }
+    el.innerHTML = renderMemberDetail(m, yg);
   } catch (e) {
     el.innerHTML = `<div class="card">${emptyState('Could not find that contact. They may have been removed from the Members sheet.')}</div>`;
   }
 }
 
-function renderMemberDetail(m) {
+function renderMemberDetail(m, yg) {
   const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || m.Email || 'Unnamed Member';
   const statusCls = (m.MembershipStatus || '').toLowerCase() === 'active' ? 'active' : 'inactive';
 
@@ -75,6 +79,21 @@ function renderMemberDetail(m) {
     <div class="card" style="margin-top:16px;">
       <div class="card-header"><span class="card-title">Contact Details</span></div>
       <div class="detail-field-grid">${fields}</div>
+    </div>` : ''}
+
+    ${yg ? `
+    <div class="card" style="margin-top:16px;">
+      <div class="card-header"><span class="card-title">Youth Group</span></div>
+      <div class="detail-field-grid">
+        <div class="detail-field">
+          <div class="detail-field-label">Group</div>
+          <div class="detail-field-value">${yg.youth_group_name || yg.church_name || yg.id}</div>
+        </div>
+        ${m.youth_group_role ? `<div class="detail-field">
+          <div class="detail-field-label">Role</div>
+          <div class="detail-field-value">${m.youth_group_role}</div>
+        </div>` : ''}
+      </div>
     </div>` : ''}
   `;
 }

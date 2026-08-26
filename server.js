@@ -171,6 +171,9 @@ sheetsLib.ensureColumns('Members', ['Tags'])
 sheetsLib.ensureColumns('Members', ['youth_group_id'])
   .catch(err => console.error('Could not add youth_group_id column to Members:', err.message));
 
+sheetsLib.ensureColumns('Members', ['youth_group_role'])
+  .catch(err => console.error('Could not add youth_group_role column to Members:', err.message));
+
 sheetsLib.ensureColumns('Documents', ['DocumentID', 'UploadedBy', 'Tags', 'Source'])
   .catch(err => console.error('Could not add columns to Documents:', err.message));
 
