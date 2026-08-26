@@ -1542,17 +1542,21 @@ function _populateContactYGDropdown() {
   if (current) sel.value = current;
 }
 
-// Populate the linked-contact dropdown inside the YG modal
+// Populate the "Link an existing contact" dropdown in the YG modal.
+// Excludes contacts already in _ygLinkedContacts (not removed).
 function _populateYGContactDropdown() {
   const sel = document.getElementById('yg_contact_id');
   if (!sel) return;
-  const current = sel.value;
-  sel.innerHTML = '<option value="">— Select from contacts —</option>' +
-    _allMembersCache.map(m => {
-      const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || m.Email || m.MemberID;
-      return `<option value="${m.MemberID}">${name}</option>`;
-    }).join('');
-  if (current) sel.value = current;
+  const linked = new Set(
+    (_ygLinkedContacts || []).filter(c => c._status !== 'removed').map(c => c.id)
+  );
+  sel.innerHTML = '<option value="">— Link an existing contact… —</option>' +
+    _allMembersCache
+      .filter(m => !linked.has(m.MemberID))
+      .map(m => {
+        const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || m.Email || m.MemberID;
+        return `<option value="${m.MemberID}">${escHtml(name)}</option>`;
+      }).join('');
 }
 
 // ── View switcher ─────────────────────────────────────────────────────────────
@@ -1590,7 +1594,12 @@ function ygCard(g, idx) {
   const loc    = [g.city, g.state].filter(Boolean).join(', ');
   const tags   = g.tags ? g.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
   const isPartner = g.category === 'Partner';
-  const pc = g.primary_contact_name || '';
+  // Resolve primary contact name from members cache when stored value looks like a raw ID
+  let pc = g.primary_contact_name || '';
+  if (g.primary_contact_id && (!pc || /^M-/.test(pc))) {
+    const m = (_allMembersCache || []).find(x => x.MemberID === g.primary_contact_id);
+    if (m) pc = [m.FirstName, m.LastName].filter(Boolean).join(' ') || m.Email || '';
+  }
   return `
     <div class="yg-card" role="button" tabindex="0"
          onclick="openYGPanel(_youthGroupsCache[${idx}])"
@@ -1627,9 +1636,15 @@ async function openYGPanel(g) {
     const isPartner = detail.category === 'Partner';
     const contacts  = detail.contacts || [];
 
+    // primary_contact_name is server-resolved, but guard against raw M- IDs stored in old records
+    let pcName = detail.primary_contact_name || '';
+    if (detail.primary_contact_id && (!pcName || /^M-/.test(pcName))) {
+      const linked = (detail.contacts || []).find(m => m.MemberID === detail.primary_contact_id);
+      if (linked) pcName = [linked.FirstName, linked.LastName].filter(Boolean).join(' ') || linked.Email || '';
+    }
     const pcHtml = detail.primary_contact_id
-      ? `<a href="/members/${encodeURIComponent(detail.primary_contact_id)}">${detail.primary_contact_name || detail.primary_contact_id}</a>`
-      : (detail.primary_contact_name || '—');
+      ? `<a href="/members/${encodeURIComponent(detail.primary_contact_id)}">${pcName || detail.primary_contact_id}</a>`
+      : (pcName || '—');
 
     body.innerHTML = `
       <div class="yg-panel-title">
@@ -1662,11 +1677,18 @@ async function openYGPanel(g) {
         </div>
         ${contacts.length ? contacts.map(m => {
           const cname = [m.FirstName, m.LastName].filter(Boolean).join(' ') || m.Email || '—';
+          const isPrimary = m.MemberID === detail.primary_contact_id;
+          const roleLabel = m.youth_group_role ? `<span style="font-size:10.5px;color:var(--text-dim);">${escHtml(m.youth_group_role)}</span>` : '';
+          const primaryBadge = isPrimary ? `<span class="yg-lc-primary-badge">Primary</span>` : '';
           return `<a href="/members/${encodeURIComponent(m.MemberID)}" class="yg-contact-row">
             ${avatarHtml(cname, null)}
-            <div class="contact-info"><div class="contact-name">${cname}</div><div class="contact-email">${m.Email || '—'}</div></div>
+            <div class="contact-info">
+              <div class="contact-name">${escHtml(cname)}</div>
+              <div class="contact-email">${m.Email || '—'} ${roleLabel}</div>
+            </div>
+            ${primaryBadge}
           </a>`;
-        }).join('') : `<div style="color:var(--text-muted);font-size:13px;">No contacts linked yet. Edit a contact and assign this group.</div>`}
+        }).join('') : `<div style="color:var(--text-muted);font-size:13px;">No contacts linked yet. Use "Edit Group" to add contacts.</div>`}
       </div>
 
       ${detail.instagram_handle ? `
@@ -1700,6 +1722,10 @@ function closeYGPanel() {
 // ── Youth Group create / edit modal ───────────────────────────────────────────
 let _ygModalGroup = null;
 
+// Linked contacts state for the modal.
+// Each entry: { id, name, email, role, isPrimary, _status: 'original'|'added'|'removed', _origRole }
+let _ygLinkedContacts = [];
+
 function openYGModal(g) {
   _ygModalGroup = g || null;
   const isEdit = !!g;
@@ -1712,14 +1738,46 @@ function openYGModal(g) {
   document.getElementById('yg_city').value       = g?.city                  || '';
   document.getElementById('yg_state').value      = g?.state                 || '';
   document.getElementById('yg_zip').value        = g?.zip                   || '';
-  document.getElementById('yg_pc_name').value    = g?.primary_contact_name  || '';
-  document.getElementById('yg_pc_phone').value   = g?.primary_contact_phone || '';
-  document.getElementById('yg_pc_email').value   = g?.primary_contact_email || '';
   document.getElementById('yg_instagram').value  = g?.instagram_handle      || '';
   document.getElementById('yg_tags').value       = g?.tags                  || '';
   document.getElementById('yg_notes').value      = g?.notes                 || '';
-  _populateYGContactDropdown();
-  document.getElementById('yg_contact_id').value = g?.primary_contact_id    || '';
+
+  // ── Initialise linked contacts from the group's contact list ─────────────
+  if (isEdit && Array.isArray(g.contacts)) {
+    _ygLinkedContacts = g.contacts.map(m => ({
+      id:       m.MemberID,
+      name:     [m.FirstName, m.LastName].filter(Boolean).join(' ') || m.Email || m.MemberID,
+      email:    m.Email || '',
+      role:     m.youth_group_role || '',
+      isPrimary: m.MemberID === (g.primary_contact_id || ''),
+      _status:  'original',
+      _origRole: m.youth_group_role || ''
+    }));
+    // Ensure exactly one primary (the stored primary_contact_id wins)
+    const hasPrimary = _ygLinkedContacts.some(c => c.isPrimary);
+    if (!hasPrimary && g.primary_contact_id) {
+      // primary_contact_id not in contacts list — could be a dangling ref; keep it tracked
+      _ygLinkedContacts.push({
+        id: g.primary_contact_id,
+        name: g.primary_contact_name || g.primary_contact_id,
+        email: g.primary_contact_email || '',
+        role: '',
+        isPrimary: true,
+        _status: 'original',
+        _origRole: ''
+      });
+    }
+  } else {
+    _ygLinkedContacts = [];
+  }
+
+  // Reset free-text new contact section
+  document.getElementById('yg_pc_name').value    = '';
+  document.getElementById('yg_pc_phone').value   = '';
+  document.getElementById('yg_pc_email').value   = '';
+  document.getElementById('yg_pc_role_new').value = '';
+  document.getElementById('yg_pc_new_is_primary').checked = false;
+  document.getElementById('yg_new_contact_fields').style.display = 'none';
 
   // Restore autocomplete hidden state for existing groups
   document.getElementById('yg_lat').value           = g?.lat           || '';
@@ -1727,11 +1785,101 @@ function openYGModal(g) {
   document.getElementById('yg_location_type').value = g?.location_type || '';
   if (typeof ygAcSetStatus === 'function') ygAcSetStatus(g?.location_type || '');
 
+  _populateYGContactDropdown();
+  ygRenderLinkedList();
+
   document.getElementById('ygModalSuccess').style.display = 'none';
   document.getElementById('ygModalNav').style.display    = 'flex';
   document.getElementById('ygModalOverlay').classList.add('open');
   document.getElementById('ygModal').classList.add('open');
   setTimeout(() => document.getElementById('yg_name').focus(), 80);
+}
+
+// ── Linked contacts list rendering ───────────────────────────────────────────
+const YG_ROLES = ['', 'Member', 'Leader', 'Youth Pastor', 'Parent', 'Other'];
+
+function ygRenderLinkedList() {
+  const container = document.getElementById('yg_linked_list');
+  if (!container) return;
+  const visible = _ygLinkedContacts.filter(c => c._status !== 'removed');
+  if (!visible.length) {
+    container.innerHTML = `<div style="font-size:12px;color:var(--text-muted);padding:6px 0;">No contacts linked yet.</div>`;
+    return;
+  }
+  container.innerHTML = visible.map(c => {
+    const roleOpts = YG_ROLES.map(r =>
+      `<option value="${r}" ${c.role === r ? 'selected' : ''}>${r || '— Role —'}</option>`
+    ).join('');
+    return `<div class="yg-lc-row" id="yglc-${c.id}">
+      <input type="radio" class="yg-lc-primary-radio" name="yg_primary" value="${c.id}"
+             title="Make primary contact" ${c.isPrimary ? 'checked' : ''}
+             onchange="ygSetPrimary('${c.id}')">
+      <div class="yg-lc-info">
+        <span class="yg-lc-name">${escHtml(c.name)}</span>
+        ${c.email ? `<span class="yg-lc-email">${escHtml(c.email)}</span>` : ''}
+      </div>
+      ${c.isPrimary ? `<span class="yg-lc-primary-badge">Primary</span>` : ''}
+      <select class="yg-lc-role-sel" onchange="ygChangeRole('${c.id}', this.value)">${roleOpts}</select>
+      <button type="button" class="btn btn-outline btn-sm yg-lc-remove" onclick="ygRemoveLinked('${c.id}')" title="Unlink">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function ygSetPrimary(id) {
+  _ygLinkedContacts.forEach(c => { c.isPrimary = c.id === id; });
+  ygRenderLinkedList();
+}
+
+function ygChangeRole(id, role) {
+  const c = _ygLinkedContacts.find(x => x.id === id);
+  if (c) c.role = role;
+}
+
+function ygRemoveLinked(id) {
+  const c = _ygLinkedContacts.find(x => x.id === id);
+  if (!c) return;
+  if (c._status === 'added') {
+    _ygLinkedContacts = _ygLinkedContacts.filter(x => x.id !== id);
+  } else {
+    c._status = 'removed';
+  }
+  // If we removed the primary, clear the primary flag
+  if (c.isPrimary) {
+    c.isPrimary = false;
+    const first = _ygLinkedContacts.find(x => x._status !== 'removed');
+    if (first) first.isPrimary = true;
+  }
+  _populateYGContactDropdown();
+  ygRenderLinkedList();
+}
+
+function ygAddLinkedContact() {
+  const sel = document.getElementById('yg_contact_id');
+  const id  = sel?.value;
+  if (!id) return;
+  if (_ygLinkedContacts.some(c => c.id === id && c._status !== 'removed')) return;
+
+  const m = (_allMembersCache || []).find(x => x.MemberID === id);
+  if (!m) return;
+
+  const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || m.Email || id;
+  const noPrimary = !_ygLinkedContacts.some(c => c._status !== 'removed' && c.isPrimary);
+
+  _ygLinkedContacts.push({
+    id, name, email: m.Email || '', role: '', isPrimary: noPrimary,
+    _status: 'added', _origRole: ''
+  });
+
+  sel.value = '';
+  _populateYGContactDropdown();
+  ygRenderLinkedList();
+}
+
+function ygToggleNewContact() {
+  const fields = document.getElementById('yg_new_contact_fields');
+  if (!fields) return;
+  const showing = fields.style.display !== 'none';
+  fields.style.display = showing ? 'none' : 'flex';
 }
 
 function closeYGModal() {
@@ -1754,47 +1902,106 @@ async function submitYGForm() {
     return;
   }
 
-  const body = {
-    youth_group_name:      name,
-    church_name:           church,
-    category:              document.getElementById('yg_category').value,
-    address:               document.getElementById('yg_address').value.trim(),
-    city:                  document.getElementById('yg_city').value.trim(),
-    state:                 document.getElementById('yg_state').value.trim(),
-    zip:                   document.getElementById('yg_zip').value.trim(),
-    primary_contact_id:    document.getElementById('yg_contact_id').value,
-    primary_contact_name:  document.getElementById('yg_pc_name').value.trim(),
-    primary_contact_phone: document.getElementById('yg_pc_phone').value.trim(),
-    primary_contact_email: document.getElementById('yg_pc_email').value.trim(),
-    instagram_handle:      igRaw,
-    tags:                  document.getElementById('yg_tags').value.trim(),
-    notes:                 document.getElementById('yg_notes').value.trim()
-  };
-  // Include autocomplete-captured coordinates when present
-  const acLat = document.getElementById('yg_lat').value;
-  const acLng = document.getElementById('yg_lng').value;
-  if (acLat && acLng) {
-    body.lat           = acLat;
-    body.lng           = acLng;
-    body.location_type = document.getElementById('yg_location_type').value || 'exact';
-  }
+  // ── Determine primary contact from the linked list ────────────────────────
+  const primaryEntry  = _ygLinkedContacts.find(c => c.isPrimary && c._status !== 'removed');
+  const primaryId     = primaryEntry?.id || '';
+
+  // ── Free-text new contact fields ─────────────────────────────────────────
+  const newName   = document.getElementById('yg_pc_name').value.trim();
+  const newPhone  = document.getElementById('yg_pc_phone').value.trim();
+  const newEmail  = document.getElementById('yg_pc_email').value.trim();
+  const newRole   = document.getElementById('yg_pc_role_new')?.value || '';
+  const newIsPrimary = document.getElementById('yg_pc_new_is_primary')?.checked || false;
 
   try {
     const isEdit = !!_ygModalGroup;
-    const url    = isEdit ? `/api/youth-groups/${encodeURIComponent(_ygModalGroup.id)}` : '/api/youth-groups';
-    const res    = await fetch(url, {
+    let groupId  = _ygModalGroup?.id || null;
+
+    // ── 1. Create or update the youth group record ────────────────────────
+    const body = {
+      youth_group_name:      name,
+      church_name:           church,
+      category:              document.getElementById('yg_category').value,
+      address:               document.getElementById('yg_address').value.trim(),
+      city:                  document.getElementById('yg_city').value.trim(),
+      state:                 document.getElementById('yg_state').value.trim(),
+      zip:                   document.getElementById('yg_zip').value.trim(),
+      primary_contact_id:    primaryId,
+      // Clear legacy free-text fields when a linked contact is primary;
+      // keep them only when there are no linked contacts (backwards-compat).
+      primary_contact_name:  primaryId ? '' : (newName || ''),
+      primary_contact_phone: primaryId ? '' : (newPhone || ''),
+      primary_contact_email: primaryId ? '' : (newEmail || ''),
+      instagram_handle:      igRaw,
+      tags:                  document.getElementById('yg_tags').value.trim(),
+      notes:                 document.getElementById('yg_notes').value.trim()
+    };
+    const acLat = document.getElementById('yg_lat').value;
+    const acLng = document.getElementById('yg_lng').value;
+    if (acLat && acLng) {
+      body.lat           = acLat;
+      body.lng           = acLng;
+      body.location_type = document.getElementById('yg_location_type').value || 'exact';
+    }
+
+    const url = isEdit ? `/api/youth-groups/${encodeURIComponent(groupId)}` : '/api/youth-groups';
+    const res = await fetch(url, {
       method:  isEdit ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(body)
     });
     const data = await res.json();
     if (!res.ok) { alert(data.error || 'Could not save youth group.'); return; }
+    if (!isEdit) groupId = data.id;
+
+    // ── 2. Apply linked contact changes ───────────────────────────────────
+    const memberPatch = (memberId, fields) =>
+      fetch(`/api/members/${encodeURIComponent(memberId)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields)
+      });
+
+    for (const c of _ygLinkedContacts) {
+      if (c._status === 'removed') {
+        await memberPatch(c.id, { youth_group_id: '', youth_group_role: '' });
+      } else if (c._status === 'added') {
+        await memberPatch(c.id, { youth_group_id: groupId, youth_group_role: c.role });
+      } else if (c._status === 'original' && c.role !== c._origRole) {
+        await memberPatch(c.id, { youth_group_role: c.role });
+      }
+    }
+
+    // ── 3. Create a new contact from free-text and link them ──────────────
+    if (newName || newEmail) {
+      const [firstName, ...rest] = newName.split(' ');
+      const createRes = await fetch('/api/members', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          FirstName: firstName || '', LastName: rest.join(' ') || '',
+          Email: newEmail, Phone: newPhone
+        })
+      });
+      if (createRes.ok) {
+        const newMember = await createRes.json();
+        await memberPatch(newMember.MemberID, {
+          youth_group_id:   groupId,
+          youth_group_role: newRole
+        });
+        // If this new contact is marked as primary, update the group
+        if (newIsPrimary) {
+          await fetch(`/api/youth-groups/${encodeURIComponent(groupId)}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ primary_contact_id: newMember.MemberID, primary_contact_name: '', primary_contact_phone: '', primary_contact_email: '' })
+          });
+        }
+      }
+    }
 
     const ok = document.getElementById('ygModalSuccess');
     ok.style.display = 'block';
     ok.textContent   = isEdit ? 'Youth group updated.' : 'Youth group added.';
     document.getElementById('ygModalNav').style.display = 'none';
-    await loadYouthGroups();
+    await Promise.all([loadYouthGroups(), loadMembers()]);
     setTimeout(() => {
       closeYGModal();
       if (isEdit) { closeYGPanel(); openYGPanel(data); }

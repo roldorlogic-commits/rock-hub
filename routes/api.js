@@ -329,7 +329,7 @@ router.post('/members/not-duplicate', requireBoard, async (req, res) => {
 
 router.patch('/members/:id', requireBoard, async (req, res) => {
   try {
-    const allowed = ['FirstName', 'LastName', 'Email', 'Phone', 'Tags', 'MembershipType', 'MembershipStatus', 'Notes', 'youth_group_id'];
+    const allowed = ['FirstName', 'LastName', 'Email', 'Phone', 'Tags', 'MembershipType', 'MembershipStatus', 'Notes', 'youth_group_id', 'youth_group_role'];
     const fields = {};
     for (const k of allowed) {
       if (req.body[k] !== undefined) fields[k] = req.body[k];

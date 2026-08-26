@@ -159,9 +159,6 @@
   if (document.readyState !== 'loading') attach();
   else document.addEventListener('DOMContentLoaded', attach);
 
-  // ── XSS-safe escaping ────────────────────────────────────────────────────
-  function escHtml(str) {
-    return String(str ?? '').replace(/[&<>"']/g,
-      c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-  }
+  // Use the shared escHtml from api.js (loaded before this script)
+  const escHtml = window.escHtml || (s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
 })();

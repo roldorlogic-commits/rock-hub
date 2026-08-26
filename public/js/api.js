@@ -121,6 +121,8 @@ function priorityPill(p) {
 function _esc(v) {
   return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+// Alias used by board.js and yg-autocomplete.js for XSS-safe output
+function escHtml(v) { return _esc(v); }
 
 function initials(name) {
   if (!name) return '?';

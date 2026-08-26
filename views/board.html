@@ -910,16 +910,43 @@
       <!-- Location accuracy indicator — set by autocomplete JS -->
       <div id="yg_loc_status" style="display:none;"></div>
       <hr style="border:none;border-top:1px solid var(--gold-line);margin:4px 0;">
-      <div class="modal-title" style="font-size:13px;font-weight:600;margin:0;">Primary Contact</div>
-      <label>Linked Contact (optional)
-        <select id="yg_contact_id"><option value="">— Select from contacts —</option></select>
-      </label>
-      <p style="font-size:11px;color:var(--text-muted);margin:-8px 0 0;">Or fill in free-text fields below if contact isn't in the system yet.</p>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <label>Name<input type="text" id="yg_pc_name" placeholder="Jane Smith"></label>
-        <label>Phone<input type="tel" id="yg_pc_phone" placeholder="(555) 000-0000"></label>
+      <div class="modal-title" style="font-size:13px;font-weight:600;margin:0;">Linked Contacts</div>
+      <!-- Existing linked contacts list — rendered by ygRenderLinkedList() -->
+      <div id="yg_linked_list" style="display:flex;flex-direction:column;gap:6px;"></div>
+      <!-- Add an existing contact -->
+      <div style="display:flex;gap:8px;align-items:flex-end;">
+        <label style="flex:1;margin:0;">
+          <select id="yg_contact_id"><option value="">— Link an existing contact… —</option></select>
+        </label>
+        <button type="button" class="btn btn-outline btn-sm" onclick="ygAddLinkedContact()" style="white-space:nowrap;">+ Link</button>
       </div>
-      <label>Email<input type="email" id="yg_pc_email" placeholder="jane@example.com"></label>
+      <!-- Free-text: create a new contact and link them -->
+      <div id="yg_new_contact_wrap">
+        <button type="button" class="btn-link-sm" id="yg_new_contact_toggle" onclick="ygToggleNewContact()" style="font-size:11px;color:var(--text-muted);background:none;border:none;cursor:pointer;padding:0;text-decoration:underline;">+ Add someone not in the system…</button>
+        <div id="yg_new_contact_fields" style="display:none;flex-direction:column;gap:10px;margin-top:8px;">
+          <p style="font-size:11px;color:var(--text-muted);margin:0;">A new contact record will be created and linked to this group.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <label>Name<input type="text" id="yg_pc_name" placeholder="Jane Smith"></label>
+            <label>Phone<input type="tel" id="yg_pc_phone" placeholder="(555) 000-0000"></label>
+          </div>
+          <label>Email<input type="email" id="yg_pc_email" placeholder="jane@example.com"></label>
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+            <label style="flex:1;margin:0;">Role <span style="font-weight:400;color:var(--text-muted);">(optional)</span>
+              <select id="yg_pc_role_new" style="margin-top:4px;">
+                <option value="">— Role —</option>
+                <option value="Member">Member</option>
+                <option value="Leader">Leader</option>
+                <option value="Youth Pastor">Youth Pastor</option>
+                <option value="Parent">Parent</option>
+                <option value="Other">Other</option>
+              </select>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin:0;padding-top:18px;white-space:nowrap;">
+              <input type="checkbox" id="yg_pc_new_is_primary"> Make primary
+            </label>
+          </div>
+        </div>
+      </div>
       <hr style="border:none;border-top:1px solid var(--gold-line);margin:4px 0;">
       <label>Instagram Handle <span style="color:var(--text-muted);font-weight:400;">(no @)</span><input type="text" id="yg_instagram" placeholder="zionsangelyouth" autocomplete="off" spellcheck="false"></label>
       <label>Tags <span style="color:var(--text-muted);font-weight:400;">(comma-separated)</span><input type="text" id="yg_tags" placeholder="e.g. Active, East Side"></label>
