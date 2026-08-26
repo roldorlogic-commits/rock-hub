@@ -27,14 +27,104 @@ function canEditTask(task, user) {
 // ── My Sign-Ups (volunteer dashboard widget) ────────────────────────────────
 router.get('/my-registrations', async (req, res) => {
   try {
-    const [regs, events] = await Promise.all([sheets.getEventRegistrations(), sheets.getEvents()]);
+    const [regs, events, signups, members] = await Promise.all([
+      sheets.getEventRegistrations(), sheets.getEvents(),
+      sheets.getVolunteerSignups(), sheets.getMembers()
+    ]);
     const myEmail = (req.user.email || '').toLowerCase();
-    const mine = regs.filter(r => r.Email?.toLowerCase() === myEmail);
+
+    // Cross-reference by MemberID so board-assigned rows (which may use a
+    // different email field than the volunteer's login email) still surface.
+    const myMember   = members.find(m => (m.Email || '').toLowerCase() === myEmail);
+    const myMemberID = myMember?.MemberID || '';
+
+    // VolunteerSignups for this user — carries position/role info.
+    const myVolSignups = signups.filter(s => (s.Email || '').toLowerCase() === myEmail);
+
+    const mine = regs.filter(r =>
+      (r.Email || '').toLowerCase() === myEmail ||
+      (myMemberID && r.MemberID === myMemberID)
+    );
+
+    const registeredEventIds = new Set(mine.map(r => r.EventID));
+
     const withEvent = mine.map(r => {
-      const ev = events.find(e => e.EventID === r.EventID) || {};
-      return { ...r, EventName: ev.EventName || r.EventID, StartDate: ev.StartDate || '', Location: ev.Location || '' };
+      const ev         = events.find(e => e.EventID === r.EventID) || {};
+      const volSignup  = myVolSignups.find(s => s.EventID === r.EventID && s.Status === 'approved');
+      const role       = volSignup?.PositionTitle || r.Role || '';
+      return {
+        ...r,
+        EventName:     ev.EventName  || r.EventID,
+        StartDate:     ev.StartDate  || '',
+        Location:      ev.Location   || '',
+        PhotoURL:      ev.PhotoURL   || '',
+        PositionTitle: role,
+        SignupType:    volSignup ? 'assigned' : 'signup'
+      };
     });
-    res.json(withEvent);
+
+    // Include any approved VolunteerSignups that have no matching EventRegistration
+    // (can happen when the upsert used a different email than the login email).
+    const extras = myVolSignups
+      .filter(s => !registeredEventIds.has(s.EventID))
+      .map(s => {
+        const ev = events.find(e => e.EventID === s.EventID) || {};
+        return {
+          RegistrationID: s.SignupID,
+          EventID:        s.EventID,
+          EventName:      ev.EventName  || s.EventID,
+          StartDate:      ev.StartDate  || '',
+          Location:       ev.Location   || '',
+          PhotoURL:       ev.PhotoURL   || '',
+          Status:         s.Status === 'approved' ? 'Confirmed' : 'Pending',
+          PositionTitle:  s.PositionTitle || '',
+          Role:           s.PositionTitle || '',
+          SignupType:     'assigned',
+          Email:          s.Email,
+          ContactName:    s.ContactName
+        };
+      });
+
+    res.json([...withEvent, ...extras]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── My Team — volunteers sharing events with the signed-in user ─────────────
+// Returns teammates' names and youth-group affiliation only; no phone/email.
+router.get('/my-team', async (req, res) => {
+  try {
+    const myEmail = (req.user.email || '').toLowerCase();
+    const [regs, members, youthGroups] = await Promise.all([
+      sheets.getEventRegistrations(),
+      sheets.getMembers(),
+      sheets.getYouthGroups()
+    ]);
+
+    // Events this volunteer is signed up for
+    const myEventIds = new Set(
+      regs.filter(r => (r.Email || '').toLowerCase() === myEmail).map(r => r.EventID)
+    );
+    if (!myEventIds.size) return res.json([]);
+
+    // Other registrants on those same events
+    const seen = new Set();
+    const teammates = [];
+    for (const r of regs) {
+      if (!myEventIds.has(r.EventID)) continue;
+      if ((r.Email || '').toLowerCase() === myEmail) continue;
+      const key = (r.Email || r.MemberID || r.FirstName).toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const member = members.find(m => (m.Email || '').toLowerCase() === (r.Email || '').toLowerCase());
+      const ygId   = member?.youth_group_id || '';
+      const yg     = ygId ? youthGroups.find(g => g.id === ygId) : null;
+      teammates.push({
+        name:       [r.FirstName, r.LastName].filter(Boolean).join(' ') || r.Email || '—',
+        youthGroup: yg ? (yg.youth_group_name || yg.church_name || '') : ''
+      });
+    }
+    res.json(teammates);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

@@ -35,9 +35,15 @@ function mySignupFor(eventId) {
 function renderMySignupsList(signups) {
   if (!signups.length) return emptyState('No sign-ups yet — browse Events to find something to get involved with.');
   return signups.map(r => {
-    const cls = r.Status === 'Confirmed' ? 'active' : r.Status === 'Waitlisted' ? 'pending' : 'pending';
+    const cls  = r.Status === 'Confirmed' ? 'active' : r.Status === 'Waitlisted' ? 'pending' : 'pending';
+    const role = r.PositionTitle || r.Role || '';
+    const typeLabel = r.SignupType === 'assigned' ? 'Assigned' : 'Signed Up';
+    const href = r.EventID ? `/events/${encodeURIComponent(r.EventID)}` : null;
+    const rowAttrs = href
+      ? `class="event-row clickable" role="button" tabindex="0" onclick="location.href='${href}'" onkeydown="if(event.key==='Enter')location.href='${href}'"`
+      : `class="event-row"`;
     return `
-      <div class="event-row">
+      <div ${rowAttrs}>
         <div class="date-block">
           <span class="month">${fmtDateBlock(r.StartDate).month}</span>
           <span class="day">${fmtDateBlock(r.StartDate).day}</span>
@@ -47,7 +53,8 @@ function renderMySignupsList(signups) {
           <div class="event-meta">
             <span>${fmtDate(r.StartDate)}</span>
             ${r.Location ? `<span class="event-meta-sep">·</span><span>${r.Location}</span>` : ''}
-            ${r.Role ? `<span class="event-meta-sep">·</span><span>${r.Role}</span>` : ''}
+            <span class="event-meta-sep">·</span><span>${typeLabel}</span>
+            ${role ? `<span class="event-meta-sep">·</span><span style="color:var(--gold);">${role}</span>` : ''}
           </div>
         </div>
         <span class="status-pill ${cls}">${r.Status}</span>
@@ -130,20 +137,22 @@ function vEventRow(ev, withSignup = false) {
         : `<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();signUp('${eventId}')">Sign Up</button>`)
     : statusPill(ev.Status || 'Upcoming');
 
+  const desc = ev.Description ? `<div class="event-desc">${_esc(ev.Description.slice(0, 120))}${ev.Description.length > 120 ? '…' : ''}</div>` : '';
   return `
     <div ${row}>
-      ${ev.PhotoURL ? `<img src="${ev.PhotoURL}" alt="" class="event-row-photo">` : ''}
       <div class="date-block">
         <span class="month">${db.month}</span>
         <span class="day">${db.day}</span>
       </div>
       <div class="event-info">
+        ${ev.PhotoURL ? `<img src="${ev.PhotoURL}" alt="" class="event-vol-photo">` : ''}
         <div class="event-name">${ev.EventName || 'Untitled Event'}</div>
         <div class="event-meta">
           <span>${fmtDate(ev.StartDate)}</span>
           ${ev.Location ? `<span class="event-meta-sep">·</span><span>${ev.Location}</span>` : ''}
         </div>
         ${ev.CoordinatorName ? `<div class="event-meta" style="margin-top:2px;">Coordinator: ${ev.CoordinatorName}</div>` : ''}
+        ${desc}
       </div>
       ${action}
     </div>`;
@@ -293,27 +302,22 @@ async function loadResources() {
 }
 
 async function loadTeam() {
+  const el = document.getElementById('vTeam');
   try {
-    const vols = await apiFetch('/api/volunteers');
-    const el   = document.getElementById('vTeam');
-    el.innerHTML = vols.length
-      ? vols.slice(0, 10).map(v => {
-          const name = [v.FirstName, v.LastName].filter(Boolean).join(' ') || v.Email || '—';
-          return `
-            <div class="contact-row clickable" role="button" tabindex="0"
-                 onclick="location.href='/volunteers/${encodeURIComponent(v.VolunteerID)}'"
-                 onkeydown="if(event.key==='Enter')location.href='/volunteers/${encodeURIComponent(v.VolunteerID)}'">
-              ${avatarHtml(name, null)}
-              <div class="contact-info">
-                <div class="contact-name">${name}</div>
-                <div class="contact-email">${v.PreferredRole || v.Skills || '—'}</div>
-              </div>
-              <span class="status-pill ${v.Status?.toLowerCase() === 'active' ? 'active' : 'inactive'}">${v.Status || 'Active'}</span>
-            </div>`;
-        }).join('')
-      : emptyState('No team members yet — volunteers will show up here once they join.');
+    const teammates = await apiFetch('/api/my-team');
+    el.innerHTML = teammates.length
+      ? teammates.map(t => `
+          <div class="contact-row">
+            ${avatarHtml(t.name, null)}
+            <div class="contact-info">
+              <div class="contact-name">${_esc(t.name)}</div>
+              ${t.youthGroup ? `<div class="contact-email">${_esc(t.youthGroup)}</div>` : ''}
+            </div>
+          </div>`)
+        .join('')
+      : emptyState('No teammates yet — you\'ll see volunteers who are signed up for the same events as you.');
   } catch (e) {
-    document.getElementById('vTeam').innerHTML = emptyState('Could not load your team right now. Please try again shortly.');
+    el.innerHTML = emptyState('Could not load your team right now. Please try again shortly.');
   }
 }
 
@@ -387,6 +391,10 @@ function renderMyProfile(vol) {
       ${row('Skills', vol.Skills)}
       ${row('Availability', vol.AvailabilityDays)}
       ${row('Emergency Contact', ecLine)}
+      <div style="display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--gold-line);">
+        <span style="min-width:140px;color:var(--text-muted);font-size:0.875rem;">Notifications</span>
+        <span style="flex:1;"><a href="#" onclick="openNotifPrefs();return false;" style="color:var(--gold);font-size:0.875rem;">Edit notification preferences →</a></span>
+      </div>
     </div>`;
 }
 

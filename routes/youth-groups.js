@@ -274,8 +274,31 @@ router.patch('/youth-groups/:id', requireBoard, async (req, res) => {
     }
 
     fields.updated_at = todayStr();
+
+    // Before updating, read the current group to detect primary_contact_id changes.
+    const existing = await sheets.getYouthGroupById(req.params.id).catch(() => null);
+
     const updated = await sheets.updateRowFields('YouthGroups', 'id', req.params.id, fields);
     if (!updated) return res.status(404).json({ error: 'Youth group not found.' });
+
+    // ── Sync primary_contact_id ↔ Members.youth_group_id ─────────────────────
+    if (fields.primary_contact_id !== undefined) {
+      const newContactId = fields.primary_contact_id || '';
+      const oldContactId = existing?.primary_contact_id || '';
+
+      // Unlink the old primary contact (clear their youth_group_id if it points here)
+      if (oldContactId && oldContactId !== newContactId) {
+        const oldMember = await sheets.getMemberById(oldContactId).catch(() => null);
+        if (oldMember && oldMember.youth_group_id === req.params.id) {
+          await sheets.updateRowFields('Members', 'MemberID', oldContactId, { youth_group_id: '' });
+        }
+      }
+      // Link the new primary contact
+      if (newContactId) {
+        await sheets.updateRowFields('Members', 'MemberID', newContactId, { youth_group_id: req.params.id });
+      }
+    }
+
     res.json(updated);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

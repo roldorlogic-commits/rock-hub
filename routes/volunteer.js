@@ -117,4 +117,15 @@ router.put('/events/:id/positions/:posId/signups/:signupId', requireBoard, async
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Permanently removes a signup from this position (event-scoped; the contact record is untouched).
+router.delete('/events/:id/positions/:posId/signups/:signupId', requireBoard, async (req, res) => {
+  try {
+    const ok = await volunteer.deleteSignup(req.params.signupId);
+    if (!ok) return res.status(404).json({ error: 'Signup not found.' });
+    const positions = await volunteer.getPositionsByEvent(req.params.id);
+    const position  = positions.find(p => p.PositionID === req.params.posId) || null;
+    res.json({ ok: true, position });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

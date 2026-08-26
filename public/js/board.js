@@ -35,33 +35,34 @@ async function loadEvents() {
     eventsById = Object.fromEntries(events.filter(e => e.EventID).map(e => [e.EventID, e]));
     renderEventsPreview(events);
     renderEventsFull(events);
-    renderProgress(events);
   } catch (e) {
     document.getElementById('eventsPreview').innerHTML = emptyState('Could not load events right now. Please try again shortly.');
   }
 }
 
 function eventRow(ev) {
-  const db  = fmtDateBlock(ev.StartDate);
+  const db   = fmtDateBlock(ev.StartDate);
   const href = ev.EventID ? `/events/${encodeURIComponent(ev.EventID)}` : null;
-  const row  = href
-    ? `class="event-row clickable" role="button" tabindex="0" onclick="location.href='${href}'" onkeydown="if(event.key==='Enter')location.href='${href}'"`
-    : `class="event-row"`;
+  const clickAttrs = href
+    ? `role="button" tabindex="0" onclick="location.href='${href}'" onkeydown="if(event.key==='Enter')location.href='${href}'"`
+    : '';
   return `
-    <div ${row}>
-      ${ev.PhotoURL ? `<img src="${ev.PhotoURL}" alt="" class="event-row-photo">` : ''}
-      <div class="date-block">
-        <span class="month">${db.month}</span>
-        <span class="day">${db.day}</span>
-      </div>
-      <div class="event-info">
-        <div class="event-name">${ev.EventName || 'Untitled Event'}</div>
-        <div class="event-meta">
-          <span>${fmtDate(ev.StartDate)}</span>
-          ${ev.Location  ? `<span class="event-meta-sep">·</span><span>${ev.Location}</span>` : ''}
-          ${ev.Status    ? `<span class="event-meta-sep">·</span>${statusPill(ev.Status)}` : ''}
+    <div class="event-item${href ? ' clickable' : ''}" ${clickAttrs}>
+      ${ev.PhotoURL ? `<img src="${ev.PhotoURL}" alt="" class="event-item-photo">` : ''}
+      <div class="event-row">
+        <div class="date-block">
+          <span class="month">${db.month}</span>
+          <span class="day">${db.day}</span>
         </div>
-        ${ev.CoordinatorName ? `<div class="event-meta" style="margin-top:2px;">Coordinator: ${ev.CoordinatorName}</div>` : ''}
+        <div class="event-info">
+          <div class="event-name">${ev.EventName || 'Untitled Event'}</div>
+          <div class="event-meta">
+            <span>${fmtDate(ev.StartDate)}</span>
+            ${ev.Location  ? `<span class="event-meta-sep">·</span><span>${ev.Location}</span>` : ''}
+            ${ev.Status    ? `<span class="event-meta-sep">·</span>${statusPill(ev.Status)}` : ''}
+          </div>
+          ${ev.CoordinatorName ? `<div class="event-meta" style="margin-top:2px;">Coordinator: ${ev.CoordinatorName}</div>` : ''}
+        </div>
       </div>
     </div>`;
 }
@@ -80,55 +81,33 @@ function renderEventsFull(events) {
   el.innerHTML = sorted.length
     ? sorted.map(ev => {
         const href = ev.EventID ? `/events/${encodeURIComponent(ev.EventID)}` : null;
-        const row  = href
-          ? `class="event-row clickable" role="button" tabindex="0" onclick="location.href='${href}'" onkeydown="if(event.key==='Enter')location.href='${href}'"`
-          : `class="event-row"`;
+        const clickAttrs = href
+          ? `role="button" tabindex="0" onclick="location.href='${href}'" onkeydown="if(event.key==='Enter')location.href='${href}'"`
+          : '';
         return `
-          <div ${row}>
-            ${ev.PhotoURL ? `<img src="${ev.PhotoURL}" alt="" class="event-row-photo">` : ''}
-            <div class="date-block">
-              <span class="month">${fmtDateBlock(ev.StartDate).month}</span>
-              <span class="day">${fmtDateBlock(ev.StartDate).day}</span>
-            </div>
-            <div class="event-info">
-              <div class="event-name">${ev.EventName || '—'}</div>
-              <div class="event-meta">
-                <span>${fmtDate(ev.StartDate)}</span>
-                ${ev.Location ? `<span class="event-meta-sep">·</span><span>${ev.Location}</span>` : ''}
-                ${ev.Capacity ? `<span class="event-meta-sep">·</span><span>Cap: ${ev.Capacity}</span>` : ''}
+          <div class="event-item${href ? ' clickable' : ''}" ${clickAttrs}>
+            ${ev.PhotoURL ? `<img src="${ev.PhotoURL}" alt="" class="event-item-photo">` : ''}
+            <div class="event-row">
+              <div class="date-block">
+                <span class="month">${fmtDateBlock(ev.StartDate).month}</span>
+                <span class="day">${fmtDateBlock(ev.StartDate).day}</span>
               </div>
-            </div>
-            <div style="flex-shrink:0;text-align:right;">
-              ${statusPill(ev.Status || 'Upcoming')}
-              ${ev.CoordinatorName ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">${ev.CoordinatorName}</div>` : ''}
+              <div class="event-info">
+                <div class="event-name">${ev.EventName || '—'}</div>
+                <div class="event-meta">
+                  <span>${fmtDate(ev.StartDate)}</span>
+                  ${ev.Location ? `<span class="event-meta-sep">·</span><span>${ev.Location}</span>` : ''}
+                  ${ev.Capacity ? `<span class="event-meta-sep">·</span><span>Cap: ${ev.Capacity}</span>` : ''}
+                </div>
+              </div>
+              <div style="flex-shrink:0;text-align:right;">
+                ${statusPill(ev.Status || 'Upcoming')}
+                ${ev.CoordinatorName ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">${ev.CoordinatorName}</div>` : ''}
+              </div>
             </div>
           </div>`;
       }).join('')
     : emptyState('No events yet. Add rows to the Events sheet in Google Sheets.');
-}
-
-function renderProgress(events) {
-  const el = document.getElementById('progressSection');
-  const withCap = events.filter(e => e.EventName && parseInt(e.Capacity) > 0);
-  if (!withCap.length) {
-    el.innerHTML = emptyState('Add Capacity to events to see registration progress.');
-    return;
-  }
-  el.innerHTML = withCap.slice(0, 6).map(ev => {
-    const capacity   = parseInt(ev.Capacity) || 0;
-    const registered = parseInt(ev.RegisteredCount) || 0;
-    const pct = capacity > 0 ? Math.min(100, Math.round((registered / capacity) * 100)) : 0;
-    return `
-      <div class="progress-item">
-        <div class="progress-name">${ev.EventName}</div>
-        <div class="progress-wrap">
-          <div class="progress-track">
-            <div class="progress-fill" style="width:${pct}%"></div>
-          </div>
-        </div>
-        <div class="progress-pct">${registered} / ${capacity} registered</div>
-      </div>`;
-  }).join('');
 }
 
 // ── Tasks ────────────────────────────────────────────────────────────────────

@@ -1099,18 +1099,32 @@ async function _renderSignupTable(posId) {
 function _signupRow(posId, s) {
   const status = (s.Status || 'pending').toLowerCase();
   const cls = status === 'approved' ? 'confirmed' : status === 'rejected' ? 'cancelled' : 'pending';
-  const actions = status === 'pending'
+  const statusActions = status === 'pending'
     ? `<button class="btn btn-sm btn-gold" onclick="setSignupStatus('${posId}','${s.SignupID}','approved')">Approve</button>
        <button class="btn btn-sm btn-outline" onclick="setSignupStatus('${posId}','${s.SignupID}','rejected')">Reject</button>`
     : `<button class="btn btn-sm btn-outline" onclick="setSignupStatus('${posId}','${s.SignupID}','pending')" title="Reset to pending">Reset</button>`;
+  const deleteBtn = `<button class="btn btn-sm" style="color:#ff6363;border-color:#ff636344;margin-left:4px;" onclick="deleteVolSignup('${posId}','${s.SignupID}')" title="Remove from list">Delete</button>`;
   return `<tr>
     <td>${_esc(s.ContactName || '—')}</td>
     <td>${_esc(s.Email || '')}</td>
     <td>${_esc(s.Phone || '')}</td>
     <td><span class="status-pill ${cls}" style="font-size:10px;">${status.toUpperCase()}</span></td>
     <td style="white-space:nowrap;">${s.SignedUpAt ? fmtDate(s.SignedUpAt) : '—'}</td>
-    <td style="white-space:nowrap;">${actions}</td>
+    <td style="white-space:nowrap;">${statusActions}${deleteBtn}</td>
   </tr>`;
+}
+
+async function deleteVolSignup(posId, signupId) {
+  if (!confirm('Remove this signup from the list? The contact record is not deleted.')) return;
+  try {
+    const res = await fetch(
+      `/api/events/${encodeURIComponent(currentEvent.EventID)}/positions/${encodeURIComponent(posId)}/signups/${encodeURIComponent(signupId)}`,
+      { method: 'DELETE' }
+    );
+    if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'Could not delete signup.'); return; }
+    _volExpanded.add(posId);
+    await loadVolunteers();
+  } catch (e) { alert('Network error — please try again.'); }
 }
 
 async function setSignupStatus(posId, signupId, status) {

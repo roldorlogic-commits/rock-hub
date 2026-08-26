@@ -335,8 +335,55 @@ router.patch('/members/:id', requireBoard, async (req, res) => {
       if (req.body[k] !== undefined) fields[k] = req.body[k];
     }
     if (!Object.keys(fields).length) return res.status(400).json({ error: 'Nothing to update.' });
+
+    // Read before so we know the old email (needed for cross-sheet sync).
+    const before = await sheets.getMemberById(req.params.id);
+    if (!before) return res.status(404).json({ error: 'Member not found.' });
+
     const updated = await sheets.updateRowFields('Members', 'MemberID', req.params.id, fields);
     if (!updated) return res.status(404).json({ error: 'Member not found.' });
+
+    // ── Propagate identity changes to Volunteers / VolunteerAuth ─────────────
+    const identityKeys = ['FirstName', 'LastName', 'Email', 'Phone'];
+    const hasIdentity  = identityKeys.some(k => fields[k] !== undefined);
+    if (hasIdentity) {
+      const oldEmail  = (before.Email  || '').toLowerCase();
+      const newEmail  = (fields.Email  !== undefined ? fields.Email : before.Email || '').toLowerCase();
+
+      const vols = await sheets.getVolunteers();
+      const volRow = oldEmail ? vols.find(v => (v.Email || '').toLowerCase() === oldEmail) : null;
+      if (volRow) {
+        const volFields = {};
+        if (fields.FirstName !== undefined) volFields.FirstName = fields.FirstName;
+        if (fields.LastName  !== undefined) volFields.LastName  = fields.LastName;
+        if (fields.Email     !== undefined) volFields.Email     = fields.Email;
+        if (fields.Phone     !== undefined) volFields.Phone     = fields.Phone;
+        await sheets.updateRowFields('Volunteers', 'VolunteerID', volRow.VolunteerID, volFields);
+      }
+
+      if (fields.Email && oldEmail && oldEmail !== newEmail) {
+        // Update VolunteerAuth login email
+        const authRow = await sheets.findVolunteerAuthByEmail(oldEmail);
+        if (authRow) {
+          await sheets.updateRowFields('VolunteerAuth', 'Email', authRow.Email, { Email: newEmail });
+        }
+        // Re-point all EventRegistrations from old to new email
+        const allRegs = await sheets.getEventRegistrations();
+        for (const r of allRegs) {
+          if ((r.Email || '').toLowerCase() === oldEmail) {
+            await sheets.updateRowFields('EventRegistrations', 'RegistrationID', r.RegistrationID, { Email: fields.Email });
+          }
+        }
+        // Re-point VolunteerSignups
+        const allSigs = await sheets.getVolunteerSignups();
+        for (const s of allSigs) {
+          if ((s.Email || '').toLowerCase() === oldEmail) {
+            await sheets.updateRowFields('VolunteerSignups', 'SignupID', s.SignupID, { Email: fields.Email });
+          }
+        }
+      }
+    }
+
     res.json(updated);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
