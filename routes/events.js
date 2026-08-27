@@ -13,6 +13,7 @@ const email   = require('../lib/email');
 const sms     = require('../lib/sms');
 const { requireAuth, requireBoard } = require('../middleware/auth');
 const { generateItineraryPdf }     = require('../lib/pdf');
+const calSync                      = require('../lib/calendar-sync');
 
 router.use(requireAuth);
 
@@ -262,6 +263,9 @@ router.post('/events', requireBoard, async (req, res) => {
     await sheets.appendRow('Events', fields);
     await createDefaultChecklist(eventId);
     res.json({ ok: true, EventID: eventId });
+    // Async — runs after response is sent; failure is logged, never fatal
+    calSync.syncEventToCalendar(fields)
+      .catch(err => console.error('[calendar-sync] create', eventId, err.message));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -279,6 +283,9 @@ router.patch('/events/:id', requireBoard, async (req, res) => {
     const updated = await sheets.updateRowFields('Events', 'EventID', req.params.id, { ...req.body, UpdatedAt: todayStr() });
     if (!updated) return res.status(404).json({ error: 'Event not found.' });
     res.json(updated);
+    // Sync calendar after response — uses stored CalendarEventID if present
+    calSync.syncEventToCalendar(updated)
+      .catch(err => console.error('[calendar-sync] patch', req.params.id, err.message));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -291,6 +298,21 @@ router.post('/events/:id/advance-status', requireBoard, async (req, res) => {
     const next = req.body?.status || STATUS_ORDER[Math.min(idx + 1, STATUS_ORDER.length - 1)];
     const updated = await sheets.updateRowFields('Events', 'EventID', req.params.id, { Status: next, UpdatedAt: todayStr() });
     res.json(updated);
+    // Keep calendar in sync on status changes
+    calSync.syncEventToCalendar(updated)
+      .catch(err => console.error('[calendar-sync] advance-status', req.params.id, err.message));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Cancel an event and remove it from the shared calendar.
+router.post('/events/:id/cancel', requireBoard, async (req, res) => {
+  try {
+    const ev = await sheets.getEventById(req.params.id);
+    if (!ev) return res.status(404).json({ error: 'Event not found.' });
+    const updated = await sheets.updateRowFields('Events', 'EventID', req.params.id, { Status: 'Cancelled', UpdatedAt: todayStr() });
+    res.json(updated);
+    calSync.removeEventFromCalendar(ev)
+      .catch(err => console.error('[calendar-sync] cancel', req.params.id, err.message));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
