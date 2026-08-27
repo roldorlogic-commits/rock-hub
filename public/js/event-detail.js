@@ -2104,8 +2104,25 @@ function renderItineraryTab(items, el) {
 
   if (!items.length) { el.innerHTML = header + emptyState('No itinerary items yet.'); return; }
 
-  const rows = items.map(item => _itnRow(item, isBoard)).join('');
-  el.innerHTML = header + `<div class="itn-list">${rows}</div>`;
+  // Group by date when the event spans multiple days
+  const isMultiDay = currentEvent?.StartDate && currentEvent?.EndDate && currentEvent.StartDate !== currentEvent.EndDate;
+  let bodyHtml;
+  if (isMultiDay) {
+    const groups = {};
+    for (const item of items) {
+      const d = item.ItemDate || currentEvent?.StartDate || '';
+      (groups[d] = groups[d] || []).push(item);
+    }
+    const dates = Object.keys(groups).sort();
+    bodyHtml = dates.map(d => {
+      const label = fmtDate(d);
+      const dayRows = groups[d].map(item => _itnRow(item, isBoard)).join('');
+      return `<div class="itn-day-header">${_esc(label)}</div>${dayRows}`;
+    }).join('');
+  } else {
+    bodyHtml = items.map(item => _itnRow(item, isBoard)).join('');
+  }
+  el.innerHTML = header + `<div class="itn-list">${bodyHtml}</div>`;
 }
 
 function _itnRow(item, isBoard) {
@@ -2125,6 +2142,14 @@ function _itnRow(item, isBoard) {
 
 function openAddItnModal() {
   document.getElementById('addItnForm')?.reset();
+  const startDate = currentEvent?.StartDate || '';
+  const endDate   = currentEvent?.EndDate   || startDate;
+  const dateInput = document.getElementById('addItn_Date');
+  if (dateInput) {
+    dateInput.value = startDate;
+    if (startDate) dateInput.min = startDate;
+    if (endDate)   dateInput.max = endDate;
+  }
   _modalError('addItnError', '');
   _openModal('addItnOverlay', 'addItnModal');
 }
@@ -2139,7 +2164,7 @@ async function submitAddItn() {
   try {
     const res = await fetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/itinerary`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ Time: g('addItn_Time'), Title: title, Notes: g('addItn_Notes') })
+      body: JSON.stringify({ ItemDate: g('addItn_Date'), Time: g('addItn_Time'), Title: title, Notes: g('addItn_Notes') })
     });
     const data = await res.json();
     if (!res.ok) { _modalError('addItnError', data.error || 'Failed.'); return; }
@@ -2160,6 +2185,14 @@ function openEditItnModal(id) {
   document.getElementById('editItn_Time').value  = item.Time  || '';
   document.getElementById('editItn_Title').value = item.Title || '';
   document.getElementById('editItn_Notes').value = item.Notes || '';
+  const startDate = currentEvent?.StartDate || '';
+  const endDate   = currentEvent?.EndDate   || startDate;
+  const dateInput = document.getElementById('editItn_Date');
+  if (dateInput) {
+    dateInput.value = item.ItemDate || startDate;
+    if (startDate) dateInput.min = startDate;
+    if (endDate)   dateInput.max = endDate;
+  }
   _modalError('editItnError', '');
   _openModal('editItnOverlay', 'editItnModal');
 }
@@ -2175,7 +2208,7 @@ async function submitEditItn() {
   try {
     const res = await fetch(`/api/itinerary/${encodeURIComponent(id)}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ Time: g('editItn_Time'), Title: title, Notes: g('editItn_Notes') })
+      body: JSON.stringify({ ItemDate: g('editItn_Date'), Time: g('editItn_Time'), Title: title, Notes: g('editItn_Notes') })
     });
     const data = await res.json();
     if (!res.ok) { _modalError('editItnError', data.error || 'Failed.'); return; }
