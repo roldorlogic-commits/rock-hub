@@ -798,6 +798,12 @@
 .itn-body { flex: 1; min-width: 0; }
 .itn-title { font-size: 13px; font-weight: 600; color: var(--text-white); }
 .itn-notes { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+.itn-day-header {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--text-white); background: var(--gold-faint);
+  padding: 6px 10px; margin-top: 4px;
+  border-left: 3px solid var(--gold);
+}
 
 /* ── Event card photo thumbnails ─────────────────────────────────────────────── */
 .event-row-photo {

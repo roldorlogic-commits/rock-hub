@@ -814,7 +814,10 @@ router.get('/events/:id/itinerary/pdf', async (req, res) => {
 
     const items = allItems
       .filter(i => i.EventID === req.params.id)
-      .sort((a, b) => (a.Time || '').localeCompare(b.Time || ''));
+      .sort((a, b) => {
+        const d = (a.ItemDate || '').localeCompare(b.ItemDate || '');
+        return d !== 0 ? d : (a.Time || '').localeCompare(b.Time || '');
+      });
 
     const pdf = await generateItineraryPdf(ev, items);
 
@@ -836,7 +839,10 @@ router.get('/events/:id/itinerary', async (req, res) => {
     const items = await sheets.getEventItinerary();
     const filtered = items
       .filter(i => i.EventID === req.params.id)
-      .sort((a, b) => (a.Time || '').localeCompare(b.Time || ''));
+      .sort((a, b) => {
+        const d = (a.ItemDate || '').localeCompare(b.ItemDate || '');
+        return d !== 0 ? d : (a.Time || '').localeCompare(b.Time || '');
+      });
     res.json(filtered);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -848,6 +854,7 @@ router.post('/events/:id/itinerary', requireBoard, async (req, res) => {
     const row = await sheets.appendRow('EventItinerary', {
       ItineraryID: `ITN${Date.now()}`,
       EventID: req.params.id,
+      ItemDate: b.ItemDate || '',
       Time: b.Time || '',
       Title: b.Title.trim(),
       Notes: (b.Notes || '').trim(),
@@ -860,9 +867,10 @@ router.post('/events/:id/itinerary', requireBoard, async (req, res) => {
 router.patch('/itinerary/:id', requireBoard, async (req, res) => {
   try {
     const fields = {};
-    if (req.body.Time  !== undefined) fields.Time  = req.body.Time;
-    if (req.body.Title !== undefined) fields.Title = req.body.Title;
-    if (req.body.Notes !== undefined) fields.Notes = req.body.Notes;
+    if (req.body.ItemDate !== undefined) fields.ItemDate = req.body.ItemDate;
+    if (req.body.Time     !== undefined) fields.Time     = req.body.Time;
+    if (req.body.Title    !== undefined) fields.Title    = req.body.Title;
+    if (req.body.Notes    !== undefined) fields.Notes    = req.body.Notes;
     const updated = await sheets.updateRowFields('EventItinerary', 'ItineraryID', req.params.id, fields);
     if (!updated) return res.status(404).json({ error: 'Itinerary item not found.' });
     res.json(updated);
