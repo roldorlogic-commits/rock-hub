@@ -12,6 +12,7 @@ const drive   = require('../lib/drive');
 const email   = require('../lib/email');
 const sms     = require('../lib/sms');
 const { requireAuth, requireBoard } = require('../middleware/auth');
+const { generateItineraryPdf }     = require('../lib/pdf');
 
 router.use(requireAuth);
 
@@ -780,6 +781,34 @@ router.post('/events/:id/walkin', requireBoard, async (req, res) => {
 });
 
 // ── Itinerary ────────────────────────────────────────────────────────────────
+
+router.get('/events/:id/itinerary/pdf', async (req, res) => {
+  try {
+    const [ev, allItems] = await Promise.all([
+      sheets.getEventById(req.params.id),
+      sheets.getEventItinerary(),
+    ]);
+    if (!ev) return res.status(404).json({ error: 'Event not found.' });
+
+    const items = allItems
+      .filter(i => i.EventID === req.params.id)
+      .sort((a, b) => (a.Time || '').localeCompare(b.Time || ''));
+
+    const pdf = await generateItineraryPdf(ev, items);
+
+    const safe = (ev.EventName || 'Itinerary').replace(/[^a-zA-Z0-9 \-_().]/g, '').trim();
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${safe} - Itinerary.pdf"`,
+      'Content-Length': pdf.length,
+    });
+    res.end(pdf);
+  } catch (err) {
+    console.error('[pdf] itinerary export failed:', err.message);
+    res.status(500).json({ error: 'PDF generation failed — ' + err.message });
+  }
+});
+
 router.get('/events/:id/itinerary', async (req, res) => {
   try {
     const items = await sheets.getEventItinerary();
