@@ -3,6 +3,7 @@
 const express    = require('express');
 const router     = express.Router();
 const sheets     = require('../lib/sheets');
+const calSync    = require('../lib/calendar-sync');
 const { requireVP } = require('../middleware/auth');
 
 router.use(requireVP);
@@ -46,6 +47,16 @@ router.get('/activity', async (req, res) => {
     }
 
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/calendar-backfill — sync all events that don't yet have a CalendarEventID
+router.post('/calendar-backfill', async (req, res) => {
+  try {
+    const results = await calSync.backfillAll();
+    res.json(results);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
