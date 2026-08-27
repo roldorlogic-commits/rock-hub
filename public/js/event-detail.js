@@ -2082,11 +2082,20 @@ function fmtTime(t) {
   return `${hr}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
+function exportItineraryPdf() {
+  const id = currentEvent?.EventID;
+  if (!id) return;
+  window.location.href = `/api/events/${encodeURIComponent(id)}/itinerary/pdf`;
+}
+
 function renderItineraryTab(items, el) {
   el = el || document.getElementById('itineraryContent');
   const isBoard = currentUser?.role === 'Board';
+  const exportBtn = items.length
+    ? `<button class="btn btn-sm" style="border:1px solid var(--gold-line);color:var(--gold);background:transparent;" onclick="exportItineraryPdf()">&#x21E9; Export PDF</button>`
+    : '';
   const header = `<div class="tab-inner-header">
-    <div></div>
+    <div>${exportBtn}</div>
     ${isBoard ? `<button class="btn btn-gold btn-sm" onclick="openAddItnModal()">+ Add Item</button>` : ''}
   </div>`;
 
