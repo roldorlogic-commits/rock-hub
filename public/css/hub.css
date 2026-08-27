@@ -73,7 +73,7 @@ body.hub-page .audience-badge.all { background: #EBEDF1; color: #5A6478; border-
   flex-shrink: 0;
 }
 .hub-brand-img {
-  height: 34px;
+  height: 44px;
   width: auto;
   filter: drop-shadow(0 1px 4px rgba(0,0,0,.35));
 }
