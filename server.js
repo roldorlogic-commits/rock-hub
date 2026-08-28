@@ -198,6 +198,9 @@ sheetsLib.ensureColumns('YouthGroups', ['instagram_handle'])
 sheetsLib.ensureColumns('Members', ['is_volunteer'])
   .catch(err => console.error('Could not add is_volunteer column to Members:', err.message));
 
+sheetsLib.ensureColumns('EventItinerary', ['ItemDate'])
+  .catch(err => console.error('Could not add ItemDate column to EventItinerary:', err.message));
+
 sheetsLib.ensureColumns('Tasks', ['AssigneeEmail', 'Description'])
   .catch(err => console.error('Could not add AssigneeEmail/Description columns to Tasks:', err.message));
 

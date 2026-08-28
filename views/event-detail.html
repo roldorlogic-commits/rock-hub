@@ -609,13 +609,15 @@
     </button>
     <div class="modal-title">Add Itinerary Item</div>
     <form id="addItnForm" onsubmit="event.preventDefault(); submitAddItn();">
-      <div style="display:grid;grid-template-columns:150px 110px 1fr;gap:12px;">
+      <div style="display:grid;grid-template-columns:150px auto;gap:12px;margin-bottom:12px;">
         <label>Date
           <input type="date" id="addItn_Date">
         </label>
         <label>Time
           <input type="time" id="addItn_Time">
         </label>
+      </div>
+      <div>
         <label>Title <span style="color:var(--gold);">*</span>
           <input type="text" id="addItn_Title" placeholder="e.g. Opening Worship">
         </label>
@@ -640,13 +642,15 @@
     <div class="modal-title">Edit Itinerary Item</div>
     <form id="editItnForm" onsubmit="event.preventDefault(); submitEditItn();">
       <input type="hidden" id="editItn_ID">
-      <div style="display:grid;grid-template-columns:150px 110px 1fr;gap:12px;">
+      <div style="display:grid;grid-template-columns:150px auto;gap:12px;margin-bottom:12px;">
         <label>Date
           <input type="date" id="editItn_Date">
         </label>
         <label>Time
           <input type="time" id="editItn_Time">
         </label>
+      </div>
+      <div>
         <label>Title <span style="color:var(--gold);">*</span>
           <input type="text" id="editItn_Title" placeholder="e.g. Opening Worship">
         </label>
