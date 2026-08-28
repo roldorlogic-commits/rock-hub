@@ -58,15 +58,15 @@ router.get('/youth-groups/geocodio', async (req, res) => {
   const key = process.env.GEOCODIO_API_KEY;
   if (!key) {
     console.warn('[geocodio] GEOCODIO_API_KEY not set — returning empty suggestions');
-    return res.json([]);
+    return res.json({ _debug: 'no_key' });
   }
   try {
     const url = `https://api.geocod.io/v1.7/suggest?q=${encodeURIComponent(q)}&country=US&api_key=${key}`;
     const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
     if (!r.ok) {
-      const err = await r.text().catch(() => '');
-      console.error(`[geocodio] suggest HTTP ${r.status}:`, err.slice(0, 300));
-      return res.json([]);
+      const errText = await r.text().catch(() => '');
+      console.error(`[geocodio] suggest HTTP ${r.status}:`, errText.slice(0, 300));
+      return res.json({ _debug: `http_${r.status}`, error: errText.slice(0, 200) });
     }
     const data = await r.json();
 
@@ -91,10 +91,10 @@ router.get('/youth-groups/geocodio', async (req, res) => {
       return { label, address: addr, city, state, zip, lat: '', lng: '' };
     }).filter(s => s.label);
 
-    res.json(suggestions);
+    res.json({ _debug: 'ok', _raw: data, suggestions });
   } catch (err) {
     console.error('[geocodio] suggest error:', err.message);
-    res.json([]);
+    res.json({ _debug: 'catch', error: err.message });
   }
 });
 
