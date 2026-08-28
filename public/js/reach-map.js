@@ -12,9 +12,10 @@
     maxZoom: 19
   }).addTo(map);
 
-  // ── Marker cluster group ─────────────────────────────────────────────────
-  const clusterGroup = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 60 });
-  map.addLayer(clusterGroup);
+  // ── HTML escape helper ────────────────────────────────────────────────────
+  function escHtml(v) {
+    return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
 
   // ── Custom pin icons by category ─────────────────────────────────────────
   function makeIcon(category) {
@@ -47,27 +48,57 @@
     document.getElementById('mapNoData').style.display = 'block';
   }
 
+  // ── Build popup HTML ──────────────────────────────────────────────────────
+  function makePopupHtml(g) {
+    const name   = escHtml(g.youth_group_name || g.church_name || '—');
+    const church = (g.church_name && g.youth_group_name) ? `<div class="rmap-popup-church">${escHtml(g.church_name)}</div>` : '';
+    const isPart = g.category === 'Partner';
+    const badge  = `<span class="rmap-popup-badge yg-cat-badge ${isPart ? 'partner' : 'prospect'}">${escHtml(g.category || 'Prospect')}</span>`;
+    const loc    = [g.address, g.city, g.state, g.zip].filter(Boolean).map(escHtml).join(', ');
+    const pc     = g.primary_contact_name
+      ? `<div class="rmap-popup-contact">${escHtml(g.primary_contact_name)}${g.primary_contact_phone ? ' · ' + escHtml(g.primary_contact_phone) : ''}</div>`
+      : '';
+    return `<div>
+      <div class="rmap-popup-name">${name}</div>
+      ${church}${badge}
+      ${loc ? `<div class="rmap-popup-loc">${loc}</div>` : ''}
+      ${pc}
+      <span class="rmap-popup-link" data-ygid="${escHtml(g.id)}">View full card →</span>
+    </div>`;
+  }
+
   // ── Place markers ─────────────────────────────────────────────────────────
+  const markers = [];
   for (const g of mapped) {
     const lat  = parseFloat(g.lat);
     const lng  = parseFloat(g.lng);
     const icon = makeIcon(g.category);
     const name = g.youth_group_name || g.church_name || '—';
     const marker = L.marker([lat, lng], { icon, title: name });
-    marker.on('click', () => showGroupDetail(g));
-    clusterGroup.addLayer(marker);
+    marker.bindPopup(makePopupHtml(g), { maxWidth: 260, className: 'rmap-popup-wrap' });
+    marker.addTo(map);
+    markers.push(marker);
   }
+
+  // Delegate "View full card" clicks inside any open popup
+  map.on('popupopen', (e) => {
+    const el = e.popup.getElement();
+    if (!el) return;
+    el.querySelectorAll('[data-ygid]').forEach(link => {
+      link.addEventListener('click', () => {
+        const g = mapped.find(x => x.id === link.dataset.ygid);
+        if (g) { map.closePopup(); showGroupDetail(g); }
+      });
+    });
+  });
 
   // Fit bounds to all markers if any
   if (mapped.length) {
-    try { map.fitBounds(clusterGroup.getBounds().pad(0.15)); } catch (_) {}
+    try { map.fitBounds(L.featureGroup(markers).getBounds().pad(0.15)); } catch (_) {}
   }
 
   // ── Side panel ────────────────────────────────────────────────────────────
-  function esc(v) {
-    return String(v ?? '').replace(/[&<>"']/g, c =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  }
+  const esc = escHtml;
 
   function showGroupDetail(g) {
     const panel   = document.getElementById('mapSidePanel');

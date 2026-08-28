@@ -986,3 +986,63 @@ body.hub-page .welcome-banner .assignment-value { color: #FFFFFF; }
 @media (max-width: 540px) {
   .meti-groups { grid-template-columns: 1fr; }
 }
+
+/* ── Reach Map — themed Leaflet popup ──────────────────────────────────────── */
+.rmap-popup-wrap .leaflet-popup-content-wrapper {
+  background: var(--bg-primary);
+  border: 1px solid rgba(201,169,110,.5);
+  border-radius: 6px;
+  padding: 0;
+  box-shadow: 0 6px 20px rgba(0,0,0,.5);
+  color: var(--text-white, #e8e6df);
+}
+.rmap-popup-wrap .leaflet-popup-content {
+  margin: 0;
+  padding: 14px 16px;
+  width: auto !important;
+}
+.rmap-popup-wrap .leaflet-popup-tip-container { margin-top: -1px; }
+.rmap-popup-wrap .leaflet-popup-tip { background: var(--bg-primary); box-shadow: none; }
+.rmap-popup-wrap .leaflet-popup-close-button { color: var(--gold, #C9A96E); font-size: 18px; top: 6px; right: 8px; }
+.rmap-popup-wrap .leaflet-popup-close-button:hover { color: #fff; }
+
+.rmap-popup-name {
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gold, #C9A96E);
+  margin-bottom: 2px;
+  letter-spacing: .03em;
+}
+.rmap-popup-church {
+  font-size: 11px;
+  color: var(--text-dim, #9aa0b4);
+  margin-bottom: 6px;
+}
+.rmap-popup-badge { margin-bottom: 7px; display: block; }
+.rmap-popup-loc {
+  font-size: 11px;
+  color: var(--text-dim, #9aa0b4);
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+.rmap-popup-contact {
+  font-size: 11px;
+  color: var(--text-dim, #9aa0b4);
+  margin-bottom: 8px;
+}
+.rmap-popup-link {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--gold, #C9A96E);
+  text-decoration: none;
+  border-top: 1px solid rgba(201,169,110,.2);
+  padding-top: 8px;
+  margin-top: 4px;
+  width: 100%;
+  cursor: pointer;
+}
+.rmap-popup-link:hover { color: #fff; }
+/* Badge colors for dark popup background */
+.rmap-popup-wrap .yg-cat-badge.partner  { background: rgba(201,168,76,.25); color: #d4a93a; border-color: rgba(201,168,76,.5); }
+.rmap-popup-wrap .yg-cat-badge.prospect { background: rgba(107,124,158,.25); color: #8fa0c0; border-color: rgba(107,124,158,.5); }

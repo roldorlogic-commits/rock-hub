@@ -1,6 +1,5 @@
 'use strict';
 
-const https  = require('https');
 const express = require('express');
 const router  = express.Router();
 const sheets  = require('../lib/sheets');
@@ -12,61 +11,38 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-// Nominatim geocoder — no key needed, rate-limit: 1 req/sec.
-// Returns { lat, lng } strings or null. Retries once after 1.5s on failure.
-async function geocodeOnce(parts) {
-  return new Promise((resolve) => {
-    const q = encodeURIComponent(parts);
-    const options = {
-      hostname: 'nominatim.openstreetmap.org',
-      path: `/search?q=${q}&format=json&limit=1&addressdetails=0`,
-      headers: { 'User-Agent': 'ROCK-Hub/1.0 (hub.gorock.org; roldorlogic@gmail.com)' }
-    };
-    const req = https.get(options, (res) => {
-      let raw = '';
-      res.on('data', chunk => raw += chunk);
-      res.on('end', () => {
-        try {
-          const results = JSON.parse(raw);
-          if (results && results[0]) {
-            resolve({ lat: String(results[0].lat), lng: String(results[0].lon) });
-          } else {
-            resolve(null);
-          }
-        } catch { resolve(null); }
-      });
-    });
-    req.on('error', () => resolve(null));
-    req.setTimeout(8000, () => { req.destroy(); resolve(null); });
-  });
+// Geocodio geocoder — returns { lat, lng } strings or null.
+// Progressive fallback: full address → city/state/zip → zip only.
+async function geocodeOnce(q) {
+  const key = process.env.GEOCODIO_API_KEY;
+  if (!key) return null;
+  try {
+    const url = `https://api.geocod.io/v1.7/geocode?q=${encodeURIComponent(q)}&country=US&limit=1&api_key=${key}`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return null;
+    const data = await r.json();
+    const result = data?.results?.[0];
+    if (result?.location) {
+      return { lat: String(result.location.lat), lng: String(result.location.lng) };
+    }
+    return null;
+  } catch { return null; }
 }
 
 async function geocode(address, city, state, zip) {
-  // Try progressively less specific queries so we always get at least a
-  // city/zip-level pin even when OSM hasn't indexed the exact street.
   const attempts = [
-    [address, city, state, zip],  // full address
-    [city, state, zip],            // city + state + zip  (drops street)
-    [zip],                         // zip only
+    [address, city, state, zip],
+    [city, state, zip],
+    [zip],
   ].map(parts => parts.filter(Boolean).join(', ')).filter(s => s.trim());
 
   for (let i = 0; i < attempts.length; i++) {
     const q = attempts[i];
-    if (i > 0) await sleep(1100); // respect Nominatim 1 req/sec
     console.log(`[geocode] attempt ${i + 1}/${attempts.length}: "${q}"`);
     const result = await geocodeOnce(q);
     if (result) {
       if (i > 0) console.log(`[geocode] resolved at fallback level ${i + 1}: "${q}" → ${result.lat},${result.lng}`);
       return result;
-    }
-    // Retry the same query once on failure before moving to next fallback
-    await sleep(1100);
-    const retry = await geocodeOnce(q);
-    if (retry) {
-      console.log(`[geocode] resolved on retry at level ${i + 1}: "${q}" → ${retry.lat},${retry.lng}`);
-      return retry;
     }
     console.warn(`[geocode] no result for: "${q}"`);
   }
@@ -74,62 +50,52 @@ async function geocode(address, city, state, zip) {
   return null;
 }
 
-// US state full-name → abbreviation (used when parsing Photon results)
-const STATE_ABBR = {
-  'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA',
-  'Colorado':'CO','Connecticut':'CT','Delaware':'DE','Florida':'FL','Georgia':'GA',
-  'Hawaii':'HI','Idaho':'ID','Illinois':'IL','Indiana':'IN','Iowa':'IA',
-  'Kansas':'KS','Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD',
-  'Massachusetts':'MA','Michigan':'MI','Minnesota':'MN','Mississippi':'MS',
-  'Missouri':'MO','Montana':'MT','Nebraska':'NE','Nevada':'NV','New Hampshire':'NH',
-  'New Jersey':'NJ','New Mexico':'NM','New York':'NY','North Carolina':'NC',
-  'North Dakota':'ND','Ohio':'OH','Oklahoma':'OK','Oregon':'OR','Pennsylvania':'PA',
-  'Rhode Island':'RI','South Carolina':'SC','South Dakota':'SD','Tennessee':'TN',
-  'Texas':'TX','Utah':'UT','Vermont':'VT','Virginia':'VA','Washington':'WA',
-  'West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY','District of Columbia':'DC'
-};
-
-// GET /api/youth-groups/photon?q=... — server-side Photon autocomplete proxy.
-// Sets User-Agent + Florida location bias; returns simplified suggestion list.
-// Must be registered before /:id to avoid capturing "photon" as an ID param.
-router.get('/youth-groups/photon', async (req, res) => {
+// GET /api/youth-groups/geocodio?q=... — Geocodio autocomplete proxy.
+// Must be registered before /:id to avoid capturing "geocodio" as an ID param.
+router.get('/youth-groups/geocodio', async (req, res) => {
   const q = (req.query.q || '').trim();
   if (!q) return res.json([]);
+  const key = process.env.GEOCODIO_API_KEY;
+  if (!key) {
+    console.warn('[geocodio] GEOCODIO_API_KEY not set — returning empty suggestions');
+    return res.json([]);
+  }
   try {
-    const params = new URLSearchParams({
-      q, limit: '6', lang: 'en',
-      lat: '28.0', lon: '-81.5'   // bias toward central Florida
-    });
-    const url = `https://photon.komoot.io/api/?${params}`;
-    const r = await fetch(url, {
-      headers: { 'User-Agent': 'ROCK-Hub/1.0 (hub.gorock.org; roldorlogic@gmail.com)' },
-      signal: AbortSignal.timeout(6000)
-    });
+    const url = `https://api.geocod.io/v1.7/suggest?q=${encodeURIComponent(q)}&country=US&api_key=${key}`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
     if (!r.ok) return res.json([]);
     const data = await r.json();
 
-    const suggestions = (data.features || [])
-      .filter(f => f.properties?.country === 'United States')
-      .map(f => {
-        const p    = f.properties;
-        const num  = p.housenumber || '';
-        const st   = p.street      || '';
-        const addr = [num, st].filter(Boolean).join(' ') || p.name || '';
-        const city = p.city || p.town || p.village || '';
-        const rawState = p.state || '';
-        const state = STATE_ABBR[rawState] || rawState.slice(0, 2).toUpperCase();
-        const zip   = p.postcode ? p.postcode.slice(0, 5) : '';
-        const [lon, lat] = f.geometry.coordinates;
-        const label = [addr, city, state, zip].filter(Boolean).join(', ');
-        return { label, address: addr, city, state, zip, lat: String(lat), lng: String(lon) };
-      })
-      .filter(s => s.label);
+    const suggestions = (data?.suggestions || []).map(s => {
+      // Geocodio suggest returns: { value, addressComponents: { number, predirectional, street, suffix, city, state, zip, country } }
+      const ac    = s.addressComponents || {};
+      const num   = ac.number || '';
+      const pre   = ac.predirectional ? ac.predirectional + ' ' : '';
+      const st    = ac.street || '';
+      const sfx   = ac.suffix || '';
+      const addr  = [num, pre + st + (sfx ? ' ' + sfx : '')].filter(Boolean).join(' ').trim();
+      const city  = ac.city  || '';
+      const state = ac.state || '';
+      const zip   = (ac.zip  || '').slice(0, 5);
+      const label = s.value || [addr, city, state, zip].filter(Boolean).join(', ');
+      // Geocodio suggest doesn't return coordinates — use full geocode on selection
+      return { label, address: addr, city, state, zip, lat: '', lng: '' };
+    }).filter(s => s.label);
 
     res.json(suggestions);
   } catch (err) {
-    console.error('[photon] proxy error:', err.message);
+    console.error('[geocodio] suggest error:', err.message);
     res.json([]);
   }
+});
+
+// GET /api/youth-groups/geocode-point?q=... — single geocode for autocomplete selection.
+// Called by the frontend when the user picks a suggestion (no coords in suggest results).
+router.get('/youth-groups/geocode-point', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.json({ lat: '', lng: '' });
+  const coords = await geocodeOnce(q);
+  res.json(coords || { lat: '', lng: '' });
 });
 
 // GET /api/youth-groups
@@ -334,7 +300,6 @@ router.post('/youth-groups/geocode-backfill', requireBoard, async (req, res) => 
     );
     let filled = 0, failed = 0;
     for (const g of missing) {
-      if (filled + failed > 0) await sleep(1100); // 1 req/sec Nominatim policy
       const coords = await geocode(g.address, g.city, g.state, g.zip);
       if (coords) {
         await sheets.updateRowFields('YouthGroups', 'id', g.id, {
@@ -362,9 +327,7 @@ async function runGeocodeBackfill() {
     );
     if (!missing.length) return;
     console.log(`[geocode-backfill] ${missing.length} group(s) need geocoding…`);
-    for (let i = 0; i < missing.length; i++) {
-      const g = missing[i];
-      if (i > 0) await sleep(1100);
+    for (const g of missing) {
       const coords = await geocode(g.address, g.city, g.state, g.zip);
       if (coords) {
         await sheets.updateRowFields('YouthGroups', 'id', g.id, {

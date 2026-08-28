@@ -616,7 +616,7 @@ html, body { height: 100%; }
   position: fixed;
   inset: 0;
   background: rgba(10, 12, 24, .65);
-  z-index: 300;
+  z-index: 1000;
 }
 .modal-overlay.open { display: block; }
 
@@ -633,7 +633,7 @@ html, body { height: 100%; }
   border: 0.5px solid var(--gold-line);
   border-radius: var(--radius);
   padding: 28px;
-  z-index: 310;
+  z-index: 1010;
 }
 .modal-box.open { display: block; }
 .modal-title {

@@ -1,4 +1,4 @@
-/* Youth Group address autocomplete — Photon (photon.komoot.io) via server proxy.
+/* Youth Group address autocomplete — Geocodio via server proxy.
    Attaches to #yg_address inside the YG create/edit modal.
    Exports ygAcSetStatus() for board.js to call when the modal opens. */
 
@@ -75,19 +75,28 @@
   }
 
   // ── Select a suggestion ───────────────────────────────────────────────────
-  function selectSuggestion(s) {
+  async function selectSuggestion(s) {
     _selectionMade = true;
+    closeDropdown();
 
     const addr = el('yg_address'); if (addr) addr.value = s.address || '';
     const city = el('yg_city');    if (city) city.value = s.city    || '';
     const state= el('yg_state');   if (state) state.value = s.state  || '';
     const zip  = el('yg_zip');     if (zip)  zip.value  = s.zip    || '';
-    const lat  = el('yg_lat');     if (lat)  lat.value  = s.lat    || '';
-    const lng  = el('yg_lng');     if (lng)  lng.value  = s.lng    || '';
-    const lt   = el('yg_location_type'); if (lt) lt.value = 'exact';
 
-    setStatus('exact');
-    closeDropdown();
+    // Geocodio suggest doesn't include coordinates — fetch them now for exact placement.
+    const q = s.label || [s.address, s.city, s.state, s.zip].filter(Boolean).join(', ');
+    try {
+      const coords = await fetch(`/api/youth-groups/geocode-point?q=${encodeURIComponent(q)}`).then(r => r.ok ? r.json() : {});
+      const lat = el('yg_lat'); if (lat) lat.value = coords.lat || '';
+      const lng = el('yg_lng'); if (lng) lng.value = coords.lng || '';
+      const lt  = el('yg_location_type'); if (lt) lt.value = (coords.lat ? 'exact' : '');
+      setStatus(coords.lat ? 'exact' : '');
+    } catch {
+      const lat = el('yg_lat'); if (lat) lat.value = '';
+      const lng = el('yg_lng'); if (lng) lng.value = '';
+      setStatus('');
+    }
   }
 
   // ── Keyboard navigation inside dropdown ──────────────────────────────────
@@ -106,7 +115,7 @@
   // ── Fetch suggestions from server proxy ──────────────────────────────────
   async function fetchSuggestions(q) {
     try {
-      const r = await fetch(`/api/youth-groups/photon?q=${encodeURIComponent(q)}`);
+      const r = await fetch(`/api/youth-groups/geocodio?q=${encodeURIComponent(q)}`);
       if (!r.ok) return [];
       return await r.json();
     } catch (_) { return []; }

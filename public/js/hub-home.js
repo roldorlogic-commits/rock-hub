@@ -21,9 +21,6 @@ function selectBoard(id) {
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
-  const clusterGroup = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 50 });
-  map.addLayer(clusterGroup);
-
   function makeIcon(category) {
     const color = category === 'Partner' ? '#C9A84C' : '#6B7C9E';
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="18" height="24">
@@ -34,17 +31,46 @@ function selectBoard(id) {
     return L.divIcon({ html: svg, className: '', iconSize: [18, 24], iconAnchor: [9, 24], popupAnchor: [0, -26] });
   }
 
+  function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function makePopupHtml(g) {
+    const name    = esc(g.youth_group_name || g.church_name || '—');
+    const church  = (g.church_name && g.youth_group_name) ? `<div class="rmap-popup-church">${esc(g.church_name)}</div>` : '';
+    const isPart  = g.category === 'Partner';
+    const badge   = `<span class="rmap-popup-badge yg-cat-badge ${isPart ? 'partner' : 'prospect'}">${esc(g.category || 'Prospect')}</span>`;
+    const loc     = [g.address, g.city, g.state, g.zip].filter(Boolean).map(esc).join(', ');
+    const pc      = g.primary_contact_name
+      ? `<div class="rmap-popup-contact">${esc(g.primary_contact_name)}${g.primary_contact_phone ? ' · ' + esc(g.primary_contact_phone) : ''}</div>`
+      : '';
+    return `<div>
+      <div class="rmap-popup-name">${name}</div>
+      ${church}${badge}
+      ${loc ? `<div class="rmap-popup-loc">${loc}</div>` : ''}
+      ${pc}
+      <a class="rmap-popup-link" href="/board?s=members"
+         onclick="sessionStorage.setItem('openYG','${esc(g.id)}')">View full card →</a>
+    </div>`;
+  }
+
   fetch('/api/youth-groups').then(r => r.ok ? r.json() : []).then(groups => {
     const mapped = (groups || []).filter(g => g.lat && g.lng && !isNaN(parseFloat(g.lat)));
     if (!mapped.length) { map.setView([28.5, -81.4], 8); return; }
+    const markers = [];
     for (const g of mapped) {
       const marker = L.marker([parseFloat(g.lat), parseFloat(g.lng)], {
         icon: makeIcon(g.category),
         title: g.youth_group_name || g.church_name || ''
       });
-      clusterGroup.addLayer(marker);
+      marker.bindPopup(makePopupHtml(g), { maxWidth: 240, className: 'rmap-popup-wrap' });
+      marker.addTo(map);
+      markers.push(marker);
     }
-    try { map.fitBounds(clusterGroup.getBounds().pad(0.15)); } catch (_) {}
+    try {
+      const fg = L.featureGroup(markers);
+      map.fitBounds(fg.getBounds().pad(0.15));
+    } catch (_) {}
   }).catch(() => { map.setView([28.5, -81.4], 8); });
 })();
 
