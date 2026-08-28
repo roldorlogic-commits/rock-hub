@@ -50,7 +50,9 @@ async function geocode(address, city, state, zip) {
   return null;
 }
 
-// GET /api/youth-groups/geocodio?q=... — Geocodio autocomplete proxy.
+// GET /api/youth-groups/geocodio?q=... — Geocodio address autocomplete proxy.
+// Uses the standard geocode endpoint with limit=5 (suggest endpoint doesn't exist).
+// Returns coordinates in each suggestion so no second round-trip is needed.
 // Must be registered before /:id to avoid capturing "geocodio" as an ID param.
 router.get('/youth-groups/geocodio', async (req, res) => {
   const q = (req.query.q || '').trim();
@@ -58,27 +60,20 @@ router.get('/youth-groups/geocodio', async (req, res) => {
   const key = process.env.GEOCODIO_API_KEY;
   if (!key) {
     console.warn('[geocodio] GEOCODIO_API_KEY not set — returning empty suggestions');
-    return res.json({ _debug: 'no_key' });
+    return res.json([]);
   }
   try {
-    const url = `https://api.geocod.io/v1.7/suggest?q=${encodeURIComponent(q)}&country=US&api_key=${key}`;
+    const url = `https://api.geocod.io/v1.7/geocode?q=${encodeURIComponent(q)}&country=US&limit=5&api_key=${key}`;
     const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
     if (!r.ok) {
       const errText = await r.text().catch(() => '');
-      console.error(`[geocodio] suggest HTTP ${r.status}:`, errText.slice(0, 300));
-      return res.json({ _debug: `http_${r.status}`, error: errText.slice(0, 200) });
+      console.error(`[geocodio] autocomplete HTTP ${r.status}:`, errText.slice(0, 300));
+      return res.json([]);
     }
     const data = await r.json();
 
-    // Log raw response to diagnose format (temporary)
-    console.log('[geocodio] suggest raw:', JSON.stringify(data).slice(0, 500));
-
-    const suggestions = (data?.suggestions || []).map(s => {
-      // Handle both string suggestions and object suggestions
-      if (typeof s === 'string') {
-        return { label: s, address: '', city: '', state: '', zip: '', lat: '', lng: '' };
-      }
-      const ac    = s.addressComponents || {};
+    const suggestions = (data?.results || []).map(result => {
+      const ac    = result.address_components || {};
       const num   = ac.number || '';
       const pre   = ac.predirectional ? ac.predirectional + ' ' : '';
       const st    = ac.street || '';
@@ -87,14 +82,16 @@ router.get('/youth-groups/geocodio', async (req, res) => {
       const city  = ac.city  || '';
       const state = ac.state || '';
       const zip   = (ac.zip  || '').slice(0, 5);
-      const label = s.value || [addr, city, state, zip].filter(Boolean).join(', ');
-      return { label, address: addr, city, state, zip, lat: '', lng: '' };
+      const label = result.formatted_address || [addr, city, state, zip].filter(Boolean).join(', ');
+      const lat   = result.location?.lat != null ? String(result.location.lat) : '';
+      const lng   = result.location?.lng != null ? String(result.location.lng) : '';
+      return { label, address: addr, city, state, zip, lat, lng };
     }).filter(s => s.label);
 
-    res.json({ _debug: 'ok', _raw: data, suggestions });
+    res.json(suggestions);
   } catch (err) {
-    console.error('[geocodio] suggest error:', err.message);
-    res.json({ _debug: 'catch', error: err.message });
+    console.error('[geocodio] autocomplete error:', err.message);
+    res.json([]);
   }
 });
 

@@ -75,7 +75,7 @@
   }
 
   // ── Select a suggestion ───────────────────────────────────────────────────
-  async function selectSuggestion(s) {
+  function selectSuggestion(s) {
     _selectionMade = true;
     closeDropdown();
 
@@ -83,20 +83,10 @@
     const city = el('yg_city');    if (city) city.value = s.city    || '';
     const state= el('yg_state');   if (state) state.value = s.state  || '';
     const zip  = el('yg_zip');     if (zip)  zip.value  = s.zip    || '';
-
-    // Geocodio suggest doesn't include coordinates — fetch them now for exact placement.
-    const q = s.label || [s.address, s.city, s.state, s.zip].filter(Boolean).join(', ');
-    try {
-      const coords = await fetch(`/api/youth-groups/geocode-point?q=${encodeURIComponent(q)}`).then(r => r.ok ? r.json() : {});
-      const lat = el('yg_lat'); if (lat) lat.value = coords.lat || '';
-      const lng = el('yg_lng'); if (lng) lng.value = coords.lng || '';
-      const lt  = el('yg_location_type'); if (lt) lt.value = (coords.lat ? 'exact' : '');
-      setStatus(coords.lat ? 'exact' : '');
-    } catch {
-      const lat = el('yg_lat'); if (lat) lat.value = '';
-      const lng = el('yg_lng'); if (lng) lng.value = '';
-      setStatus('');
-    }
+    const lat  = el('yg_lat');     if (lat)  lat.value  = s.lat    || '';
+    const lng  = el('yg_lng');     if (lng)  lng.value  = s.lng    || '';
+    const lt   = el('yg_location_type'); if (lt) lt.value = s.lat ? 'exact' : '';
+    setStatus(s.lat ? 'exact' : '');
   }
 
   // ── Keyboard navigation inside dropdown ──────────────────────────────────
