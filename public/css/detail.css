@@ -783,6 +783,23 @@
   border-left: 3px solid var(--gold);
 }
 
+/* ── Drag-to-reorder ─────────────────────────────────────────────────────────── */
+.itn-drag-handle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 4px 0 0;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity .15s;
+  cursor: grab;
+}
+.itn-row:hover .itn-drag-handle { opacity: 0.55; }
+.itn-drag-handle:active { cursor: grabbing; }
+.itn-row.dragging { opacity: 0.3; }
+.itn-row.drag-over { box-shadow: inset 0 2px 0 var(--gold); }
+.itn-day-header.drag-over { outline: 1px dashed var(--gold); }
+
 /* ── Event card photo thumbnails ─────────────────────────────────────────────── */
 .event-row-photo {
   flex-shrink: 0;

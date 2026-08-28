@@ -2073,48 +2073,70 @@ function exportItineraryPdf() {
   window.location.href = `/api/events/${encodeURIComponent(id)}/itinerary/pdf`;
 }
 
+// ── Itinerary drag-reorder state ─────────────────────────────────────────────
+let _dragItems = [];   // flat ordered array — source of truth for render order
+let _dragId    = null; // ItineraryID currently being dragged
+
 function renderItineraryTab(items, el) {
   el = el || document.getElementById('itineraryContent');
   const isBoard = currentUser?.role === 'Board';
-  const exportBtn = items.length
-    ? `<button class="btn btn-sm" style="border:1px solid var(--gold-line);color:var(--gold);background:transparent;" onclick="exportItineraryPdf()">&#x21E9; Export PDF</button>`
-    : '';
-  const header = `<div class="tab-inner-header">
-    <div>${exportBtn}</div>
-    ${isBoard ? `<button class="btn btn-gold btn-sm" onclick="openAddItnModal()">+ Add Item</button>` : ''}
-  </div>`;
 
+  _dragItems = [...items];
   _itnItemCache = {};
   for (const item of items) _itnItemCache[item.ItineraryID] = item;
 
+  const hasManualSort = items.some(i => i.SortOrder !== '' && i.SortOrder != null);
+  const exportBtn = items.length
+    ? `<button class="btn btn-sm" style="border:1px solid var(--gold-line);color:var(--gold);background:transparent;" onclick="exportItineraryPdf()">&#x21E9; Export PDF</button>`
+    : '';
+  const sortBtn = isBoard && hasManualSort
+    ? `<button class="btn btn-sm" style="border:1px solid var(--gold-line);color:var(--text-muted);background:transparent;" onclick="resetItnSort()" title="Revert to chronological order">&#x21BA; Sort by time</button>`
+    : '';
+  const header = `<div class="tab-inner-header">
+    <div style="display:flex;gap:8px;">${exportBtn}${sortBtn}</div>
+    ${isBoard ? `<button class="btn btn-gold btn-sm" onclick="openAddItnModal()">+ Add Item</button>` : ''}
+  </div>`;
+
   if (!items.length) { el.innerHTML = header + emptyState('No itinerary items yet.'); return; }
 
-  // Group by date when the event spans multiple days
-  const isMultiDay = currentEvent?.StartDate && currentEvent?.EndDate && currentEvent.StartDate !== currentEvent.EndDate;
-  let bodyHtml;
-  if (isMultiDay) {
-    const groups = {};
-    for (const item of items) {
-      const d = item.ItemDate || currentEvent?.StartDate || '';
-      (groups[d] = groups[d] || []).push(item);
-    }
-    const dates = Object.keys(groups).sort();
-    bodyHtml = dates.map(d => {
-      const label = fmtDate(d);
-      const dayRows = groups[d].map(item => _itnRow(item, isBoard)).join('');
-      return `<div class="itn-day-header">${_esc(label)}</div>${dayRows}`;
-    }).join('');
-  } else {
-    bodyHtml = items.map(item => _itnRow(item, isBoard)).join('');
+  el.innerHTML = header + `<div class="itn-list">${_buildItnBody(items, isBoard)}</div>`;
+  _attachItnDrag(el.querySelector('.itn-list'), isBoard);
+}
+
+function _buildItnBody(items, isBoard) {
+  const isMultiDay = currentEvent?.StartDate && currentEvent?.EndDate
+    && currentEvent.StartDate !== currentEvent.EndDate;
+  if (!isMultiDay) return items.map(i => _itnRow(i, isBoard)).join('');
+
+  // Day groups always appear in chronological date order;
+  // items within each day preserve their drag order.
+  const seen = new Set();
+  const dates = [];
+  for (const i of items) {
+    const d = i.ItemDate || currentEvent?.StartDate || '';
+    if (!seen.has(d)) { seen.add(d); dates.push(d); }
   }
-  el.innerHTML = header + `<div class="itn-list">${bodyHtml}</div>`;
+  dates.sort();
+  return dates.map(d => {
+    const dayItems = items.filter(i => (i.ItemDate || currentEvent?.StartDate || '') === d);
+    return `<div class="itn-day-header" data-day-date="${_esc(d)}">${_esc(fmtDate(d))}</div>`
+      + dayItems.map(i => _itnRow(i, isBoard)).join('');
+  }).join('');
 }
 
 function _itnRow(item, isBoard) {
   const timeDisplay = item.Time ? fmtTime(item.Time) : '';
   const trashIco = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+  const handleIco = `<svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor">
+    <circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/>
+    <circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/>
+    <circle cx="3" cy="13" r="1.5"/><circle cx="7" cy="13" r="1.5"/>
+  </svg>`;
   return `<div class="itn-row${isBoard ? ' itn-clickable' : ''}"
+               data-id="${_esc(item.ItineraryID)}"
+               data-date="${_esc(item.ItemDate || '')}"
                ${isBoard ? `onclick="openEditItnModal('${_esc(item.ItineraryID)}')"` : ''}>
+    ${isBoard ? `<span class="itn-drag-handle" title="Drag to reorder">${handleIco}</span>` : ''}
     <div class="itn-time">${_esc(timeDisplay)}</div>
     <div class="itn-body">
       <div class="itn-title">${_esc(item.Title)}</div>
@@ -2123,6 +2145,128 @@ function _itnRow(item, isBoard) {
     ${isBoard ? `<button class="icon-btn" title="Delete" style="flex-shrink:0;"
                          onclick="event.stopPropagation(); deleteItnItem('${_esc(item.ItineraryID)}')">${trashIco}</button>` : ''}
   </div>`;
+}
+
+// ── Drag-to-reorder ───────────────────────────────────────────────────────────
+
+function _attachItnDrag(list, isBoard) {
+  if (!isBoard || !list) return;
+
+  function clearIndicators() {
+    list.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+  }
+
+  list.querySelectorAll('.itn-row[data-id]').forEach(row => {
+    // Only allow dragging when the handle is grabbed
+    row.addEventListener('mousedown', e => {
+      row.draggable = !!e.target.closest('.itn-drag-handle');
+    });
+    row.addEventListener('mouseup', () => { row.draggable = false; });
+
+    row.addEventListener('dragstart', e => {
+      _dragId = row.dataset.id;
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', _dragId);
+    });
+    row.addEventListener('dragend', () => {
+      row.draggable = false;
+      row.classList.remove('dragging');
+      _dragId = null;
+      clearIndicators();
+    });
+    row.addEventListener('dragover', e => {
+      if (!_dragId || _dragId === row.dataset.id) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      clearIndicators();
+      row.classList.add('drag-over');
+    });
+    row.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!_dragId || _dragId === row.dataset.id) return;
+      _applyDrop(row.dataset.id, row.dataset.date, list, isBoard);
+    });
+  });
+
+  // Day headers: drop → move item to start of that day
+  list.querySelectorAll('.itn-day-header[data-day-date]').forEach(header => {
+    header.addEventListener('dragover', e => {
+      if (!_dragId) return;
+      e.preventDefault();
+      clearIndicators();
+      header.classList.add('drag-over');
+    });
+    header.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!_dragId) return;
+      _applyDropOnDay(header.dataset.dayDate, list, isBoard);
+    });
+  });
+}
+
+function _applyDrop(targetId, targetDate, list, isBoard) {
+  const dragIdx  = _dragItems.findIndex(i => i.ItineraryID === _dragId);
+  if (dragIdx === -1) return;
+
+  const draggedItem = { ..._dragItems[dragIdx], ItemDate: targetDate || _dragItems[dragIdx].ItemDate };
+  _itnItemCache[_dragId] = { ..._itnItemCache[_dragId], ItemDate: draggedItem.ItemDate };
+
+  const rest = _dragItems.filter(i => i.ItineraryID !== _dragId);
+  const targetIdx = rest.findIndex(i => i.ItineraryID === targetId);
+  rest.splice(targetIdx === -1 ? rest.length : targetIdx, 0, draggedItem);
+  _dragItems = rest;
+
+  _rerenderItnList(list, isBoard);
+  _saveItnOrder();
+}
+
+function _applyDropOnDay(dayDate, list, isBoard) {
+  const dragIdx = _dragItems.findIndex(i => i.ItineraryID === _dragId);
+  if (dragIdx === -1) return;
+
+  const draggedItem = { ..._dragItems[dragIdx], ItemDate: dayDate };
+  _itnItemCache[_dragId] = { ..._itnItemCache[_dragId], ItemDate: dayDate };
+
+  const rest = _dragItems.filter(i => i.ItineraryID !== _dragId);
+  const firstOfDay = rest.findIndex(i => (i.ItemDate || '') === dayDate);
+  rest.splice(firstOfDay === -1 ? rest.length : firstOfDay, 0, draggedItem);
+  _dragItems = rest;
+
+  _rerenderItnList(list, isBoard);
+  _saveItnOrder();
+}
+
+function _rerenderItnList(list, isBoard) {
+  if (!list) return;
+  list.innerHTML = _buildItnBody(_dragItems, isBoard);
+  _attachItnDrag(list, isBoard);
+}
+
+async function _saveItnOrder() {
+  const eventId = currentEvent?.EventID;
+  if (!eventId) return;
+  const updates = _dragItems.map((item, idx) => ({
+    ItineraryID: item.ItineraryID,
+    SortOrder:   idx * 10,
+    ItemDate:    item.ItemDate || '',
+  }));
+  try {
+    await fetch(`/api/events/${encodeURIComponent(eventId)}/itinerary/reorder`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+  } catch (err) { console.error('Failed to save itinerary order:', err); }
+}
+
+async function resetItnSort() {
+  const eventId = currentEvent?.EventID;
+  if (!eventId) return;
+  try {
+    await fetch(`/api/events/${encodeURIComponent(eventId)}/itinerary/sort`, { method: 'DELETE' });
+    _tabLoaded.itinerary = false;
+    await loadItinerary();
+  } catch (err) { console.error('Failed to reset sort:', err); }
 }
 
 function openAddItnModal() {

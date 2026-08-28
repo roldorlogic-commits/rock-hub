@@ -804,6 +804,27 @@ router.post('/events/:id/walkin', requireBoard, async (req, res) => {
 
 // ── Itinerary ────────────────────────────────────────────────────────────────
 
+// Sort itinerary items: manual order (SortOrder) if any item has it, else date+time.
+// Blank ItemDate → pushed to end. Blank Time → pushed to end of its day.
+function sortItnItems(items) {
+  const hasManual = items.some(i => i.SortOrder !== '' && i.SortOrder != null);
+  if (hasManual) {
+    return [...items].sort((a, b) => {
+      const sa = parseFloat(a.SortOrder);
+      const sb = parseFloat(b.SortOrder);
+      return (isNaN(sa) ? Infinity : sa) - (isNaN(sb) ? Infinity : sb);
+    });
+  }
+  return [...items].sort((a, b) => {
+    const da = a.ItemDate || '9999-99-99';
+    const db = b.ItemDate || '9999-99-99';
+    if (da !== db) return da.localeCompare(db);
+    const ta = a.Time || '99:99';
+    const tb = b.Time || '99:99';
+    return ta.localeCompare(tb);
+  });
+}
+
 router.get('/events/:id/itinerary/pdf', async (req, res) => {
   try {
     const [ev, allItems] = await Promise.all([
@@ -812,12 +833,7 @@ router.get('/events/:id/itinerary/pdf', async (req, res) => {
     ]);
     if (!ev) return res.status(404).json({ error: 'Event not found.' });
 
-    const items = allItems
-      .filter(i => i.EventID === req.params.id)
-      .sort((a, b) => {
-        const d = (a.ItemDate || '').localeCompare(b.ItemDate || '');
-        return d !== 0 ? d : (a.Time || '').localeCompare(b.Time || '');
-      });
+    const items = sortItnItems(allItems.filter(i => i.EventID === req.params.id));
 
     const pdf = await generateItineraryPdf(ev, items);
 
@@ -837,13 +853,33 @@ router.get('/events/:id/itinerary/pdf', async (req, res) => {
 router.get('/events/:id/itinerary', async (req, res) => {
   try {
     const items = await sheets.getEventItinerary();
-    const filtered = items
-      .filter(i => i.EventID === req.params.id)
-      .sort((a, b) => {
-        const d = (a.ItemDate || '').localeCompare(b.ItemDate || '');
-        return d !== 0 ? d : (a.Time || '').localeCompare(b.Time || '');
-      });
-    res.json(filtered);
+    res.json(sortItnItems(items.filter(i => i.EventID === req.params.id)));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Bulk-save manual drag order: [{ItineraryID, SortOrder, ItemDate?}]
+router.patch('/events/:id/itinerary/reorder', requireBoard, async (req, res) => {
+  try {
+    const updates = Array.isArray(req.body) ? req.body : [];
+    await Promise.all(updates.map(u => {
+      if (!u.ItineraryID) return Promise.resolve();
+      const fields = { SortOrder: String(u.SortOrder ?? '') };
+      if (u.ItemDate !== undefined) fields.ItemDate = u.ItemDate;
+      return sheets.updateRowFields('EventItinerary', 'ItineraryID', u.ItineraryID, fields);
+    }));
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Clear manual order → revert to chronological auto-sort
+router.delete('/events/:id/itinerary/sort', requireBoard, async (req, res) => {
+  try {
+    const all = await sheets.getEventItinerary();
+    const toReset = all.filter(i => i.EventID === req.params.id && i.SortOrder);
+    await Promise.all(toReset.map(i =>
+      sheets.updateRowFields('EventItinerary', 'ItineraryID', i.ItineraryID, { SortOrder: '' })
+    ));
+    res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -867,10 +903,11 @@ router.post('/events/:id/itinerary', requireBoard, async (req, res) => {
 router.patch('/itinerary/:id', requireBoard, async (req, res) => {
   try {
     const fields = {};
-    if (req.body.ItemDate !== undefined) fields.ItemDate = req.body.ItemDate;
-    if (req.body.Time     !== undefined) fields.Time     = req.body.Time;
-    if (req.body.Title    !== undefined) fields.Title    = req.body.Title;
-    if (req.body.Notes    !== undefined) fields.Notes    = req.body.Notes;
+    if (req.body.ItemDate  !== undefined) fields.ItemDate  = req.body.ItemDate;
+    if (req.body.Time      !== undefined) fields.Time      = req.body.Time;
+    if (req.body.Title     !== undefined) fields.Title     = req.body.Title;
+    if (req.body.Notes     !== undefined) fields.Notes     = req.body.Notes;
+    if (req.body.SortOrder !== undefined) fields.SortOrder = req.body.SortOrder;
     const updated = await sheets.updateRowFields('EventItinerary', 'ItineraryID', req.params.id, fields);
     if (!updated) return res.status(404).json({ error: 'Itinerary item not found.' });
     res.json(updated);
