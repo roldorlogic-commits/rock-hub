@@ -732,28 +732,6 @@
   background-position: center;
   display: none;
 }
-.event-hero-thumb { flex-shrink: 0; margin-right: 2px; }
-.event-hero-thumb-img {
-  width: 52px;
-  height: 52px;
-  border-radius: 8px;
-  object-fit: cover;
-  border: 1px solid var(--gold-line);
-}
-
-/* ── Overview photo ──────────────────────────────────────────────────────────── */
-.overview-photo {
-  margin: 0 0 16px;
-  border-radius: 8px;
-  overflow: hidden;
-  max-height: 220px;
-}
-.overview-photo img {
-  width: 100%;
-  max-height: 220px;
-  object-fit: cover;
-  display: block;
-}
 
 /* ── Photo upload field ──────────────────────────────────────────────────────── */
 .photo-preview-box {

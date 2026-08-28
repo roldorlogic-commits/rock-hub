@@ -82,23 +82,9 @@ function renderEventHero(ev) {
   }).join('');
 
   const thumbEl = document.getElementById('eventHeroThumb');
+  if (thumbEl) thumbEl.style.display = 'none';
   const photoEl = document.getElementById('eventHeroPhoto');
-  if (thumbEl) {
-    if (ev.PhotoURL) {
-      thumbEl.innerHTML = `<img src="${_esc(ev.PhotoURL)}" alt="" class="event-hero-thumb-img">`;
-      thumbEl.style.display = '';
-    } else {
-      thumbEl.style.display = 'none';
-    }
-  }
-  if (photoEl) {
-    if (ev.PhotoURL) {
-      photoEl.style.backgroundImage = `url('${ev.PhotoURL.replace(/'/g, "\\'")}')`;
-      photoEl.style.display = '';
-    } else {
-      photoEl.style.display = 'none';
-    }
-  }
+  if (photoEl) photoEl.style.display = 'none';
 
   renderCountdown(ev.StartDate);
   document.getElementById('eventHeroLoading').style.display = 'none';
@@ -229,7 +215,6 @@ function _renderOverviewReadOnly(el, ev) {
     <div class="overview-grid">
       <div class="card span-full">
         <div class="card-header"><span class="card-title">Event Details</span></div>
-        ${ev.PhotoURL ? `<div class="overview-photo"><img src="${_esc(ev.PhotoURL)}" alt="Event photo"></div>` : ''}
         <div class="detail-field-grid">
           ${_roField('Start Date', fmtDate(ev.StartDate))}
           ${_roField('End Date', ev.EndDate && ev.EndDate !== ev.StartDate ? fmtDate(ev.EndDate) : '')}

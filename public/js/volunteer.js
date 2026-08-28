@@ -145,7 +145,6 @@ function vEventRow(ev, withSignup = false) {
         <span class="day">${db.day}</span>
       </div>
       <div class="event-info">
-        ${ev.PhotoURL ? `<img src="${ev.PhotoURL}" alt="" class="event-vol-photo">` : ''}
         <div class="event-name">${ev.EventName || 'Untitled Event'}</div>
         <div class="event-meta">
           <span>${fmtDate(ev.StartDate)}</span>
@@ -176,14 +175,7 @@ function signUp(eventId) {
   const ev = eventsById[eventId];
   document.getElementById('signupEventName').textContent = ev ? `${ev.EventName} · ${fmtDate(ev.StartDate)}${ev.Location ? ' · ' + ev.Location : ''}` : '';
   const photoEl = document.getElementById('signupEventPhoto');
-  if (photoEl) {
-    if (ev?.PhotoURL) {
-      photoEl.src = ev.PhotoURL;
-      photoEl.style.display = '';
-    } else {
-      photoEl.style.display = 'none';
-    }
-  }
+  if (photoEl) photoEl.style.display = 'none';
   document.getElementById('signupForm').dataset.eventId = eventId;
   document.getElementById('signupName').value  = currentUser?.name  || '';
   document.getElementById('signupEmail').value = currentUser?.email || '';

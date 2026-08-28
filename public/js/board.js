@@ -48,7 +48,6 @@ function eventRow(ev) {
     : '';
   return `
     <div class="event-item${href ? ' clickable' : ''}" ${clickAttrs}>
-      ${ev.PhotoURL ? `<img src="${ev.PhotoURL}" alt="" class="event-item-photo">` : ''}
       <div class="event-row">
         <div class="date-block">
           <span class="month">${db.month}</span>
@@ -86,7 +85,6 @@ function renderEventsFull(events) {
           : '';
         return `
           <div class="event-item${href ? ' clickable' : ''}" ${clickAttrs}>
-            ${ev.PhotoURL ? `<img src="${ev.PhotoURL}" alt="" class="event-item-photo">` : ''}
             <div class="event-row">
               <div class="date-block">
                 <span class="month">${fmtDateBlock(ev.StartDate).month}</span>
