@@ -17,6 +17,7 @@ body.hub-page {
   --text-white:   #1F2A44;   /* primary text (near-navy)                 */
   --text-dim:     rgba(23,32,58,.66);
   --text-muted:   rgba(23,32,58,.42);
+  --surface-raised: rgba(0,0,0,.04);  /* .yg-lc-row background in light theme */
 
   --navy:         #0D2444;   /* top nav + hero                           */
   --hub-max:      1240px;
@@ -876,6 +877,13 @@ body.hub-page .welcome-banner .assignment-value { color: #FFFFFF; }
   cursor: pointer;
   width: 14px;
   height: 14px;
+}
+.yg-lc-row-orphan { opacity: .75; }
+.yg-lc-orphan-label {
+  flex: 1;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-muted);
 }
 
 /* ── YG card Instagram handle badge ─────────────────────────────────────── */

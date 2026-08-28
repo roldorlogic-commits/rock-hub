@@ -661,7 +661,8 @@ html, body { height: 100%; }
   font-weight: 500;
 }
 .modal-box label.checkbox-label input { width: auto; }
-.modal-box input, .modal-box textarea { width: 100%; }
+.modal-box input:not([type="radio"]):not([type="checkbox"]):not([type="hidden"]),
+.modal-box textarea { width: 100%; }
 .modal-success {
   text-align: center;
   padding: 20px 0 4px;
