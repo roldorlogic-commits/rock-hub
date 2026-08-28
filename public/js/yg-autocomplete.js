@@ -34,6 +34,15 @@
   // Exposed so board.js can call ygAcSetStatus(g.location_type) on modal open.
   window.ygAcSetStatus = setStatus;
 
+  // Resets debounce and selection state whenever the modal opens (create or edit)
+  // so stale _selectionMade from a prior session never blocks the first keystroke.
+  window.ygAcReset = function() {
+    clearTimeout(_debounceTimer);
+    _debounceTimer = null;
+    _selectionMade = false;
+    closeDropdown();
+  };
+
   // ── Clear coords (called when user types freely after a selection) ────────
   function clearSelection() {
     if (!_selectionMade) return;

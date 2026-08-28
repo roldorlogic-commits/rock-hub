@@ -69,6 +69,8 @@
 
   // ── Place markers ─────────────────────────────────────────────────────────
   const markers = [];
+  let _hoverTimer = null;
+
   for (const g of mapped) {
     const lat  = parseFloat(g.lat);
     const lng  = parseFloat(g.lng);
@@ -76,11 +78,13 @@
     const name = g.youth_group_name || g.church_name || '—';
     const marker = L.marker([lat, lng], { icon, title: name });
     marker.bindPopup(makePopupHtml(g), { maxWidth: 260, className: 'rmap-popup-wrap' });
+    marker.on('mouseover', () => { clearTimeout(_hoverTimer); marker.openPopup(); });
+    marker.on('mouseout',  () => { _hoverTimer = setTimeout(() => marker.closePopup(), 220); });
     marker.addTo(map);
     markers.push(marker);
   }
 
-  // Delegate "View full card" clicks inside any open popup
+  // On popup open: wire "View full card" and keep popup open on hover.
   map.on('popupopen', (e) => {
     const el = e.popup.getElement();
     if (!el) return;
@@ -90,6 +94,8 @@
         if (g) { map.closePopup(); showGroupDetail(g); }
       });
     });
+    el.addEventListener('mouseenter', () => clearTimeout(_hoverTimer));
+    el.addEventListener('mouseleave', () => { _hoverTimer = setTimeout(() => map.closePopup(), 220); });
   });
 
   // Fit bounds to all markers if any

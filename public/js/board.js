@@ -1786,6 +1786,7 @@ function openYGModal(g) {
   document.getElementById('yg_lat').value           = g?.lat           || '';
   document.getElementById('yg_lng').value           = g?.lng           || '';
   document.getElementById('yg_location_type').value = g?.location_type || '';
+  if (typeof ygAcReset     === 'function') ygAcReset();
   if (typeof ygAcSetStatus === 'function') ygAcSetStatus(g?.location_type || '');
 
   _populateYGContactDropdown();
@@ -1810,6 +1811,14 @@ function ygRenderLinkedList() {
     return;
   }
   container.innerHTML = visible.map(c => {
+    // Orphan: name fell back to the raw MemberID (no resolved display name)
+    const isOrphan = !c.name || c.name === c.id;
+    if (isOrphan) {
+      return `<div class="yg-lc-row yg-lc-row-orphan" id="yglc-${c.id}">
+        <span class="yg-lc-orphan-label">Unknown contact</span>
+        <button type="button" class="btn btn-outline btn-sm yg-lc-remove" onclick="ygRemoveLinked('${c.id}')" title="Unlink">Unlink</button>
+      </div>`;
+    }
     const roleOpts = YG_ROLES.map(r =>
       `<option value="${r}" ${c.role === r ? 'selected' : ''}>${r || '— Role —'}</option>`
     ).join('');
