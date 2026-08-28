@@ -141,7 +141,7 @@
                   <button class="cal-popover-close" onclick="closeCalPopover()">&#10005;</button>
                 </div>
                 <div id="calPopoverEvents" class="cal-popover-events"></div>
-                <button class="btn btn-gold btn-sm" style="width:100%;margin-top:10px;" onclick="openCalAddEvent()">+ Add Event</button>
+                <button class="btn btn-gold btn-sm" style="width:100%;margin-top:10px;" onclick="openCreateFromCal()">+ Add Event</button>
               </div>
             </div>
 
@@ -207,38 +207,6 @@
     </section>
 
     <!-- ── Add Calendar Event modal ──────────────────────────────────────────── -->
-    <div class="modal-overlay" id="calAddOverlay" onclick="closeCalAddEvent()"></div>
-    <div class="modal-box" id="calAddModal" style="width:440px;">
-      <button class="icon-btn slide-panel-close" onclick="closeCalAddEvent()" aria-label="Close">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-      <div class="modal-title">Add Calendar Event</div>
-      <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px;">
-        <label>Title <span style="color:var(--gold);">*</span><input type="text" id="cal_title" placeholder="e.g. Board Meeting"></label>
-        <label>Description<textarea id="cal_desc" rows="2" placeholder="Optional description…" style="resize:vertical;"></textarea></label>
-        <label>Location<input type="text" id="cal_location" placeholder="e.g. Zoom / Church Hall"></label>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <label>Date <span style="color:var(--gold);">*</span><input type="date" id="cal_date"></label>
-          <label style="justify-content:flex-end;">
-            <span style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
-              <input type="checkbox" id="cal_allday" onchange="toggleCalAllDay(this)" checked style="width:auto;">
-              All day
-            </span>
-          </label>
-        </div>
-        <div id="cal_time_fields" style="display:none;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <label>Start Time<input type="time" id="cal_start_time"></label>
-          <label>End Time<input type="time" id="cal_end_time"></label>
-        </div>
-      </div>
-      <p class="form-error" id="calAddError" style="display:none;margin-top:10px;"></p>
-      <div class="modal-nav">
-        <button class="btn btn-outline btn-sm" onclick="closeCalAddEvent()">Cancel</button>
-        <button class="btn btn-gold btn-sm" id="calAddSubmit" onclick="submitCalAddEvent()">Add to Calendar</button>
-      </div>
-      <div class="modal-success" id="calAddSuccess" style="display:none;text-align:center;padding:16px 0;">Event added to ROCK Calendar!</div>
-    </div>
-
     <!-- ── EVENTS ─────────────────────────────────────────────────────────── -->
     <section id="events" class="content-section">
       <div class="card">

@@ -635,6 +635,44 @@
 
   <!-- ── Edit Itinerary Item Modal ─────────────────────────────────────────── -->
   <div class="modal-overlay" id="editItnOverlay" onclick="closeEditItnModal()"></div>
+  <!-- ── Duplicate Event Modal ─────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="dupOverlay" onclick="closeDuplicateModal()"></div>
+  <div class="modal-box" id="dupModal" style="width:420px;">
+    <button class="icon-btn slide-panel-close" onclick="closeDuplicateModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Duplicate Event</div>
+    <p style="font-size:12px;color:var(--text-muted);margin:6px 0 16px;">Choose what to copy into the new event. Registrations and volunteer sign-ups are never copied.</p>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px;">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+        <input type="checkbox" id="dup_details" checked style="width:auto;margin-top:2px;">
+        <span>
+          <strong>Event details</strong>
+          <span style="display:block;font-size:11px;color:var(--text-muted);">Name, type, location, capacity, coordinator, cost, description</span>
+        </span>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+        <input type="checkbox" id="dup_itinerary" checked style="width:auto;margin-top:2px;">
+        <span>
+          <strong>Itinerary</strong>
+          <span style="display:block;font-size:11px;color:var(--text-muted);">All run-of-show items and their order</span>
+        </span>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+        <input type="checkbox" id="dup_positions" checked style="width:auto;margin-top:2px;">
+        <span>
+          <strong>Volunteer roles</strong>
+          <span style="display:block;font-size:11px;color:var(--text-muted);">Role definitions (e.g. Greeters, Parking) — not the people</span>
+        </span>
+      </label>
+    </div>
+    <p class="form-error" id="dupError" style="display:none;"></p>
+    <div class="modal-nav">
+      <button class="btn btn-outline" onclick="closeDuplicateModal()">Cancel</button>
+      <button class="btn btn-gold" id="dupSubmitBtn" onclick="submitDuplicate()">Duplicate Event</button>
+    </div>
+  </div>
+
   <div class="modal-box" id="editItnModal">
     <button class="icon-btn slide-panel-close" onclick="closeEditItnModal()" aria-label="Close">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>

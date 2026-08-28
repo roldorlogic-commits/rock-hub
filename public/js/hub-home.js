@@ -175,81 +175,13 @@ function selectBoard(id) {
   render();
 })();
 
-// ── Add Calendar Event modal ──────────────────────────────────────────────────
-window.openCalAddEvent = function() {
-  const dateStr = window._calSelectedDate || '';
-  const el = document.getElementById('cal_date');
-  if (el && dateStr) el.value = dateStr;
-  document.getElementById('calAddOverlay').classList.add('open');
-  document.getElementById('calAddModal').classList.add('open');
-  document.getElementById('calAddError').style.display = 'none';
-  document.getElementById('calAddSuccess').style.display = 'none';
-  document.getElementById('calAddSubmit').style.display = '';
-};
-
-window.closeCalAddEvent = function() {
-  document.getElementById('calAddOverlay').classList.remove('open');
-  document.getElementById('calAddModal').classList.remove('open');
-};
-
-window.toggleCalAllDay = function(cb) {
-  const fields = document.getElementById('cal_time_fields');
-  if (!fields) return;
-  fields.style.display = cb.checked ? 'none' : 'grid';
-};
-
-window.submitCalAddEvent = async function() {
-  const titleEl  = document.getElementById('cal_title');
-  const dateEl   = document.getElementById('cal_date');
-  const allDay   = document.getElementById('cal_allday').checked;
-  const startT   = document.getElementById('cal_start_time')?.value;
-  const endT     = document.getElementById('cal_end_time')?.value;
-  const errorEl  = document.getElementById('calAddError');
-  const successEl= document.getElementById('calAddSuccess');
-  const submitBtn= document.getElementById('calAddSubmit');
-
-  errorEl.style.display = 'none';
-  if (!titleEl.value.trim()) { errorEl.textContent = 'Title is required.'; errorEl.style.display = ''; return; }
-  if (!dateEl.value)         { errorEl.textContent = 'Date is required.';  errorEl.style.display = ''; return; }
-
-  const date  = dateEl.value; // YYYY-MM-DD
-  let start, end;
-  if (allDay) {
-    start = date;
-    end   = date;
-  } else {
-    const tz = 'T' + (startT || '09:00') + ':00';
-    start = date + tz;
-    end   = date + 'T' + (endT || (startT ? (parseInt(startT.split(':')[0])+1).toString().padStart(2,'0') + ':' + startT.split(':')[1] : '10:00')) + ':00';
-  }
-
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Adding…';
-  try {
-    await apiFetch('/api/calendar/events', {
-      method: 'POST',
-      body: JSON.stringify({
-        title:       titleEl.value.trim(),
-        description: document.getElementById('cal_desc')?.value || '',
-        location:    document.getElementById('cal_location')?.value || '',
-        start, end, allDay
-      })
-    });
-    // Clear cache for this month so the tile refreshes
-    const monthKey = date.slice(0, 7);
-    if (window._calCache) delete window._calCache[monthKey];
-    successEl.style.display = '';
-    submitBtn.style.display = 'none';
-    setTimeout(closeCalAddEvent, 1800);
-    // Trigger a re-render
-    document.getElementById('calNextBtn')?.click();
-    document.getElementById('calPrevBtn')?.click();
-  } catch (err) {
-    errorEl.textContent = err.message || 'Could not add event.';
-    errorEl.style.display = '';
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Add to Calendar';
+// ── Calendar "Add Event" → hub event-create flow ─────────────────────────────
+// Routes into the board's existing Create Event modal with the selected date
+// pre-filled, so there's one creation path that auto-syncs to the calendar.
+window.openCreateFromCal = function() {
+  closeCalPopover();
+  if (typeof openCreateEventModal === 'function') {
+    openCreateEventModal(window._calSelectedDate || '');
   }
 };
 

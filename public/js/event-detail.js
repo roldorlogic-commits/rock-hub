@@ -62,9 +62,11 @@ function renderEventHero(ev) {
   if (currentUser?.role === 'Board') {
     const idx  = STATUS_STEPS.indexOf(ev.Status);
     const next = STATUS_STEPS[idx + 1];
-    actionsEl.innerHTML = next
+    const statusBtn = next
       ? `<button class="btn btn-gold btn-sm" onclick="setStatus('${next}')">→ Mark ${next}</button>`
       : `<span class="status-pill completed" style="font-size:11px;">Completed</span>`;
+    const dupBtn = `<button class="btn btn-outline btn-sm" onclick="openDuplicateModal()" title="Duplicate this event">Duplicate</button>`;
+    actionsEl.innerHTML = dupBtn + statusBtn;
   } else {
     actionsEl.innerHTML = '';
   }
@@ -2348,6 +2350,43 @@ async function submitEditItn() {
     _modalError('editItnError', 'Network error — please try again.');
   } finally {
     _btnLoading('editItnSubmitBtn', false, 'Save Changes');
+  }
+}
+
+// ── Duplicate Event ───────────────────────────────────────────────────────────
+
+function openDuplicateModal() {
+  document.getElementById('dup_details').checked   = true;
+  document.getElementById('dup_itinerary').checked = true;
+  document.getElementById('dup_positions').checked = true;
+  _modalError('dupError', '');
+  _openModal('dupOverlay', 'dupModal');
+}
+function closeDuplicateModal() { _closeModal('dupOverlay', 'dupModal'); }
+
+async function submitDuplicate() {
+  const btn = document.getElementById('dupSubmitBtn');
+  _modalError('dupError', '');
+  btn.disabled = true;
+  btn.textContent = 'Duplicating…';
+  try {
+    const res = await fetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/duplicate`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        copyDetails:   document.getElementById('dup_details').checked,
+        copyItinerary: document.getElementById('dup_itinerary').checked,
+        copyPositions: document.getElementById('dup_positions').checked,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) { _modalError('dupError', data.error || 'Duplicate failed.'); return; }
+    // Navigate to new event — board members land on edit view directly
+    window.location.href = `/events/${encodeURIComponent(data.EventID)}`;
+  } catch (err) {
+    _modalError('dupError', 'Network error — please try again.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Duplicate Event';
   }
 }
 

@@ -269,6 +269,85 @@ router.post('/events', requireBoard, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Duplicate Event ──────────────────────────────────────────────────────────
+router.post('/events/:id/duplicate', requireBoard, async (req, res) => {
+  try {
+    const src = await sheets.getEventById(req.params.id);
+    if (!src) return res.status(404).json({ error: 'Source event not found.' });
+
+    const { copyDetails = true, copyItinerary = true, copyPositions = true } = req.body || {};
+    const newId = `EVT${Date.now()}`;
+
+    // Build new event fields
+    const fields = {
+      EventID:    newId,
+      EventName:  (src.EventName || 'Event') + ' (Copy)',
+      Status:     'Planning',
+      StartDate:  '', EndDate: '',
+      StartTime:  '', EndTime: '',
+      RegisteredCount: '0',
+      CalendarEventID: '',
+      CreatedAt: todayStr(), UpdatedAt: todayStr(),
+    };
+    if (copyDetails) {
+      Object.assign(fields, {
+        EventType:            src.EventType            || '',
+        Description:          src.Description          || '',
+        Location:             src.Location             || '',
+        Address:              src.Address              || '',
+        Capacity:             src.Capacity             || '0',
+        VolunteersNeeded:     src.VolunteersNeeded     || '0',
+        Cost:                 src.Cost                 || '0',
+        CoordinatorName:      src.CoordinatorName      || '',
+        CoordinatorEmail:     src.CoordinatorEmail     || '',
+        RegistrationInfo:     src.RegistrationInfo     || '',
+        RegistrationDeadline: '',
+      });
+    }
+
+    await sheets.appendRow('Events', fields);
+    await createDefaultChecklist(newId);
+
+    // Copy itinerary (without registrations/signups)
+    if (copyItinerary) {
+      const allItems = await sheets.getEventItinerary();
+      const srcItems = sortItnItems(allItems.filter(i => i.EventID === req.params.id));
+      for (const item of srcItems) {
+        await sheets.appendRow('EventItinerary', {
+          ItineraryID: `ITN${Date.now()}${Math.random().toString(36).slice(2,6)}`,
+          EventID:  newId,
+          ItemDate: item.ItemDate || '',
+          Time:     item.Time     || '',
+          Title:    item.Title    || '',
+          Notes:    item.Notes    || '',
+          SortOrder: item.SortOrder || '',
+          CreatedBy: req.user.name || req.user.email,
+        });
+      }
+    }
+
+    // Copy volunteer positions (role definitions only, not signups)
+    if (copyPositions) {
+      const allPos = await sheets.getVolunteerPositions();
+      const srcPos = allPos.filter(p => p.EventID === req.params.id);
+      for (const pos of srcPos) {
+        await sheets.appendRow('VolunteerPositions', {
+          PositionID:  `POS${Date.now()}${Math.random().toString(36).slice(2,6)}`,
+          EventID:     newId,
+          Title:       pos.Title       || '',
+          Description: pos.Description || '',
+          SlotsTotal:  pos.SlotsTotal  || '0',
+          SlotsFilled: '0',
+          Status:      'Open',
+          CreatedAt:   todayStr(),
+        });
+      }
+    }
+
+    res.json({ ok: true, EventID: newId });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Event detail (status stepper, edit) ─────────────────────────────────────
 router.get('/events/:id', async (req, res) => {
   try {

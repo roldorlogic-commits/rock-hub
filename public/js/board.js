@@ -1339,7 +1339,7 @@ async function loadAnnouncements() {
 let _ceStep = 1;
 const _CE_STEPS = 3;
 
-function openCreateEventModal() {
+function openCreateEventModal(prefillDate) {
   _ceStep = 1;
   const fields = [
     'ce_name','ce_type','ce_desc',
@@ -1347,6 +1347,11 @@ function openCreateEventModal() {
     'ce_capacity','ce_volunteers','ce_regDeadline','ce_cost','ce_coordName','ce_coordEmail'
   ];
   fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  // Pre-fill date when launched from the calendar tile
+  if (prefillDate) {
+    const sd = document.getElementById('ce_startDate');
+    if (sd) sd.value = prefillDate;
+  }
   document.getElementById('createEventSuccess').style.display = 'none';
   document.getElementById('createStepForm').style.display    = 'flex';
   document.getElementById('createEventNav').style.display    = 'flex';
