@@ -58,15 +58,28 @@ function selectBoard(id) {
     const mapped = (groups || []).filter(g => g.lat && g.lng && !isNaN(parseFloat(g.lat)));
     if (!mapped.length) { map.setView([28.5, -81.4], 8); return; }
     const markers = [];
+    let _hoverTimer = null;
+
     for (const g of mapped) {
       const marker = L.marker([parseFloat(g.lat), parseFloat(g.lng)], {
         icon: makeIcon(g.category),
         title: g.youth_group_name || g.church_name || ''
       });
       marker.bindPopup(makePopupHtml(g), { maxWidth: 240, className: 'rmap-popup-wrap' });
+      marker.on('mouseover', () => { clearTimeout(_hoverTimer); marker.openPopup(); });
+      marker.on('mouseout',  () => { _hoverTimer = setTimeout(() => marker.closePopup(), 220); });
       marker.addTo(map);
       markers.push(marker);
     }
+
+    // Keep popup open when the cursor moves from pin into the popup itself.
+    map.on('popupopen', (e) => {
+      const el = e.popup.getElement();
+      if (!el) return;
+      el.addEventListener('mouseenter', () => clearTimeout(_hoverTimer));
+      el.addEventListener('mouseleave', () => { _hoverTimer = setTimeout(() => map.closePopup(), 220); });
+    });
+
     try {
       const fg = L.featureGroup(markers);
       map.fitBounds(fg.getBounds().pad(0.15));

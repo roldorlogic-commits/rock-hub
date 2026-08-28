@@ -1786,6 +1786,7 @@ function openYGModal(g) {
   document.getElementById('yg_lat').value           = g?.lat           || '';
   document.getElementById('yg_lng').value           = g?.lng           || '';
   document.getElementById('yg_location_type').value = g?.location_type || '';
+  if (typeof ygAcReset     === 'function') ygAcReset();
   if (typeof ygAcSetStatus === 'function') ygAcSetStatus(g?.location_type || '');
 
   _populateYGContactDropdown();
