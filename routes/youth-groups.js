@@ -63,22 +63,31 @@ router.get('/youth-groups/geocodio', async (req, res) => {
   try {
     const url = `https://api.geocod.io/v1.7/suggest?q=${encodeURIComponent(q)}&country=US&api_key=${key}`;
     const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
-    if (!r.ok) return res.json([]);
+    if (!r.ok) {
+      const err = await r.text().catch(() => '');
+      console.error(`[geocodio] suggest HTTP ${r.status}:`, err.slice(0, 300));
+      return res.json([]);
+    }
     const data = await r.json();
 
+    // Log raw response to diagnose format (temporary)
+    console.log('[geocodio] suggest raw:', JSON.stringify(data).slice(0, 500));
+
     const suggestions = (data?.suggestions || []).map(s => {
-      // Geocodio suggest returns: { value, addressComponents: { number, predirectional, street, suffix, city, state, zip, country } }
+      // Handle both string suggestions and object suggestions
+      if (typeof s === 'string') {
+        return { label: s, address: '', city: '', state: '', zip: '', lat: '', lng: '' };
+      }
       const ac    = s.addressComponents || {};
       const num   = ac.number || '';
       const pre   = ac.predirectional ? ac.predirectional + ' ' : '';
       const st    = ac.street || '';
       const sfx   = ac.suffix || '';
-      const addr  = [num, pre + st + (sfx ? ' ' + sfx : '')].filter(Boolean).join(' ').trim();
+      const addr  = [num, (pre + st + (sfx ? ' ' + sfx : '')).trim()].filter(Boolean).join(' ').trim();
       const city  = ac.city  || '';
       const state = ac.state || '';
       const zip   = (ac.zip  || '').slice(0, 5);
       const label = s.value || [addr, city, state, zip].filter(Boolean).join(', ');
-      // Geocodio suggest doesn't return coordinates — use full geocode on selection
       return { label, address: addr, city, state, zip, lat: '', lng: '' };
     }).filter(s => s.label);
 
