@@ -1045,7 +1045,6 @@ async function confirmDeleteVol(idx) {
 function openAddVolModal() {
   ['av_first','av_last','av_email','av_phone','av_role','av_avail','av_notes']
     .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  document.getElementById('addVolWarn').style.display    = 'none';
   document.getElementById('addVolExact').style.display   = 'none';
   document.getElementById('addVolNav').style.display     = 'flex';
   document.getElementById('addVolSuccess').style.display = 'none';
@@ -1115,7 +1114,6 @@ async function submitAddVol(action, linkMemberID) {
 
 function _showAddVolExact(matches) {
   document.getElementById('addVolNav').style.display  = 'none';
-  document.getElementById('addVolWarn').style.display = 'none';
   const msgEl  = document.getElementById('addVolExactMsg');
   const btnsEl = document.getElementById('addVolExactBtns');
   msgEl.innerHTML = matches.slice(0, 3).map(m => {
