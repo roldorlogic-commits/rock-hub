@@ -257,6 +257,7 @@
           <span id="membersBulkCount" style="font-size:12px;color:var(--text-dim);flex:1;min-width:80px;"></span>
           <button class="btn btn-sm btn-ghost" onclick="openBulkAction('tag')">Apply Tag</button>
           <button class="btn btn-sm btn-ghost" onclick="openBulkAction('notify')">Send Email</button>
+          <button class="btn btn-sm btn-ghost" onclick="openBulkYGModal()">Assign to Youth Group</button>
           <button class="btn btn-sm" style="color:#ff6363;border-color:#ff636344;" onclick="openBulkAction('delete')">Delete</button>
           <button class="btn btn-sm btn-ghost" onclick="clearBulkSelection()">✕ Clear</button>
         </div>
@@ -807,6 +808,64 @@
       <button class="btn btn-outline btn-sm" onclick="closeBulkConfirm()">Cancel</button>
       <button class="btn btn-gold btn-sm" id="bulkConfirmBtn" onclick="executeBulkAction()">Confirm</button>
     </div>
+  </div>
+
+  <!-- ── Bulk: Assign to Youth Group modal ────────────────────────────────── -->
+  <div class="modal-overlay" id="bulkYGOverlay" onclick="closeBulkYGModal()"></div>
+  <div class="modal-box" id="bulkYGModal" style="width:500px;">
+    <button class="icon-btn slide-panel-close" onclick="closeBulkYGModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-title">Assign to Youth Group</div>
+
+    <!-- Step 1: pick group + role -->
+    <div id="bulkYGStep1">
+      <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px;">
+        <label>Youth Group <span style="color:var(--gold);">*</span>
+          <div style="position:relative;margin-top:4px;">
+            <input type="text" id="bulkYG_Search" placeholder="Search groups…" autocomplete="off"
+              oninput="bulkYGSearch()" onfocus="bulkYGSearch()">
+            <div id="bulkYG_Suggest" style="display:none;position:absolute;width:100%;max-height:200px;overflow-y:auto;
+              border:1px solid var(--gold-line);border-radius:6px;background:var(--surface);z-index:20;top:100%;margin-top:2px;"></div>
+          </div>
+          <input type="hidden" id="bulkYG_ID">
+        </label>
+        <label>Role <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(optional — applied to all)</span>
+          <select id="bulkYG_Role" style="margin-top:4px;">
+            <option value="">— No role —</option>
+            <option value="Member">Member</option>
+            <option value="Leader">Leader</option>
+            <option value="Youth Pastor">Youth Pastor</option>
+            <option value="Parent">Parent</option>
+            <option value="Other">Other</option>
+          </select>
+        </label>
+      </div>
+      <p class="form-error" id="bulkYGStep1Error" style="display:none;margin-top:10px;"></p>
+      <div class="modal-nav" style="margin-top:16px;">
+        <button class="btn btn-outline btn-sm" onclick="closeBulkYGModal()">Cancel</button>
+        <button class="btn btn-gold btn-sm" onclick="bulkYGContinue()">Continue →</button>
+      </div>
+    </div>
+
+    <!-- Step 2: conflict resolution (hidden until needed) -->
+    <div id="bulkYGStep2" style="display:none;">
+      <p style="color:var(--text-dim);font-size:13px;margin:14px 0 4px;" id="bulkYGConflictIntro"></p>
+      <div id="bulkYGConflictList" style="margin:10px 0;max-height:280px;overflow-y:auto;
+        border:1px solid var(--gold-line);border-radius:6px;"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="btn btn-sm btn-outline" onclick="bulkYGConflictAll('reassign')">Reassign All</button>
+        <button class="btn btn-sm btn-ghost" onclick="bulkYGConflictAll('skip')">Skip All</button>
+      </div>
+      <p class="form-error" id="bulkYGStep2Error" style="display:none;margin-top:10px;"></p>
+      <div class="modal-nav" style="margin-top:16px;">
+        <button class="btn btn-outline btn-sm" onclick="bulkYGBack()">← Back</button>
+        <button class="btn btn-gold btn-sm" id="bulkYGApplyBtn" onclick="bulkYGApply()">Assign</button>
+      </div>
+    </div>
+
+    <!-- Success state -->
+    <div id="bulkYGSuccess" style="display:none;margin-top:18px;font-size:13px;color:var(--gold);"></div>
   </div>
 
   <!-- ── Edit Document modal ────────────────────────────────────────────────── -->
