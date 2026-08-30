@@ -193,7 +193,19 @@ router.post('/members/bulk', requireBoard, async (req, res) => {
       return res.json({ ok: true, sent, total: targets.length });
     }
 
-    res.status(400).json({ error: 'Unknown action. Use delete, tag, or notify.' });
+    if (action === 'assign-youth-group') {
+      const { youth_group_id, youth_group_role } = req.body;
+      if (!youth_group_id) return res.status(400).json({ error: 'youth_group_id is required.' });
+      for (const m of targets) {
+        await sheets.updateRowFields('Members', 'MemberID', m.MemberID, {
+          youth_group_id,
+          youth_group_role: youth_group_role || ''
+        });
+      }
+      return res.json({ ok: true, affected: targets.length });
+    }
+
+    res.status(400).json({ error: 'Unknown action. Use delete, tag, notify, or assign-youth-group.' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

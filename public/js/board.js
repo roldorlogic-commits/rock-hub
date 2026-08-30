@@ -848,6 +848,211 @@ async function executeBulkAction() {
   }
 }
 
+// ── Bulk: Assign to Youth Group ──────────────────────────────────────────────
+
+let _bulkYGConflicts = []; // [{ memberID, name, currentGroupID, currentGroupName, action: 'reassign'|'skip' }]
+let _bulkYGNoConflict = []; // memberIDs with no current group (assigned directly)
+
+function openBulkYGModal() {
+  if (!_selectedMemberIds.size) { alert('Select at least one contact first.'); return; }
+  // Reset
+  _bulkYGConflicts = [];
+  _bulkYGNoConflict = [];
+  document.getElementById('bulkYG_Search').value = '';
+  document.getElementById('bulkYG_ID').value = '';
+  document.getElementById('bulkYG_Role').value = '';
+  document.getElementById('bulkYG_Suggest').style.display = 'none';
+  document.getElementById('bulkYGStep1').style.display = '';
+  document.getElementById('bulkYGStep2').style.display = 'none';
+  document.getElementById('bulkYGSuccess').style.display = 'none';
+  document.getElementById('bulkYGStep1Error').style.display = 'none';
+  document.getElementById('bulkYGOverlay').classList.add('open');
+  document.getElementById('bulkYGModal').classList.add('open');
+  setTimeout(() => document.getElementById('bulkYG_Search').focus(), 80);
+}
+
+function closeBulkYGModal() {
+  document.getElementById('bulkYGOverlay')?.classList.remove('open');
+  document.getElementById('bulkYGModal')?.classList.remove('open');
+}
+
+function bulkYGSearch() {
+  const q = (document.getElementById('bulkYG_Search').value || '').toLowerCase().trim();
+  const sug = document.getElementById('bulkYG_Suggest');
+  const groups = _youthGroupsCache || [];
+  const hits = q.length < 1
+    ? groups.slice(0, 10)
+    : groups.filter(g => {
+        const name = (g.youth_group_name || g.church_name || '').toLowerCase();
+        const church = (g.church_name || '').toLowerCase();
+        return name.includes(q) || church.includes(q);
+      }).slice(0, 10);
+  if (!hits.length) { sug.style.display = 'none'; return; }
+  sug.innerHTML = hits.map(g => {
+    const label = g.youth_group_name || g.church_name || g.id;
+    const sub   = g.youth_group_name && g.church_name ? `<span style="font-size:10px;color:var(--text-muted);margin-left:6px;">${escHtml(g.church_name)}</span>` : '';
+    return `<div style="padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--gold-line);"
+      onclick="bulkYGPick('${g.id}')"
+      onmousedown="event.preventDefault()">
+      ${escHtml(label)}${sub}
+    </div>`;
+  }).join('');
+  sug.style.display = 'block';
+}
+
+function bulkYGPick(id) {
+  const grp   = (_youthGroupsCache || []).find(g => g.id === id);
+  const label = grp ? (grp.youth_group_name || grp.church_name || id) : id;
+  document.getElementById('bulkYG_ID').value = id;
+  document.getElementById('bulkYG_Search').value = label;
+  document.getElementById('bulkYG_Suggest').style.display = 'none';
+  document.getElementById('bulkYGStep1Error').style.display = 'none';
+}
+
+function bulkYGContinue() {
+  const groupID = document.getElementById('bulkYG_ID').value.trim();
+  const errEl   = document.getElementById('bulkYGStep1Error');
+  if (!groupID) {
+    errEl.textContent = 'Please select a youth group.';
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+
+  const role     = document.getElementById('bulkYG_Role').value;
+  const ids      = [..._selectedMemberIds];
+  const members  = _allMembersCache || [];
+
+  // Partition: no conflict vs. conflict (already in a DIFFERENT group)
+  _bulkYGNoConflict = [];
+  _bulkYGConflicts  = [];
+
+  for (const id of ids) {
+    const m = members.find(x => x.MemberID === id);
+    if (!m) continue;
+    const currentGID = (m.youth_group_id || '').trim();
+    if (!currentGID || currentGID === groupID) {
+      _bulkYGNoConflict.push(id);
+    } else {
+      const grp = (_youthGroupsCache || []).find(g => g.id === currentGID);
+      const currentGroupName = grp ? (grp.youth_group_name || grp.church_name || currentGID) : currentGID;
+      const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || m.Email || m.MemberID;
+      _bulkYGConflicts.push({ memberID: id, name, currentGroupID: currentGID, currentGroupName, action: 'reassign' });
+    }
+  }
+
+  if (!_bulkYGConflicts.length) {
+    // No conflicts — go straight to apply
+    _bulkYGExecute(groupID, role, [..._bulkYGNoConflict]);
+    return;
+  }
+
+  // Show conflict step
+  _bulkYGRenderConflicts(groupID, role);
+}
+
+function _bulkYGRenderConflicts(groupID, role) {
+  const grp  = (_youthGroupsCache || []).find(g => g.id === groupID);
+  const dest = grp ? (grp.youth_group_name || grp.church_name || groupID) : groupID;
+  const n    = _bulkYGConflicts.length;
+  document.getElementById('bulkYGConflictIntro').textContent =
+    `${n} selected contact${n === 1 ? ' is' : 's are'} already in another youth group. Choose what to do for each:`;
+
+  document.getElementById('bulkYGConflictList').innerHTML = _bulkYGConflicts.map((c, i) =>
+    `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(201,169,110,.1);" id="bulkYGCR_${i}">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;color:var(--text-white);">${escHtml(c.name)}</div>
+        <div style="font-size:11px;color:var(--text-muted);">Currently in: ${escHtml(c.currentGroupName)}</div>
+      </div>
+      <button class="btn btn-sm btn-gold" id="bulkYGCRbtn_${i}_reassign"
+        onclick="bulkYGConflictOne(${i},'reassign')">Reassign</button>
+      <button class="btn btn-sm btn-outline" id="bulkYGCRbtn_${i}_skip"
+        onclick="bulkYGConflictOne(${i},'skip')" style="opacity:.55;">Skip</button>
+    </div>`
+  ).join('');
+
+  const total = _bulkYGNoConflict.length + _bulkYGConflicts.filter(c => c.action === 'reassign').length;
+  document.getElementById('bulkYGApplyBtn').textContent = `Assign ${total} contact${total === 1 ? '' : 's'}`;
+  document.getElementById('bulkYGStep2Error').style.display = 'none';
+  document.getElementById('bulkYGStep1').style.display = 'none';
+  document.getElementById('bulkYGStep2').style.display = '';
+
+  // Store current groupID/role on the modal for apply step
+  document.getElementById('bulkYGModal').dataset.groupId = groupID;
+  document.getElementById('bulkYGModal').dataset.role    = role;
+}
+
+function bulkYGConflictOne(i, action) {
+  _bulkYGConflicts[i].action = action;
+  const reassignBtn = document.getElementById(`bulkYGCRbtn_${i}_reassign`);
+  const skipBtn     = document.getElementById(`bulkYGCRbtn_${i}_skip`);
+  if (reassignBtn) { reassignBtn.classList.toggle('btn-gold', action === 'reassign'); reassignBtn.style.opacity = action === 'reassign' ? '1' : '.45'; }
+  if (skipBtn)     { skipBtn.classList.toggle('btn-outline', true); skipBtn.style.opacity = action === 'skip' ? '1' : '.45'; }
+  const total = _bulkYGNoConflict.length + _bulkYGConflicts.filter(c => c.action === 'reassign').length;
+  document.getElementById('bulkYGApplyBtn').textContent = `Assign ${total} contact${total === 1 ? '' : 's'}`;
+}
+
+function bulkYGConflictAll(action) {
+  _bulkYGConflicts.forEach((_, i) => bulkYGConflictOne(i, action));
+}
+
+function bulkYGBack() {
+  document.getElementById('bulkYGStep2').style.display = 'none';
+  document.getElementById('bulkYGStep1').style.display = '';
+}
+
+async function bulkYGApply() {
+  const modal   = document.getElementById('bulkYGModal');
+  const groupID = modal.dataset.groupId;
+  const role    = modal.dataset.role;
+  const ids     = [
+    ..._bulkYGNoConflict,
+    ..._bulkYGConflicts.filter(c => c.action === 'reassign').map(c => c.memberID)
+  ];
+  if (!ids.length) {
+    document.getElementById('bulkYGStep2Error').textContent = 'No contacts to assign — mark at least one conflict as Reassign.';
+    document.getElementById('bulkYGStep2Error').style.display = 'block';
+    return;
+  }
+  await _bulkYGExecute(groupID, role, ids);
+}
+
+async function _bulkYGExecute(groupID, role, ids) {
+  const btn = document.getElementById('bulkYGApplyBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Assigning…'; }
+  const step1Btn = document.querySelector('#bulkYGStep1 .btn-gold');
+  if (step1Btn) { step1Btn.disabled = true; step1Btn.textContent = 'Assigning…'; }
+  try {
+    const res  = await fetch('/api/members/bulk', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'assign-youth-group', ids, youth_group_id: groupID, youth_group_role: role })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      const errId = document.getElementById('bulkYGStep2').style.display !== 'none' ? 'bulkYGStep2Error' : 'bulkYGStep1Error';
+      document.getElementById(errId).textContent = data.error || 'Assignment failed.';
+      document.getElementById(errId).style.display = 'block';
+      return;
+    }
+    // Show success then close
+    document.getElementById('bulkYGStep1').style.display = 'none';
+    document.getElementById('bulkYGStep2').style.display = 'none';
+    const ok = document.getElementById('bulkYGSuccess');
+    ok.style.display = 'block';
+    ok.textContent = `${data.affected} contact${data.affected === 1 ? '' : 's'} assigned.`;
+    _selectedMemberIds.clear();
+    await Promise.all([loadMembers(), loadYouthGroups()]);
+    setTimeout(() => closeBulkYGModal(), 1200);
+  } catch (err) {
+    const errId = document.getElementById('bulkYGStep2').style.display !== 'none' ? 'bulkYGStep2Error' : 'bulkYGStep1Error';
+    document.getElementById(errId).textContent = 'Network error — please try again.';
+    document.getElementById(errId).style.display = 'block';
+  } finally {
+    if (btn) { btn.disabled = false; }
+    if (step1Btn) { step1Btn.disabled = false; step1Btn.textContent = 'Continue →'; }
+  }
+}
+
 // ── Contact create / edit modal ──────────────────────────────────────────────
 let _contactModalMember = null;
 
