@@ -818,7 +818,12 @@
   border: 0.5px solid var(--gold-line);
   border-radius: var(--radius-sm);
   padding: 14px 16px;
+  transition: border-color .15s;
 }
+.vol-card--board { cursor: pointer; }
+.vol-card--board:hover { border-color: rgba(201,169,110,.45); }
+.vol-card.expanded { border-color: rgba(201,169,110,.65); }
+
 .vol-card-head {
   display: flex;
   align-items: flex-start;
@@ -846,8 +851,27 @@
   gap: 6px;
   flex-shrink: 0;
 }
+.vol-card-corner {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.vol-chevron {
+  width: 18px; height: 18px;
+  stroke: var(--text-muted);
+  transition: transform .2s;
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+.vol-card.expanded .vol-chevron { transform: rotate(180deg); }
 
 .vol-signups { margin-top: 12px; border-top: 0.5px solid var(--gold-line); padding-top: 12px; }
+.vol-signups-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
 .vol-signups-empty { font-size: 12px; color: var(--text-muted); padding: 4px 2px; }
 
 .vol-signup-table { width: 100%; border-collapse: collapse; font-size: 12px; }
