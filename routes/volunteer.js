@@ -9,6 +9,7 @@ const router    = express.Router();
 const volunteer = require('../lib/volunteer');
 const sheets    = require('../lib/sheets');
 const { requireAuth, requireBoard } = require('../middleware/auth');
+const { generateVolunteerRosterPdf } = require('../lib/pdf');
 
 router.use(requireAuth);
 
@@ -126,6 +127,38 @@ router.delete('/events/:id/positions/:posId/signups/:signupId', requireBoard, as
     const position  = positions.find(p => p.PositionID === req.params.posId) || null;
     res.json({ ok: true, position });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Volunteer Roster PDF export ──────────────────────────────────────────────
+
+router.get('/events/:id/volunteers/pdf', requireBoard, async (req, res) => {
+  try {
+    const [ev, positions, allSignups] = await Promise.all([
+      sheets.getEventById(req.params.id),
+      volunteer.getPositionsByEvent(req.params.id),
+      volunteer.getSignupsByEvent(req.params.id),
+    ]);
+    if (!ev) return res.status(404).json({ error: 'Event not found.' });
+
+    const signupsByPos = {};
+    for (const s of allSignups) {
+      if (!signupsByPos[s.PositionID]) signupsByPos[s.PositionID] = [];
+      signupsByPos[s.PositionID].push(s);
+    }
+    const posWithSignups = positions.map(p => ({ ...p, signups: signupsByPos[p.PositionID] || [] }));
+
+    const pdf  = await generateVolunteerRosterPdf(ev, posWithSignups);
+    const safe = (ev.EventName || 'Event').replace(/[^a-zA-Z0-9 \-_().]/g, '').trim();
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${safe} - Volunteer Roster.pdf"`,
+      'Content-Length': pdf.length,
+    });
+    res.end(pdf);
+  } catch (err) {
+    console.error('[pdf] volunteer roster failed:', err.message);
+    res.status(500).json({ error: 'PDF generation failed — ' + err.message });
+  }
 });
 
 module.exports = router;

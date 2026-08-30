@@ -979,9 +979,16 @@ function renderVolunteersTab(positions, el) {
   el = el || document.getElementById('volunteersContent');
   const isBoard = currentUser?.role === 'Board';
 
+  const exportBtn = (isBoard && positions.length)
+    ? `<button class="btn btn-sm" style="border:1px solid var(--gold-line);color:var(--gold);background:transparent;" onclick="exportVolunteerRosterPdf()">&#x21E9; Export PDF</button>`
+    : '';
+
   const header = `<div class="tab-inner-header">
     <div style="font-size:12px;color:var(--text-muted);">${positions.length} position${positions.length === 1 ? '' : 's'}</div>
-    ${isBoard ? `<button class="btn btn-gold btn-sm" onclick="openAddPositionModal()">+ Add Position</button>` : ''}
+    <div style="display:flex;gap:8px;">
+      ${exportBtn}
+      ${isBoard ? `<button class="btn btn-gold btn-sm" onclick="openAddPositionModal()">+ Add Position</button>` : ''}
+    </div>
   </div>`;
 
   if (!positions.length) {
@@ -995,40 +1002,56 @@ function renderVolunteersTab(positions, el) {
     positions.map(p => _positionCard(p, isBoard)).join('')
   }</div>`;
 
-  // Re-open any signup tables that were expanded before a refresh.
-  if (isBoard) _volExpanded.forEach(posId => {
-    if (!positions.some(p => p.PositionID === posId)) return;
-    const card = el.querySelector(`.vol-card[data-pos-id="${posId}"]`);
-    const btn  = card?.querySelector('.vol-card-actions .btn-outline');
-    if (btn) btn.textContent = 'Hide Signups';
-    _renderSignupTable(posId);
-  });
+  // Re-open any cards that were expanded before a refresh.
+  if (isBoard) {
+    _volExpanded.forEach(posId => {
+      if (!positions.some(p => p.PositionID === posId)) return;
+      const card = el.querySelector(`.vol-card[data-pos-id="${posId}"]`);
+      const box  = document.getElementById(`volSignups_${posId}`);
+      if (card) card.classList.add('expanded');
+      if (box)  box.style.display = 'block';
+      _renderSignupTable(posId);
+    });
+  }
 }
 
 function _positionCard(p, isBoard) {
   const total     = parseInt(p.SlotsTotal, 10) || 0;
   const filled    = parseInt(p.SlotsFilled, 10) || 0;
   const remaining = Math.max(0, total - filled);
-  const editIco  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
-  const trashIco = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+  const editIco   = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+  const trashIco  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+  const chevIco   = `<svg class="vol-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>`;
 
-  let action;
   if (isBoard) {
-    action = `<div class="vol-card-actions">
-      <button class="btn btn-gold btn-sm" onclick="openAssignModal('${p.PositionID}')">+ Assign</button>
-      <button class="btn btn-outline btn-sm" onclick="toggleSignups('${p.PositionID}', this)">Manage Signups</button>
-      <button class="icon-btn" title="Edit" onclick="openEditPositionModal('${p.PositionID}')">${editIco}</button>
-      <button class="icon-btn" title="Delete" onclick="deletePosition('${p.PositionID}')">${trashIco}</button>
+    return `<div class="vol-card vol-card--board" data-pos-id="${p.PositionID}" onclick="toggleSignups('${p.PositionID}')">
+      <div class="vol-card-head">
+        <div style="min-width:0;flex:1;">
+          <div class="vol-card-title">${_esc(p.Title)}</div>
+          ${p.Description ? `<div class="vol-card-desc">${_esc(p.Description)}</div>` : ''}
+          <div class="vol-card-slots">
+            ${_volStatusBadge(p.Status)}
+            <span>${filled} of ${total} filled</span>
+          </div>
+        </div>
+        <div class="vol-card-corner" onclick="event.stopPropagation()">
+          <button class="icon-btn" title="Edit" onclick="openEditPositionModal('${p.PositionID}')">${editIco}</button>
+          <button class="icon-btn" title="Delete" onclick="deletePosition('${p.PositionID}')">${trashIco}</button>
+          ${chevIco}
+        </div>
+      </div>
+      <div class="vol-signups" id="volSignups_${p.PositionID}" style="display:none;"></div>
     </div>`;
+  }
+
+  const mine = _volMine().has(p.PositionID);
+  let action;
+  if (mine) {
+    action = `<div class="vol-card-actions"><span class="status-pill pending" style="font-size:11px;">⏳ Pending approval</span></div>`;
+  } else if ((p.Status || 'open').toLowerCase() === 'open' && remaining > 0) {
+    action = `<div class="vol-card-actions"><button class="btn btn-gold btn-sm" onclick="openVolSignupModal('${p.PositionID}')">Sign Up</button></div>`;
   } else {
-    const mine = _volMine().has(p.PositionID);
-    if (mine) {
-      action = `<div class="vol-card-actions"><span class="status-pill pending" style="font-size:11px;">⏳ Pending approval</span></div>`;
-    } else if ((p.Status || 'open').toLowerCase() === 'open' && remaining > 0) {
-      action = `<div class="vol-card-actions"><button class="btn btn-gold btn-sm" onclick="openVolSignupModal('${p.PositionID}')">Sign Up</button></div>`;
-    } else {
-      action = `<div class="vol-card-actions"><span class="status-pill" style="font-size:11px;opacity:.6;">Not accepting signups</span></div>`;
-    }
+    action = `<div class="vol-card-actions"><span class="status-pill" style="font-size:11px;opacity:.6;">Not accepting signups</span></div>`;
   }
 
   return `<div class="vol-card" data-pos-id="${p.PositionID}">
@@ -1038,28 +1061,28 @@ function _positionCard(p, isBoard) {
         ${p.Description ? `<div class="vol-card-desc">${_esc(p.Description)}</div>` : ''}
         <div class="vol-card-slots">
           ${_volStatusBadge(p.Status)}
-          <span>${filled} of ${total} filled${!isBoard && remaining > 0 ? ` · ${remaining} slot${remaining === 1 ? '' : 's'} left` : ''}</span>
+          <span>${filled} of ${total} filled${remaining > 0 ? ` · ${remaining} slot${remaining === 1 ? '' : 's'} left` : ''}</span>
         </div>
       </div>
       ${action}
     </div>
-    <div class="vol-signups" id="volSignups_${p.PositionID}" style="display:none;"></div>
   </div>`;
 }
 
 // ── Manage signups (board, inline expand) ────────────────────────────────────
 
-async function toggleSignups(posId, btn) {
-  const box = document.getElementById(`volSignups_${posId}`);
+async function toggleSignups(posId) {
+  const card = document.querySelector(`.vol-card[data-pos-id="${posId}"]`);
+  const box  = document.getElementById(`volSignups_${posId}`);
   if (!box) return;
   if (_volExpanded.has(posId)) {
     _volExpanded.delete(posId);
     box.style.display = 'none';
-    if (btn) btn.textContent = 'Manage Signups';
+    card?.classList.remove('expanded');
     return;
   }
   _volExpanded.add(posId);
-  if (btn) btn.textContent = 'Hide Signups';
+  card?.classList.add('expanded');
   box.style.display = 'block';
   box.innerHTML = `<div class="loading-row"><div class="spinner"></div></div>`;
   await _renderSignupTable(posId);
@@ -1068,17 +1091,24 @@ async function toggleSignups(posId, btn) {
 async function _renderSignupTable(posId) {
   const box = document.getElementById(`volSignups_${posId}`);
   if (!box) return;
+  const toolbar = `<div class="vol-signups-toolbar">
+    <button class="btn btn-gold btn-sm" onclick="event.stopPropagation();openAssignModal('${posId}')">+ Assign</button>
+  </div>`;
   try {
     const signups = await apiFetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/positions/${encodeURIComponent(posId)}/signups`);
     _volSignupsByPos[posId] = signups;
-    if (!signups.length) { box.innerHTML = `<div class="vol-signups-empty">No signups yet.</div>`; box.style.display = 'block'; return; }
-    box.innerHTML = `<table class="vol-signup-table">
+    if (!signups.length) {
+      box.innerHTML = toolbar + `<div class="vol-signups-empty">No signups yet.</div>`;
+      box.style.display = 'block';
+      return;
+    }
+    box.innerHTML = toolbar + `<table class="vol-signup-table">
       <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Status</th><th>Submitted</th><th>Actions</th></tr></thead>
       <tbody>${signups.map(s => _signupRow(posId, s)).join('')}</tbody>
     </table>`;
     box.style.display = 'block';
   } catch (e) {
-    box.innerHTML = `<div class="vol-signups-empty">Could not load signups.</div>`;
+    box.innerHTML = toolbar + `<div class="vol-signups-empty">Could not load signups.</div>`;
     box.style.display = 'block';
   }
 }
@@ -1127,6 +1157,11 @@ async function setSignupStatus(posId, signupId, status) {
     // Approving auto-enrolls a registrant — refresh that tab next time it opens.
     if (status === 'approved') _tabLoaded.registrations = false;
   } catch (e) { alert('Network error — please try again.'); }
+}
+
+function exportVolunteerRosterPdf() {
+  const id = encodeURIComponent(currentEvent?.EventID || eventIdFromPath());
+  window.location.href = `/api/events/${id}/volunteers/pdf`;
 }
 
 // ── Position add / edit modal ────────────────────────────────────────────────
