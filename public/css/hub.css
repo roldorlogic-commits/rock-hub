@@ -158,7 +158,8 @@ body.hub-page .audience-badge.all { background: #EBEDF1; color: #5A6478; border-
   z-index: 210;
 }
 .hub-dd:hover .hub-dd-menu,
-.hub-dd:focus-within .hub-dd-menu { display: block; }
+.hub-dd:focus-within .hub-dd-menu,
+.hub-dd.open .hub-dd-menu { display: block; }
 .hub-dd-menu a,
 .hub-dd-menu button {
   display: flex;
