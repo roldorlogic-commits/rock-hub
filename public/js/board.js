@@ -878,12 +878,13 @@ async function executeBulkAction() {
       if (notifyChannel === 'email' || notifyChannel === 'both') parts.push(`${data.emailSent} email${data.emailSent !== 1 ? 's' : ''}`);
       if (notifyChannel === 'sms'   || notifyChannel === 'both') parts.push(`${data.smsSent} SMS`);
       const failed = data.results?.filter(r => {
-        if (notifyChannel === 'sms'  && !r.sms?.sent)   return true;
+        if (notifyChannel === 'sms'  && !r.sms?.sent && !r.sms?.skippedOptOut)   return true;
         if (notifyChannel === 'email' && !r.email?.sent) return true;
         if (notifyChannel === 'both' && !r.sms?.sent && !r.email?.sent) return true;
         return false;
       }) || [];
       let msg = `Sent: ${parts.join(' + ')} (of ${data.total} contacts).`;
+      if (data.smsSkipped) msg += ` ${data.smsSkipped} opted-out number${data.smsSkipped !== 1 ? 's' : ''} skipped.`;
       if (failed.length) {
         const names = failed.map(r => r.name).join(', ');
         msg += `\nCould not reach: ${names}`;

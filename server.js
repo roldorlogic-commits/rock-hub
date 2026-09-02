@@ -123,7 +123,9 @@ app.use('/api',        require('./routes/calendar'));
 app.use('/api/admin',  require('./routes/admin'));
 app.use('/api/meta',   require('./routes/meta-insights'));
 app.use('/api/agent',  require('./routes/agent'));
+app.use('/api/comms',  require('./routes/comms'));
 app.use('/webhooks',   require('./routes/email-inbound'));
+app.use('/webhooks',   require('./routes/sms-inbound'));
 
 const { requireAuth, requireBoard, requireBoardOrAdmin, requireActiveVolunteer, requireVP, getJwtVolunteer } = require('./middleware/auth');
 
@@ -162,6 +164,25 @@ sheetsLib.ensureAllAppSheets()
       console.log(`\n  ROCK Hub  →  http://0.0.0.0:${PORT}\n`);
     });
   });
+
+// Seed the "Save Our Number" welcome template if no templates exist yet.
+setTimeout(async () => {
+  try {
+    const comms = require('./lib/comms');
+    const existing = await comms.getTemplates();
+    if (!existing.length) {
+      await comms.createTemplate({
+        name:      'Welcome / Save Our Number',
+        channel:   'SMS',
+        subject:   '',
+        body:      'This is our official text line — save this number! Reply STOP to opt out, HELP for help.',
+        variables: '',
+        createdBy: 'system'
+      });
+      console.log('Seeded default Welcome/Save Our Number SMS template.');
+    }
+  } catch (err) { console.error('Template seed failed:', err.message); }
+}, 12000);
 
 sheetsLib.ensureColumns('Events', ['PhotoURL'])
   .catch(err => console.error('Could not add PhotoURL column to Events:', err.message));

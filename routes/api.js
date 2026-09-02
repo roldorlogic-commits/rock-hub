@@ -215,9 +215,10 @@ router.post('/members/bulk', requireBoard, async (req, res) => {
         results.push(entry);
       }
 
-      const emailSent = results.filter(r => r.email?.sent).length;
-      const smsSent   = results.filter(r => r.sms?.sent).length;
-      return res.json({ ok: true, results, emailSent, smsSent, total: targets.length });
+      const emailSent  = results.filter(r => r.email?.sent).length;
+      const smsSent    = results.filter(r => r.sms?.sent).length;
+      const smsSkipped = results.filter(r => r.sms?.skippedOptOut).length;
+      return res.json({ ok: true, results, emailSent, smsSent, smsSkipped, total: targets.length });
     }
 
     if (action === 'assign-youth-group') {

@@ -8,6 +8,7 @@
   let _open    = false;
   let _busy    = false;
   let _history = []; // [{role:'user'|'model', parts:[{text}]}]
+  let _commsSettings = null; // cached CommSettings for branded preview
 
   // ── DOM bootstrap ─────────────────────────────────────────────────────────
 
@@ -228,7 +229,7 @@
 
   // ── Action handlers ────────────────────────────────────────────────────────
 
-  function handleAction(action, replyText) {
+  async function handleAction(action, replyText) {
     switch (action.type) {
       case 'prefill_form':    renderPrefillAction(action.payload, replyText); break;
       case 'draft_document':  renderDraftAction(action.payload, replyText);   break;
@@ -420,7 +421,25 @@
 
   // ── Compose / confirm gate ─────────────────────────────────────────────────
 
-  function renderComposeAction(payload, replyText) {
+  async function _loadCommsSettings() {
+    if (_commsSettings) return _commsSettings;
+    try {
+      const r = await fetch('/api/comms/settings');
+      if (r.ok) _commsSettings = await r.json();
+    } catch (_) {}
+    return _commsSettings || {};
+  }
+
+  function _smsSegmentInfo(text) {
+    const len = (text || '').length;
+    const hasUni = [...(text || '')].some(c => c.charCodeAt(0) > 127);
+    const sMax = hasUni ? 70 : 160;
+    const mMax = hasUni ? 67 : 153;
+    if (len <= sMax) return { chars: len, segments: 1 };
+    return { chars: len, segments: Math.ceil(len / mMax) };
+  }
+
+  async function renderComposeAction(payload, replyText) {
     const { channel, recipients, subject, body: msgBody, summary } = payload;
     const channelLabel = channel === 'sms' ? 'SMS' : 'Email';
     const subjectHtml  = (channel === 'email' && subject)
@@ -431,6 +450,20 @@
       `<div class="r-row">${escHtml(r.name)} <span style="color:#4a6a8a;">→ ${escHtml(r.to)}</span></div>`
     ).join('');
 
+    // For SMS: compute branded preview
+    let displayBody = msgBody;
+    let segInfoHtml = '';
+    if (channel === 'sms') {
+      const s = await _loadCommsSettings();
+      const prefix  = (s.sms_prefix  || '').trim();
+      const signoff = (s.sms_signoff || '').trim();
+      if (prefix)  displayBody = `${prefix} ${displayBody}`;
+      if (signoff) displayBody = `${displayBody}\n${signoff}`;
+      const si = _smsSegmentInfo(displayBody);
+      const warn = si.segments > 1 ? ' — ⚠ multi-segment' : '';
+      segInfoHtml = `<div style="font-size:10px;color:#8a9ab5;margin-top:3px;">${si.chars} chars · ${si.segments} segment${si.segments !== 1 ? 's' : ''}${warn}</div>`;
+    }
+
     const uniqueId = Date.now();
 
     const card = document.createElement('div');
@@ -440,12 +473,13 @@
       ${subjectHtml}
       <div style="font-size:10px;color:#8a9ab5;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;">${recipients.length} Recipient${recipients.length !== 1 ? 's' : ''}</div>
       <div class="agent-compose-recipients">${recipientRows}</div>
-      <div style="font-size:10px;color:#8a9ab5;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;">Message</div>
-      <div class="agent-compose-body-preview" id="agent-compose-view-${uniqueId}">${escHtml(msgBody)}</div>
-      <textarea class="agent-compose-edit" id="agent-compose-edit-${uniqueId}">${escHtml(msgBody)}</textarea>
+      <div style="font-size:10px;color:#8a9ab5;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;">${channel === 'sms' ? 'Final SMS (with branding)' : 'Message'}</div>
+      <div class="agent-compose-body-preview" id="agent-compose-view-${uniqueId}">${escHtml(displayBody)}</div>
+      ${segInfoHtml}
+      <textarea class="agent-compose-edit" id="agent-compose-edit-${uniqueId}" data-raw="${escHtml(msgBody)}">${escHtml(msgBody)}</textarea>
       <div class="agent-action-btns">
         <button class="agent-btn gold" id="agent-send-confirm-${uniqueId}"
-          onclick="window._agentConfirmSend(this,${escJson(channel)},${escJson(recipients)},${escJson(subject||'')},${escJson('view-'+uniqueId)})">
+          onclick="window._agentConfirmSend(this,${escJson(channel)},${escJson(recipients)},${escJson(subject||'')},${escJson('edit-'+uniqueId)})">
           Send ${escHtml(channelLabel)}
         </button>
         <button class="agent-btn ghost" onclick="window._agentToggleComposeEdit(${uniqueId})">Edit</button>
@@ -460,21 +494,18 @@
     const editor = document.getElementById(`agent-compose-edit-${uid}`);
     if (!view || !editor) return;
     if (editor.style.display === 'none' || !editor.style.display) {
-      editor.style.display = 'block';
-      view.style.display   = 'none';
+      editor.classList.add('visible');
+      view.style.display = 'none';
     } else {
-      view.textContent     = editor.value;
-      editor.style.display = 'none';
-      view.style.display   = 'block';
+      editor.classList.remove('visible');
+      view.style.display = 'block';
     }
   };
 
-  window._agentConfirmSend = async function (btn, channel, recipients, subject, viewId) {
-    const viewEl  = document.getElementById('agent-compose-' + viewId);
-    const editEl  = viewEl?.nextElementSibling; // textarea
-    const msgBody = (editEl && editEl.tagName === 'TEXTAREA' && editEl.style.display !== 'none')
-      ? editEl.value.trim()
-      : (viewEl?.textContent?.trim() || '');
+  window._agentConfirmSend = async function (btn, channel, recipients, subject, editId) {
+    // Always read from the textarea — branding is applied server-side so we send the raw body
+    const editEl  = document.getElementById('agent-compose-' + editId);
+    const msgBody = editEl ? editEl.value.trim() : '';
 
     if (!msgBody) { showToast('Message body is empty.', true); return; }
 
