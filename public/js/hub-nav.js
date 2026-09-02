@@ -172,6 +172,14 @@
         const menu = document.createElement('div');
         menu.className = 'hub-dd-menu';
         link.dropdown.forEach(item => menu.appendChild(makeLink(item, false)));
+        // Click toggles open; clicking outside closes it
+        toggle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isOpen = dd.classList.toggle('open');
+          toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        });
+        menu.addEventListener('click', () => { dd.classList.remove('open'); });
+        document.addEventListener('click', () => { dd.classList.remove('open'); }, { capture: false });
         dd.appendChild(toggle);
         dd.appendChild(menu);
         nav.appendChild(dd);
