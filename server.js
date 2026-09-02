@@ -122,6 +122,7 @@ app.use('/api',        require('./routes/youth-groups'));
 app.use('/api',        require('./routes/calendar'));
 app.use('/api/admin',  require('./routes/admin'));
 app.use('/api/meta',   require('./routes/meta-insights'));
+app.use('/api/agent',  require('./routes/agent'));
 app.use('/webhooks',   require('./routes/email-inbound'));
 
 const { requireAuth, requireBoard, requireBoardOrAdmin, requireActiveVolunteer, requireVP, getJwtVolunteer } = require('./middleware/auth');

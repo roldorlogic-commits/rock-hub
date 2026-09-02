@@ -260,4 +260,13 @@
     buildDesktop(BOARD_LINKS);
     buildMobile(BOARD_LINKS);
   });
+
+  // Load the AI agent for board members on every hub page.
+  fetch('/api/agent/status').then(r => r.ok ? r.json() : null).then(status => {
+    if (!status?.configured) return;
+    if (document.getElementById('rock-agent-fab')) return;
+    const s = document.createElement('script');
+    s.src = '/js/agent.js';
+    document.body.appendChild(s);
+  }).catch(() => {});
 })();
