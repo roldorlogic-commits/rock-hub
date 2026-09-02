@@ -43,13 +43,16 @@ function checkRateLimit(email_) {
 // ── Hub data loader ───────────────────────────────────────────────────────────
 
 async function loadHubContext() {
-  const [members, events, volunteers, tasks, youthGroups, announcements] = await Promise.all([
+  const comms = require('../lib/comms');
+  const [members, events, volunteers, tasks, youthGroups, announcements, templates, optOuts] = await Promise.all([
     sheets.getMembers(),
     sheets.getEvents(),
     sheets.getVolunteers(),
     sheets.getTasks(),
     sheets.getYouthGroups(),
     sheets.getAnnouncements().catch(() => []),
+    comms.getTemplates().catch(() => []),
+    comms.getOptOuts().catch(() => []),
   ]);
 
   const now = new Date();
@@ -114,6 +117,16 @@ async function loadHubContext() {
     date:    a.SentAt || null,
   }));
 
+  const optedOutPhones = new Set(optOuts.filter(r => r.Status === 'opted-out').map(r => r.Phone));
+
+  const templatesSummary = templates.map(t => ({
+    id:      t.TemplateID,
+    name:    t.Name,
+    channel: t.Channel,
+    subject: t.Subject || null,
+    body:    t.Body,
+  }));
+
   return {
     asOf:          now.toISOString(),
     members:       membersSummary,
@@ -122,6 +135,8 @@ async function loadHubContext() {
     tasks:         tasksSummary,
     youthGroups:   ygSummary,
     announcements: annSummary,
+    templates:     templatesSummary,
+    optedOutPhones: [...optedOutPhones],
   };
 }
 
@@ -142,11 +157,14 @@ TODAY: ${new Date().toLocaleDateString('en-US', { weekday:'long', year:'numeric'
 3. DRAFT DOCUMENTS — call draft_document() with a title and clean HTML content for letters, reports, summaries. Use <h2>, <p>, <ul>, <li>, <strong> only.
 
 4. COMPOSE MESSAGES — call compose_message() to draft an email or SMS. It ALWAYS goes through a confirm-before-send gate. You never send on your own initiative. For group sends, include every resolved recipient.
+   - Templates are listed in Hub data under "templates" — you may reference them by name and use their body as a starting point.
+   - NEVER include opted-out phone numbers (listed in optedOutPhones) as SMS recipients.
 
 ## GUARDRAILS
 - Resolve all names/emails/phones from the Hub data below — never guess.
 - Never auto-submit forms, create/edit/delete records, or perform unsolicited sends.
 - Sensitive data (emails, phones) may be used — this is a paid, private deployment.
+- SMS: automatically exclude any number in the optedOutPhones list from recipient lists.
 
 ## LIVE HUB DATA
 \`\`\`json
@@ -282,16 +300,17 @@ router.post('/send', async (req, res) => {
         entry.result = await email.send(r.to, subject || 'Message from ROCK Hub', msgBody, null, {});
       }
     } else if (channel === 'sms') {
-      entry.result = await sms.send(r.to, msgBody);
+      entry.result = await sms.send(r.to, msgBody); // branding + opt-out check applied inside sms.send()
     } else {
       entry.result = { sent: false, error: 'Unknown channel' };
     }
     results.push(entry);
   }
 
-  const sent   = results.filter(r => r.result?.sent).length;
-  const failed = results.filter(r => !r.result?.sent);
-  res.json({ ok: true, sent, total: recipients.length, results, failed: failed.map(f => ({ name: f.name, error: f.result?.error })) });
+  const sent        = results.filter(r => r.result?.sent).length;
+  const skippedOpts = results.filter(r => r.result?.skippedOptOut).length;
+  const failed      = results.filter(r => !r.result?.sent && !r.result?.skippedOptOut);
+  res.json({ ok: true, sent, total: recipients.length, skippedOptOut: skippedOpts, results, failed: failed.map(f => ({ name: f.name, error: f.result?.error })) });
 });
 
 // ── Draft PDF endpoint ────────────────────────────────────────────────────────

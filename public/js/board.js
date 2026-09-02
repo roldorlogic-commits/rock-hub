@@ -775,6 +775,32 @@ function renderMembersFull(members) {
 // ── Bulk actions ─────────────────────────────────────────────────────────────
 let _pendingBulkAction = null;
 
+function updateBulkNotifyFields() {
+  const ch = document.getElementById('bulk_Channel')?.value || 'email';
+  const showSubject = ch === 'email' || ch === 'both';
+  document.getElementById('bulk_SubjectWrap').style.display = showSubject ? '' : 'none';
+  document.getElementById('bulk_Body').placeholder = ch === 'sms' ? 'Text message body…' : 'Message…';
+  const label = ch === 'email' ? 'Send Email' : ch === 'sms' ? 'Send SMS' : 'Send Email + SMS';
+  document.getElementById('bulkConfirmBtn').textContent = label;
+  const listEl = document.getElementById('bulk_RecipientList');
+  if (listEl) { listEl.innerHTML = _buildBulkRecipientList(ch); }
+}
+
+function _buildBulkRecipientList(channel) {
+  const members = _allMembersCache || [];
+  const list = [..._selectedMemberIds].map(id => members.find(m => m.MemberID === id)).filter(Boolean);
+  if (!list.length) return '';
+
+  const rows = list.map(m => {
+    const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || m.Email || m.MemberID;
+    const parts = [];
+    if (channel === 'email' || channel === 'both') parts.push(m.Email || '<span style="color:#ff6363">no email</span>');
+    if (channel === 'sms'   || channel === 'both') parts.push(m.Phone || '<span style="color:#ff6363">no phone</span>');
+    return `<div style="padding:2px 0;">${name} — ${parts.join(' · ')}</div>`;
+  });
+  return rows.join('');
+}
+
 function openBulkAction(action) {
   const count = _selectedMemberIds.size;
   if (!count) { alert('Select at least one contact first.'); return; }
@@ -783,8 +809,13 @@ function openBulkAction(action) {
   document.getElementById('bulkNotifyFields').style.display = action === 'notify' ? '' : 'none';
   document.getElementById('bulkTagFields').style.display    = action === 'tag'    ? '' : 'none';
   if (action === 'notify') {
+    document.getElementById('bulk_Channel').value = 'email';
     document.getElementById('bulk_Subject').value = '';
     document.getElementById('bulk_Body').value    = '';
+    updateBulkNotifyFields();
+    const listEl = document.getElementById('bulk_RecipientList');
+    listEl.innerHTML = _buildBulkRecipientList('email');
+    listEl.style.display = '';
   }
   if (action === 'tag') document.getElementById('bulk_Tag').value = '';
 
@@ -792,7 +823,7 @@ function openBulkAction(action) {
   const msgs   = {
     delete: `Permanently delete ${count} contact${count===1?'':'s'}? This cannot be undone.`,
     tag:    `Apply a tag to ${count} contact${count===1?'':'s'}.`,
-    notify: `Send an email to ${count} contact${count===1?'':'s'}.`
+    notify: ''
   };
   document.getElementById('bulkConfirmTitle').textContent = labels[action] || 'Confirm';
   document.getElementById('bulkConfirmMsg').textContent   = msgs[action]   || '';
@@ -821,10 +852,16 @@ async function executeBulkAction() {
     body.tag = document.getElementById('bulk_Tag').value.trim();
     if (!body.tag) { errEl.textContent = 'Tag is required.'; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = 'Apply Tag'; return; }
   }
+  let notifyChannel = 'email';
   if (action === 'notify') {
-    body.subject = document.getElementById('bulk_Subject').value.trim();
-    body.body    = document.getElementById('bulk_Body').value.trim();
-    if (!body.subject || !body.body) { errEl.textContent = 'Subject and message are required.'; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = 'Send Email'; return; }
+    notifyChannel    = document.getElementById('bulk_Channel').value || 'email';
+    body.channel     = notifyChannel;
+    body.body        = document.getElementById('bulk_Body').value.trim();
+    body.subject     = document.getElementById('bulk_Subject').value.trim();
+    if (!body.body) { errEl.textContent = 'Message is required.'; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = btn.dataset.label || 'Send'; return; }
+    if ((notifyChannel === 'email' || notifyChannel === 'both') && !body.subject) {
+      errEl.textContent = 'Subject is required for email.'; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = btn.dataset.label || 'Send'; return;
+    }
   }
 
   try {
@@ -836,15 +873,35 @@ async function executeBulkAction() {
     _selectedMemberIds.clear();
     await loadMembers();
 
-    if (action === 'notify') alert(`Email sent to ${data.sent} of ${data.total} contacts.`);
-    else if (action === 'delete') alert(`${data.affected} contact${data.affected===1?'':'s'} deleted.`);
-    else if (action === 'tag') alert(`Tag applied to ${data.affected} contact${data.affected===1?'':'s'}.`);
+    if (action === 'notify') {
+      const parts = [];
+      if (notifyChannel === 'email' || notifyChannel === 'both') parts.push(`${data.emailSent} email${data.emailSent !== 1 ? 's' : ''}`);
+      if (notifyChannel === 'sms'   || notifyChannel === 'both') parts.push(`${data.smsSent} SMS`);
+      const failed = data.results?.filter(r => {
+        if (notifyChannel === 'sms'  && !r.sms?.sent && !r.sms?.skippedOptOut)   return true;
+        if (notifyChannel === 'email' && !r.email?.sent) return true;
+        if (notifyChannel === 'both' && !r.sms?.sent && !r.email?.sent) return true;
+        return false;
+      }) || [];
+      let msg = `Sent: ${parts.join(' + ')} (of ${data.total} contacts).`;
+      if (data.smsSkipped) msg += ` ${data.smsSkipped} opted-out number${data.smsSkipped !== 1 ? 's' : ''} skipped.`;
+      if (failed.length) {
+        const names = failed.map(r => r.name).join(', ');
+        msg += `\nCould not reach: ${names}`;
+      }
+      alert(msg);
+    } else if (action === 'delete') {
+      alert(`${data.affected} contact${data.affected===1?'':'s'} deleted.`);
+    } else if (action === 'tag') {
+      alert(`Tag applied to ${data.affected} contact${data.affected===1?'':'s'}.`);
+    }
   } catch (err) {
     errEl.textContent = 'Network error — please try again.';
     errEl.style.display = 'block';
   } finally {
     btn.disabled = false;
-    btn.textContent = { delete: 'Delete Contacts', tag: 'Apply Tag', notify: 'Send Email' }[action] || 'Confirm';
+    const channelLabels = { email: 'Send Email', sms: 'Send SMS', both: 'Send Email + SMS' };
+    btn.textContent = action === 'notify' ? (channelLabels[notifyChannel] || 'Send') : ({ delete: 'Delete Contacts', tag: 'Apply Tag' }[action] || 'Confirm');
   }
 }
 

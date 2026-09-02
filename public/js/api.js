@@ -53,6 +53,7 @@ function showSection(id, navEl) {
     dashboard:'Dashboard', events:'Events & Programs', tasks:'Action Items',
     contacts:'Board Directory', files:'Files & Docs', minutes:'Meeting Minutes',
     reports:'Reports', settings:'Settings', members:'Contacts', volunteers:'Volunteers',
+    communications:'Communications',
     mytasks:'My Tasks', mysignups:'My Sign-Ups', resources:'Resources', myteam:'My Team',
     myprofile:'My Profile', myhours:'My Hours'
   };

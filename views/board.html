@@ -16,6 +16,19 @@
   <link rel="stylesheet" href="/css/hub.css">
   <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    .comms-tab { background: var(--bg-card); border: 1.5px solid var(--border); color: var(--text-dim); }
+    .comms-tab.active { background: var(--gold); border-color: var(--gold); color: #14203a; font-weight: 700; }
+    .comms-tab-panel { animation: fadeIn .18s ease; }
+    .tpl-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .tpl-row:last-child { border-bottom: none; }
+    .tpl-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 99px; letter-spacing: .03em; }
+    .tpl-badge.sms { background: #1a2e4a; color: #C9A84C; border: 1px solid #C9A84C44; }
+    .tpl-badge.email { background: #1a2e1a; color: #6fcf97; border: 1px solid #6fcf9744; }
+    .tpl-badge.both { background: #1e1e3a; color: #a78bfa; border: 1px solid #a78bfa44; }
+    .optout-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .optout-row:last-child { border-bottom: none; }
+  </style>
 </head>
 <body class="hub-page" data-hub-active="dashboard">
 
@@ -347,6 +360,174 @@
         <div id="reportsFull"><div class="loading-row"><div class="spinner"></div></div></div>
       </div>
     </section>
+
+    <!-- ── COMMUNICATIONS ───────────────────────────────────────────────────── -->
+    <section id="communications" class="content-section">
+      <div style="display:flex;gap:12px;margin-bottom:18px;align-items:center;flex-wrap:wrap;">
+        <h2 style="margin:0;font-size:20px;font-family:'Cinzel',serif;color:var(--text-primary)">Communications</h2>
+        <div id="commsTabBar" style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-sm comms-tab active" data-tab="branding" onclick="switchCommsTab('branding')">Branding</button>
+          <button class="btn btn-sm comms-tab" data-tab="templates" onclick="switchCommsTab('templates')">Templates</button>
+          <button class="btn btn-sm comms-tab" data-tab="compliance" onclick="switchCommsTab('compliance')">Opt-out &amp; Compliance</button>
+          <button class="btn btn-sm comms-tab" data-tab="sender" onclick="switchCommsTab('sender')">Sender Info</button>
+        </div>
+      </div>
+
+      <!-- Branding tab -->
+      <div id="commsTab-branding" class="comms-tab-panel">
+        <div class="card">
+          <div class="card-header"><span class="card-title">SMS Branding</span></div>
+          <div class="form-grid" style="padding:12px 0 4px;">
+            <div class="form-group">
+              <label class="form-label">SMS Prefix <span style="color:var(--text-dim);font-weight:400;font-size:11px;">(prepended to every outbound text)</span></label>
+              <input type="text" id="cs_sms_prefix" class="form-input" placeholder="The ROCK Association:" maxlength="40">
+            </div>
+            <div class="form-group">
+              <label class="form-label">SMS Sign-off <span style="color:var(--text-dim);font-weight:400;font-size:11px;">(appended as new line, optional)</span></label>
+              <input type="text" id="cs_sms_signoff" class="form-input" placeholder="Leave blank for none" maxlength="80">
+            </div>
+          </div>
+          <div style="margin-top:10px;">
+            <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;">Live SMS preview:</div>
+            <div id="cs_sms_preview" style="background:#0e1a30;border:1px solid #C9A84C44;border-radius:8px;padding:10px 14px;font-size:12px;color:#c8d8ee;white-space:pre-wrap;font-family:'Jost',sans-serif;line-height:1.5;"></div>
+            <div id="cs_sms_seginfo" style="font-size:10px;color:var(--text-dim);margin-top:4px;"></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:14px;">
+          <div class="card-header"><span class="card-title">Email Branding</span></div>
+          <div class="form-grid" style="padding:12px 0 4px;">
+            <div class="form-group">
+              <label class="form-label">Email "From" Name</label>
+              <input type="text" id="cs_email_from_name" class="form-input" placeholder="The ROCK Association" maxlength="80">
+            </div>
+            <div class="form-group" style="grid-column:1/-1;">
+              <label class="form-label">Email Signature <span style="color:var(--text-dim);font-weight:400;font-size:11px;">(appended to Hub-sent emails, optional)</span></label>
+              <textarea id="cs_email_signature" class="form-input" rows="3" placeholder="— The ROCK Association Team&#10;info@gorock.org" maxlength="500"></textarea>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px;">
+          <button class="btn btn-gold" onclick="saveBrandingSettings()">Save Branding</button>
+          <span id="cs_save_status" style="font-size:12px;color:var(--text-dim);align-self:center;"></span>
+        </div>
+      </div>
+
+      <!-- Templates tab -->
+      <div id="commsTab-templates" class="comms-tab-panel" style="display:none;">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Message Templates</span>
+            <button class="btn btn-gold btn-sm" onclick="openTemplateModal()">+ New Template</button>
+          </div>
+          <div style="font-size:12px;color:var(--text-dim);padding:4px 0 10px;">Reusable SMS and email templates. Supports merge fields: <code style="background:#1a2e4a;padding:1px 5px;border-radius:3px;">{first_name} {last_name} {event_name} {event_date} {event_location} {role} {org_name}</code></div>
+          <div id="commsTplList">Loading…</div>
+        </div>
+      </div>
+
+      <!-- Compliance tab -->
+      <div id="commsTab-compliance" class="comms-tab-panel" style="display:none;">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Auto-Reply Text</span></div>
+          <div style="font-size:12px;color:var(--text-dim);padding:2px 0 10px;">These messages are sent automatically when someone texts STOP, HELP, or START to your number. Keep them compliant.</div>
+          <div class="form-grid" style="padding:4px 0 4px;">
+            <div class="form-group" style="grid-column:1/-1;">
+              <label class="form-label">STOP Reply</label>
+              <textarea id="cs_sms_stop_reply" class="form-input" rows="2" maxlength="300"></textarea>
+            </div>
+            <div class="form-group" style="grid-column:1/-1;">
+              <label class="form-label">HELP Reply</label>
+              <textarea id="cs_sms_help_reply" class="form-input" rows="2" maxlength="300"></textarea>
+            </div>
+            <div class="form-group" style="grid-column:1/-1;">
+              <label class="form-label">START Reply</label>
+              <textarea id="cs_sms_start_reply" class="form-input" rows="2" maxlength="300"></textarea>
+            </div>
+          </div>
+          <button class="btn btn-gold" onclick="saveComplianceSettings()">Save Replies</button>
+          <span id="cs_compliance_status" style="font-size:12px;color:var(--text-dim);margin-left:12px;"></span>
+        </div>
+        <div class="card" style="margin-top:14px;">
+          <div class="card-header">
+            <span class="card-title">Opt-out List</span>
+            <button class="btn btn-sm" onclick="loadOptouts()">Refresh</button>
+          </div>
+          <div style="font-size:12px;color:var(--text-dim);padding:2px 0 10px;">Numbers that replied STOP. The Hub never sends to these numbers automatically. Manual re-subscribe requires your confirmation.</div>
+          <div id="commsOptoutList">Loading…</div>
+        </div>
+      </div>
+
+      <!-- Sender info tab -->
+      <div id="commsTab-sender" class="comms-tab-panel" style="display:none;">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Sender Reference</span></div>
+          <div style="font-size:12px;color:var(--text-dim);padding:2px 0 12px;">Read-only — locked to your Twilio number and email service configuration.</div>
+          <div style="display:grid;gap:14px;">
+            <div>
+              <div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">SMS Sender Number</div>
+              <div id="cs_sender_phone" style="font-size:16px;font-family:'Cinzel',serif;color:var(--gold);letter-spacing:.04em;">—</div>
+              <div style="font-size:11px;color:var(--text-dim);margin-top:2px;">Twilio A2P 10DLC — ACTIVE</div>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Email Sender Address</div>
+              <div id="cs_sender_email" style="font-size:15px;font-family:'Jost',sans-serif;color:var(--text-primary);">—</div>
+              <div style="font-size:11px;color:var(--text-dim);margin-top:2px;">via SendGrid</div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:14px;">
+          <div class="card-header"><span class="card-title">Twilio Inbound Webhook</span></div>
+          <div style="font-size:12px;color:var(--text-dim);line-height:1.7;">
+            <p style="margin-bottom:8px;">Configure your Twilio number to send inbound messages (STOP/HELP/START) to:</p>
+            <code style="background:#1a2e4a;padding:6px 12px;border-radius:6px;display:block;font-size:12px;color:#C9A84C;">https://hub.gorock.org/webhooks/sms-inbound</code>
+            <p style="margin-top:8px;">In the Twilio Console → Phone Numbers → Active Numbers → your number → Messaging → Webhook (when a message comes in) → set to the URL above, HTTP POST.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Template modal -->
+    <div id="tplModal" class="modal" style="display:none;">
+      <div class="modal-content" style="max-width:560px;">
+        <div class="modal-header">
+          <span id="tplModalTitle" class="modal-title">New Template</span>
+          <button class="modal-close" onclick="closeTemplateModal()">×</button>
+        </div>
+        <div style="padding:16px 0 4px;">
+          <div class="form-group">
+            <label class="form-label">Template Name *</label>
+            <input type="text" id="tpl_name" class="form-input" placeholder="e.g. Event Reminder">
+          </div>
+          <div class="form-grid" style="margin-top:12px;">
+            <div class="form-group">
+              <label class="form-label">Channel</label>
+              <select id="tpl_channel" class="form-input">
+                <option value="Both">SMS + Email</option>
+                <option value="SMS">SMS only</option>
+                <option value="Email">Email only</option>
+              </select>
+            </div>
+            <div class="form-group" id="tpl_subject_wrap">
+              <label class="form-label">Email Subject <span style="color:var(--text-dim);font-size:11px;">(for email)</span></label>
+              <input type="text" id="tpl_subject" class="form-input" placeholder="Subject line">
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:12px;">
+            <label class="form-label">Message Body *</label>
+            <textarea id="tpl_body" class="form-input" rows="6" placeholder="Write your template here. Use {first_name}, {event_name}, etc."></textarea>
+            <div style="font-size:10px;color:var(--text-dim);margin-top:4px;" id="tpl_charcount">0 chars</div>
+          </div>
+          <div style="margin-top:4px;font-size:11px;color:var(--text-dim);">
+            Available merge fields: <span style="color:#C9A84C;">{first_name} {last_name} {event_name} {event_date} {event_location} {role} {org_name}</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:16px;">
+          <button class="btn btn-gold" onclick="saveTemplate()">Save Template</button>
+          <button class="btn" onclick="closeTemplateModal()">Cancel</button>
+          <button class="btn btn-danger" id="tplDeleteBtn" style="margin-left:auto;display:none;" onclick="deleteTemplate()">Delete</button>
+        </div>
+        <input type="hidden" id="tpl_editing_id">
+      </div>
+    </div>
 
     <!-- ── SETTINGS ───────────────────────────────────────────────────────── -->
     <section id="settings" class="content-section">
@@ -796,8 +977,18 @@
     <p id="bulkConfirmMsg" style="color:var(--text-dim);font-size:13px;margin:12px 0 0;"></p>
     <div id="bulkNotifyFields" style="display:none;margin-top:14px;">
       <div style="display:flex;flex-direction:column;gap:10px;">
-        <label>Subject <span style="color:var(--gold);">*</span><input type="text" id="bulk_Subject" placeholder="Email subject"></label>
-        <label>Message <span style="color:var(--gold);">*</span><textarea id="bulk_Body" rows="4" placeholder="Email body…" style="resize:vertical;"></textarea></label>
+        <label>Channel <span style="color:var(--gold);">*</span>
+          <select id="bulk_Channel" onchange="updateBulkNotifyFields()" style="margin-top:4px;">
+            <option value="email">Email</option>
+            <option value="sms">SMS (text message)</option>
+            <option value="both">Email + SMS</option>
+          </select>
+        </label>
+        <div id="bulk_SubjectWrap">
+          <label>Subject <span style="color:var(--gold);">*</span><input type="text" id="bulk_Subject" placeholder="Email subject"></label>
+        </div>
+        <label id="bulk_BodyLabel">Message <span style="color:var(--gold);">*</span><textarea id="bulk_Body" rows="4" placeholder="Message…" style="resize:vertical;"></textarea></label>
+        <div id="bulk_RecipientList" style="max-height:130px;overflow-y:auto;border:1px solid var(--gold-line);border-radius:6px;padding:8px 10px;font-size:12px;color:var(--text-dim);display:none;"></div>
       </div>
     </div>
     <div id="bulkTagFields" style="display:none;margin-top:14px;">
@@ -1028,5 +1219,6 @@
   <script src="/js/board.js"></script>
   <script src="/js/hub-home.js"></script>
   <script src="/js/yg-autocomplete.js"></script>
+  <script src="/js/communications.js"></script>
 </body>
 </html>
