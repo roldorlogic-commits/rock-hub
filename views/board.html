@@ -796,8 +796,18 @@
     <p id="bulkConfirmMsg" style="color:var(--text-dim);font-size:13px;margin:12px 0 0;"></p>
     <div id="bulkNotifyFields" style="display:none;margin-top:14px;">
       <div style="display:flex;flex-direction:column;gap:10px;">
-        <label>Subject <span style="color:var(--gold);">*</span><input type="text" id="bulk_Subject" placeholder="Email subject"></label>
-        <label>Message <span style="color:var(--gold);">*</span><textarea id="bulk_Body" rows="4" placeholder="Email body…" style="resize:vertical;"></textarea></label>
+        <label>Channel <span style="color:var(--gold);">*</span>
+          <select id="bulk_Channel" onchange="updateBulkNotifyFields()" style="margin-top:4px;">
+            <option value="email">Email</option>
+            <option value="sms">SMS (text message)</option>
+            <option value="both">Email + SMS</option>
+          </select>
+        </label>
+        <div id="bulk_SubjectWrap">
+          <label>Subject <span style="color:var(--gold);">*</span><input type="text" id="bulk_Subject" placeholder="Email subject"></label>
+        </div>
+        <label id="bulk_BodyLabel">Message <span style="color:var(--gold);">*</span><textarea id="bulk_Body" rows="4" placeholder="Message…" style="resize:vertical;"></textarea></label>
+        <div id="bulk_RecipientList" style="max-height:130px;overflow-y:auto;border:1px solid var(--gold-line);border-radius:6px;padding:8px 10px;font-size:12px;color:var(--text-dim);display:none;"></div>
       </div>
     </div>
     <div id="bulkTagFields" style="display:none;margin-top:14px;">
