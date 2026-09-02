@@ -32,12 +32,12 @@
         { label: 'Meeting Minutes',   section: 'minutes',  href: '/board?s=minutes' },
         { label: 'Action Items',      section: 'tasks',    href: '/board?s=tasks' },
         { label: 'Pending Volunteers', href: '/volunteers/pending', badgeId: 'pendingVolunteersBadge' },
-        { label: 'Communications',    section: 'communications', href: '/board?s=communications' },
         { label: 'Usage Report',      href: '/admin/usage', id: 'adminUsageLink', vpOnly: true }
     ]},
     { label: 'Reach Map', href: '/reach-map', activeKey: 'reach-map' },
     { label: 'Files & Docs', section: 'files',    href: '/board?s=files' },
     { label: 'Reports',      section: 'reports',  href: '/board?s=reports' },
+    { label: 'Comms',        section: 'communications', href: '/board?s=communications' },
     { label: 'Settings',     section: 'settings', href: '/board?s=settings' }
   ];
 
@@ -154,7 +154,7 @@
     return a;
   }
 
-  const BOARD_DROPDOWN_SECTIONS = ['contacts', 'minutes', 'tasks', 'communications'];
+  const BOARD_DROPDOWN_SECTIONS = ['contacts', 'minutes', 'tasks'];
 
   function buildDesktop(links) {
     const nav = document.getElementById('hubNavLinks');
