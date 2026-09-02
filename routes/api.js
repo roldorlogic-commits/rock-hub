@@ -182,15 +182,42 @@ router.post('/members/bulk', requireBoard, async (req, res) => {
     }
 
     if (action === 'notify') {
-      if (!subject || !msgBody) return res.status(400).json({ error: 'subject and body are required for notify action.' });
-      let sent = 0;
-      for (const m of targets) {
-        if (m.Email) {
-          await email.send(m.Email, subject, msgBody).catch(() => {});
-          sent++;
-        }
+      const channel = req.body.channel || 'email'; // 'email' | 'sms' | 'both'
+      if (!msgBody) return res.status(400).json({ error: 'body is required for notify action.' });
+      if ((channel === 'email' || channel === 'both') && !subject) {
+        return res.status(400).json({ error: 'subject is required for email.' });
       }
-      return res.json({ ok: true, sent, total: targets.length });
+
+      const results = [];
+      for (const m of targets) {
+        const name = [m.FirstName, m.LastName].filter(Boolean).join(' ') || m.Email || m.MemberID;
+        const entry = { name };
+
+        if (channel === 'email' || channel === 'both') {
+          if (m.Email) {
+            const r = await email.send(m.Email, subject, msgBody)
+              .then(() => ({ sent: true }))
+              .catch(err => ({ sent: false, error: err.message }));
+            entry.email = r;
+          } else {
+            entry.email = { sent: false, error: 'No email address' };
+          }
+        }
+
+        if (channel === 'sms' || channel === 'both') {
+          if (m.Phone) {
+            entry.sms = await sms.send(m.Phone, msgBody);
+          } else {
+            entry.sms = { sent: false, error: 'No phone number' };
+          }
+        }
+
+        results.push(entry);
+      }
+
+      const emailSent = results.filter(r => r.email?.sent).length;
+      const smsSent   = results.filter(r => r.sms?.sent).length;
+      return res.json({ ok: true, results, emailSent, smsSent, total: targets.length });
     }
 
     if (action === 'assign-youth-group') {
