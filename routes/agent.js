@@ -245,6 +245,19 @@ router.get('/status', (req, res) => {
   res.json({ configured: ai.isConfigured(), model: ai.MODEL });
 });
 
+// ── History endpoint ──────────────────────────────────────────────────────────
+
+router.get('/history', async (req, res) => {
+  const userEmail = req.user?.email || 'unknown';
+  try {
+    const messages = await sheets.getAgentHistory(userEmail);
+    res.json({ messages });
+  } catch (err) {
+    console.error('[agent] history load error:', err.message);
+    res.json({ messages: [] });
+  }
+});
+
 // ── Main chat endpoint ────────────────────────────────────────────────────────
 
 router.post('/chat', async (req, res) => {
@@ -268,12 +281,22 @@ router.post('/chat', async (req, res) => {
 
     logUsage(userEmail, result.usage.promptTokenCount || 0, result.usage.candidatesTokenCount || 0, ai.MODEL);
 
+    let replyText;
+    let responsePayload;
     if (result.functionCall) {
       const { name, args } = result.functionCall;
-      return res.json({ reply: args.summary || `I'll ${name.replace('_', ' ')} now.`, action: { type: name, payload: args } });
+      replyText      = args.summary || `I'll ${name.replace(/_/g, ' ')} now.`;
+      responsePayload = { reply: replyText, action: { type: name, payload: args } };
+    } else {
+      replyText      = result.text;
+      responsePayload = { reply: replyText };
     }
 
-    res.json({ reply: result.text });
+    // Persist history (fire-and-forget) — appends the model reply to incoming messages
+    const modelMsg = { role: 'model', parts: [{ text: replyText || '[action]' }] };
+    sheets.saveAgentHistory(userEmail, [...messages, modelMsg]).catch(() => {});
+
+    res.json(responsePayload);
   } catch (err) {
     console.error('[agent] chat error:', err.message);
     if (err.code === 429) return res.status(429).json({ error: 'AI quota exceeded — try again shortly.' });

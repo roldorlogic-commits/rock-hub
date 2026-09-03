@@ -8,7 +8,9 @@
   let _open    = false;
   let _busy    = false;
   let _history = []; // [{role:'user'|'model', parts:[{text}]}]
-  let _commsSettings = null; // cached CommSettings for branded preview
+  let _commsSettings = null;
+  let _historyLoaded = false;
+  let _welcomed      = false;
 
   // ── DOM bootstrap ─────────────────────────────────────────────────────────
 
@@ -26,8 +28,10 @@
     btn.id    = 'rock-agent-fab';
     btn.title = 'Hub AI Assistant';
     btn.setAttribute('aria-label', 'Open Hub AI Assistant');
+    // Inline critical sizing so the FAB never flashes full-page before agent.css loads
+    btn.style.cssText = 'position:fixed;bottom:28px;right:28px;z-index:9000;width:52px;height:52px;border-radius:50%;padding:0;box-sizing:border-box;overflow:hidden;display:flex;align-items:center;justify-content:center;';
     btn.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="1.7">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="1.7" style="width:26px;height:26px;flex-shrink:0;">
         <path d="M12 2a10 10 0 0 1 10 10c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2z"/>
         <path d="M8 10h.01M12 10h.01M16 10h.01" stroke-width="2.2" stroke-linecap="round"/>
         <path d="M12 16s-4-1-4-4h8c0 3-4 4-4 4z" stroke-linecap="round" stroke-linejoin="round"/>
@@ -95,23 +99,50 @@
 
   function togglePanel() {
     _open = !_open;
+    sessionStorage.setItem('agentPanelOpen', _open ? '1' : '0');
     const panel = document.getElementById('rock-agent-panel');
     panel.classList.toggle('open', _open);
     if (_open) {
-      if (_history.length === 0) showWelcome();
+      if (_historyLoaded && _history.length === 0) showWelcome(); // showWelcome guards against duplicates
       setTimeout(() => document.getElementById('agent-input')?.focus(), 220);
     }
   }
 
   window._agentClose = () => {
     _open = false;
+    sessionStorage.setItem('agentPanelOpen', '0');
     document.getElementById('rock-agent-panel')?.classList.remove('open');
   };
 
   // ── Welcome message ────────────────────────────────────────────────────────
 
   function showWelcome() {
+    if (_welcomed) return;
+    _welcomed = true;
     addMessage('model', `Hello! I'm your Hub assistant. I can help you:\n\n• **Answer questions** about events, contacts, volunteers, youth groups, and tasks\n• **Pre-fill forms** — just describe what you want to create\n• **Draft documents** — letters, reports, summaries\n• **Compose messages** — email or SMS with a confirm gate\n\nWhat would you like to do?`);
+  }
+
+  // ── Load history from server ───────────────────────────────────────────────
+
+  async function loadHistory() {
+    try {
+      const r = await fetch('/api/agent/history');
+      if (!r.ok) return;
+      const data = await r.json();
+      if (!Array.isArray(data.messages) || !data.messages.length) return;
+      _history = data.messages;
+      // Render past messages (skip action placeholders)
+      const list = document.getElementById('agent-msg-list');
+      data.messages.forEach(m => {
+        const text = m.parts?.[0]?.text || '';
+        if (text && text !== '[action]') addMessage(m.role, text);
+      });
+      if (list) list.scrollTop = list.scrollHeight;
+    } catch (_) {
+      // Silently fail — welcome message will show on first open
+    } finally {
+      _historyLoaded = true;
+    }
   }
 
   // ── Message rendering ──────────────────────────────────────────────────────
@@ -577,11 +608,25 @@
 
   // ── Init ───────────────────────────────────────────────────────────────────
 
-  function init() {
+  async function init() {
     injectStyles();
     buildToast();
     buildFab();
     buildPanel();
+
+    // Load saved history, then restore open state so panel shows populated content
+    await loadHistory();
+
+    // Restore panel open/closed state across page navigations
+    if (sessionStorage.getItem('agentPanelOpen') === '1') {
+      _open = true;
+      const panel = document.getElementById('rock-agent-panel');
+      panel.classList.add('open');
+      // If history is empty show welcome now that panel is open
+      if (_history.length === 0) showWelcome();
+      setTimeout(() => document.getElementById('agent-input')?.focus(), 220);
+    }
+
     checkPendingPrefill();
   }
 
