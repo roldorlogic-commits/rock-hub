@@ -2140,22 +2140,35 @@ function renderItineraryTab(items, el) {
   _attachItnDrag(el.querySelector('.itn-list'), isBoard);
 }
 
-function _buildItnBody(items, isBoard) {
-  const isMultiDay = currentEvent?.StartDate && currentEvent?.EndDate
+function _itnIsMultiDay() {
+  return currentEvent?.StartDate && currentEvent?.EndDate
     && currentEvent.StartDate !== currentEvent.EndDate;
-  if (!isMultiDay) return items.map(i => _itnRow(i, isBoard)).join('');
+}
+function _itnDayOf(i) { return i.ItemDate || currentEvent?.StartDate || ''; }
+
+// Flattens items into the exact order they are *displayed*: single-day → as-is;
+// multi-day → grouped under chronologically-sorted day headers, items within a
+// day keeping their current order. _saveItnOrder persists SortOrder in this same
+// order, so the stored order always matches what the board sees — and what the
+// PDF renders, since lib/pdf.js groups sequentially by date off that order.
+// (Previously _saveItnOrder numbered the raw flat array, which interleaved dates
+// and diverged from the regrouped display, producing duplicate/gap SortOrders.)
+function _itnDisplayOrder(items) {
+  if (!_itnIsMultiDay()) return [...items];
+  const dates = [...new Set(items.map(_itnDayOf))].sort();
+  const out = [];
+  for (const d of dates) for (const i of items) if (_itnDayOf(i) === d) out.push(i);
+  return out;
+}
+
+function _buildItnBody(items, isBoard) {
+  if (!_itnIsMultiDay()) return items.map(i => _itnRow(i, isBoard)).join('');
 
   // Day groups always appear in chronological date order;
   // items within each day preserve their drag order.
-  const seen = new Set();
-  const dates = [];
-  for (const i of items) {
-    const d = i.ItemDate || currentEvent?.StartDate || '';
-    if (!seen.has(d)) { seen.add(d); dates.push(d); }
-  }
-  dates.sort();
+  const dates = [...new Set(items.map(_itnDayOf))].sort();
   return dates.map(d => {
-    const dayItems = items.filter(i => (i.ItemDate || currentEvent?.StartDate || '') === d);
+    const dayItems = items.filter(i => _itnDayOf(i) === d);
     return `<div class="itn-day-header" data-day-date="${_esc(d)}">${_esc(fmtDate(d))}</div>`
       + dayItems.map(i => _itnRow(i, isBoard)).join('');
   }).join('');
@@ -2276,6 +2289,9 @@ function _applyDropOnDay(dayDate, list, isBoard) {
 
 function _rerenderItnList(list, isBoard) {
   if (!list) return;
+  // Keep the in-memory flat array in the same order as the rendered (date-grouped)
+  // display so repeated drags and the subsequent save stay consistent.
+  _dragItems = _itnDisplayOrder(_dragItems);
   list.innerHTML = _buildItnBody(_dragItems, isBoard);
   _attachItnDrag(list, isBoard);
 }
@@ -2283,7 +2299,11 @@ function _rerenderItnList(list, isBoard) {
 async function _saveItnOrder() {
   const eventId = currentEvent?.EventID;
   if (!eventId) return;
-  const updates = _dragItems.map((item, idx) => ({
+  // Persist in display order → SortOrder is always a clean, monotonic sequence
+  // that matches the visible order (and the PDF). No duplicates/gaps.
+  const ordered = _itnDisplayOrder(_dragItems);
+  _dragItems = ordered;
+  const updates = ordered.map((item, idx) => ({
     ItineraryID: item.ItineraryID,
     SortOrder:   idx * 10,
     ItemDate:    item.ItemDate || '',
