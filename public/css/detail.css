@@ -800,6 +800,36 @@
 .itn-row.drag-over { box-shadow: inset 0 2px 0 var(--gold); }
 .itn-day-header.drag-over { outline: 1px dashed var(--gold); }
 
+/* ── Section-header items (no time) ─────────────────────────────────────────── */
+/* A level below the day-group header: a gold, emphasized divider that the timed
+   items beneath it read as belonging to. */
+.itn-row.itn-section {
+  align-items: center;
+  gap: 10px;
+  padding: 13px 8px 7px;
+  margin-top: 6px;
+  border-bottom: 1.5px solid var(--gold);
+}
+.itn-row.itn-section:hover { background: var(--gold-faint); }
+.itn-section-label {
+  flex: 1; min-width: 0;
+  font-size: 12.5px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--gold);
+}
+.itn-section-note {
+  display: block; margin-top: 3px;
+  font-size: 11px; font-weight: 400; letter-spacing: normal;
+  text-transform: none; color: var(--text-muted);
+}
+
+/* Timed item vs. section-header picker in the add/edit modal */
+.itn-type-toggle { display: flex; gap: 18px; margin-bottom: 14px; }
+.itn-type-toggle label {
+  display: flex; align-items: center; gap: 7px; cursor: pointer;
+  font-size: 13px; color: var(--text-white);
+}
+.itn-type-toggle input { width: auto; margin: 0; }
+
 /* ── Event card photo thumbnails ─────────────────────────────────────────────── */
 .event-row-photo {
   flex-shrink: 0;

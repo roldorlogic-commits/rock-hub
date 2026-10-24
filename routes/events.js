@@ -321,6 +321,7 @@ router.post('/events/:id/duplicate', requireBoard, async (req, res) => {
           Title:    item.Title    || '',
           Notes:    item.Notes    || '',
           SortOrder: item.SortOrder || '',
+          ItemType: item.ItemType  || '',
           CreatedBy: req.user.name || req.user.email,
         });
       }
@@ -883,9 +884,20 @@ router.post('/events/:id/walkin', requireBoard, async (req, res) => {
 
 // ── Itinerary ────────────────────────────────────────────────────────────────
 
-// Sort itinerary items: manual order (SortOrder) if any item has it, else date+time.
-// Blank ItemDate → pushed to end. Blank Time → pushed to end of its day.
+// Sort itinerary items.
+//
+// Manual order (any item has SortOrder) wins — section headers and timed items
+// alike keep the exact position the board dragged them to.
+//
+// Otherwise sort chronologically. Section headers (ItemType === 'header') carry
+// no time, so a naive date+time sort would fling them to the end of their day.
+// Instead each header is grouped with the run of timed items that follow it and
+// the whole section sorts by its earliest timed item's date+time — i.e. a header
+// "sorts with the first timed item under it", keeping sections intact. Timed
+// items before the first header form a leading section; with no headers at all
+// this collapses to a plain date+time sort (unchanged behaviour).
 function sortItnItems(items) {
+  const isHeader = i => (i.ItemType || '') === 'header';
   const hasManual = items.some(i => i.SortOrder !== '' && i.SortOrder != null);
   if (hasManual) {
     return [...items].sort((a, b) => {
@@ -894,14 +906,33 @@ function sortItnItems(items) {
       return (isNaN(sa) ? Infinity : sa) - (isNaN(sb) ? Infinity : sb);
     });
   }
-  return [...items].sort((a, b) => {
-    const da = a.ItemDate || '9999-99-99';
-    const db = b.ItemDate || '9999-99-99';
-    if (da !== db) return da.localeCompare(db);
-    const ta = a.Time || '99:99';
-    const tb = b.Time || '99:99';
-    return ta.localeCompare(tb);
+
+  const keyFor = it => `${it.ItemDate || '9999-99-99'} ${it.Time || '99:99'}`;
+  const sections = [];
+  let cur = null;
+  items.forEach((it, idx) => {
+    if (isHeader(it)) { cur = { header: it, timed: [], order: idx }; sections.push(cur); }
+    else {
+      if (!cur) { cur = { header: null, timed: [], order: idx }; sections.push(cur); }
+      cur.timed.push(it);
+    }
   });
+  const secKey = s => {
+    if (s.timed.length) return s.timed.map(keyFor).sort()[0];
+    // header with no items under it → anchor to its own date, end of that day
+    return s.header ? `${s.header.ItemDate || '9999-99-99'} 99:99` : '9999-99-99 99:99';
+  };
+  sections.sort((a, b) => {
+    const ka = secKey(a), kb = secKey(b);
+    return ka < kb ? -1 : ka > kb ? 1 : a.order - b.order;
+  });
+  const out = [];
+  for (const s of sections) {
+    if (s.header) out.push(s.header);
+    s.timed.sort((x, y) => { const kx = keyFor(x), ky = keyFor(y); return kx < ky ? -1 : kx > ky ? 1 : 0; });
+    out.push(...s.timed);
+  }
+  return out;
 }
 
 router.get('/events/:id/itinerary/pdf', async (req, res) => {
@@ -966,13 +997,15 @@ router.post('/events/:id/itinerary', requireBoard, async (req, res) => {
   try {
     const b = req.body || {};
     if (!(b.Title || '').trim()) return res.status(400).json({ error: 'Title is required.' });
+    const itemType = b.ItemType === 'header' ? 'header' : '';
     const row = await sheets.appendRow('EventItinerary', {
       ItineraryID: `ITN${Date.now()}`,
       EventID: req.params.id,
       ItemDate: b.ItemDate || '',
-      Time: b.Time || '',
+      Time: itemType === 'header' ? '' : (b.Time || ''),  // headers carry no clock time
       Title: b.Title.trim(),
       Notes: (b.Notes || '').trim(),
+      ItemType: itemType,
       CreatedBy: req.user.name || req.user.email
     });
     res.json(row);
@@ -987,6 +1020,10 @@ router.patch('/itinerary/:id', requireBoard, async (req, res) => {
     if (req.body.Title     !== undefined) fields.Title     = req.body.Title;
     if (req.body.Notes     !== undefined) fields.Notes     = req.body.Notes;
     if (req.body.SortOrder !== undefined) fields.SortOrder = req.body.SortOrder;
+    if (req.body.ItemType  !== undefined) {
+      fields.ItemType = req.body.ItemType === 'header' ? 'header' : '';
+      if (fields.ItemType === 'header') fields.Time = '';  // headers carry no clock time
+    }
     const updated = await sheets.updateRowFields('EventItinerary', 'ItineraryID', req.params.id, fields);
     if (!updated) return res.status(404).json({ error: 'Itinerary item not found.' });
     res.json(updated);
