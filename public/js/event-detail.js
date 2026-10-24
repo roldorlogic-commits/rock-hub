@@ -2174,26 +2174,40 @@ function _buildItnBody(items, isBoard) {
   }).join('');
 }
 
+function _itnIsHeaderItem(item) { return (item.ItemType || '') === 'header'; }
+
 function _itnRow(item, isBoard) {
-  const timeDisplay = item.Time ? fmtTime(item.Time) : '';
   const trashIco = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
   const handleIco = `<svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor">
     <circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/>
     <circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/>
     <circle cx="3" cy="13" r="1.5"/><circle cx="7" cy="13" r="1.5"/>
   </svg>`;
-  return `<div class="itn-row${isBoard ? ' itn-clickable' : ''}"
-               data-id="${_esc(item.ItineraryID)}"
-               data-date="${_esc(item.ItemDate || '')}"
-               ${isBoard ? `onclick="openEditItnModal('${_esc(item.ItineraryID)}')"` : ''}>
-    ${isBoard ? `<span class="itn-drag-handle" title="Drag to reorder">${handleIco}</span>` : ''}
+  const handle = isBoard ? `<span class="itn-drag-handle" title="Drag to reorder">${handleIco}</span>` : '';
+  const delBtn = isBoard ? `<button class="icon-btn" title="Delete" style="flex-shrink:0;"
+                         onclick="event.stopPropagation(); deleteItnItem('${_esc(item.ItineraryID)}')">${trashIco}</button>` : '';
+  const common = `data-id="${_esc(item.ItineraryID)}" data-date="${_esc(item.ItemDate || '')}"
+               ${isBoard ? `onclick="openEditItnModal('${_esc(item.ItineraryID)}')"` : ''}`;
+
+  // Section header: a styled divider row with no time column; the timed items
+  // that follow read as belonging to it until the next header.
+  if (_itnIsHeaderItem(item)) {
+    return `<div class="itn-row itn-section${isBoard ? ' itn-clickable' : ''}" ${common}>
+      ${handle}
+      <div class="itn-section-label">${_esc(item.Title)}${item.Notes ? `<span class="itn-section-note">${_esc(item.Notes)}</span>` : ''}</div>
+      ${delBtn}
+    </div>`;
+  }
+
+  const timeDisplay = item.Time ? fmtTime(item.Time) : '';
+  return `<div class="itn-row${isBoard ? ' itn-clickable' : ''}" ${common}>
+    ${handle}
     <div class="itn-time">${_esc(timeDisplay)}</div>
     <div class="itn-body">
       <div class="itn-title">${_esc(item.Title)}</div>
       ${item.Notes ? `<div class="itn-notes">${_esc(item.Notes)}</div>` : ''}
     </div>
-    ${isBoard ? `<button class="icon-btn" title="Delete" style="flex-shrink:0;"
-                         onclick="event.stopPropagation(); deleteItnItem('${_esc(item.ItineraryID)}')">${trashIco}</button>` : ''}
+    ${delBtn}
   </div>`;
 }
 
@@ -2326,8 +2340,30 @@ async function resetItnSort() {
   } catch (err) { console.error('Failed to reset sort:', err); }
 }
 
+// Timed item vs. section header toggle. A header carries no clock time, so its
+// Time field is hidden/cleared while the toggle is on "Section header".
+function _syncItnType(which) {
+  const isHeader = document.querySelector(`input[name="${which}ItnType"]:checked`)?.value === 'header';
+  const wrap  = document.getElementById(`${which}Itn_TimeWrap`);
+  const time  = document.getElementById(`${which}Itn_Time`);
+  const title = document.getElementById(`${which}Itn_Title`);
+  if (wrap)  wrap.style.display = isHeader ? 'none' : '';
+  if (isHeader && time) time.value = '';
+  if (title) title.placeholder = isHeader ? 'e.g. MVMT 1: CREATED' : 'e.g. Opening Worship';
+}
+function _getItnType(which) {
+  return document.querySelector(`input[name="${which}ItnType"]:checked`)?.value === 'header' ? 'header' : '';
+}
+function _setItnType(which, type) {
+  const val = type === 'header' ? 'header' : 'timed';
+  const el = document.querySelector(`input[name="${which}ItnType"][value="${val}"]`);
+  if (el) el.checked = true;
+  _syncItnType(which);
+}
+
 function openAddItnModal() {
   document.getElementById('addItnForm')?.reset();
+  _setItnType('add', 'timed');
   const startDate = currentEvent?.StartDate || '';
   const endDate   = currentEvent?.EndDate   || startDate;
   const dateInput = document.getElementById('addItn_Date');
@@ -2348,9 +2384,10 @@ async function submitAddItn() {
   _modalError('addItnError', '');
   _btnLoading('addItnSubmitBtn', true, 'Add Item');
   try {
+    const type = _getItnType('add');
     const res = await fetch(`/api/events/${encodeURIComponent(currentEvent.EventID)}/itinerary`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ItemDate: g('addItn_Date'), Time: g('addItn_Time'), Title: title, Notes: g('addItn_Notes') })
+      body: JSON.stringify({ ItemType: type, ItemDate: g('addItn_Date'), Time: type === 'header' ? '' : g('addItn_Time'), Title: title, Notes: g('addItn_Notes') })
     });
     const data = await res.json();
     if (!res.ok) { _modalError('addItnError', data.error || 'Failed.'); return; }
@@ -2371,6 +2408,7 @@ function openEditItnModal(id) {
   document.getElementById('editItn_Time').value  = item.Time  || '';
   document.getElementById('editItn_Title').value = item.Title || '';
   document.getElementById('editItn_Notes').value = item.Notes || '';
+  _setItnType('edit', item.ItemType || 'timed');
   const startDate = currentEvent?.StartDate || '';
   const endDate   = currentEvent?.EndDate   || startDate;
   const dateInput = document.getElementById('editItn_Date');
@@ -2392,9 +2430,10 @@ async function submitEditItn() {
   _modalError('editItnError', '');
   _btnLoading('editItnSubmitBtn', true, 'Save Changes');
   try {
+    const type = _getItnType('edit');
     const res = await fetch(`/api/itinerary/${encodeURIComponent(id)}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ItemDate: g('editItn_Date'), Time: g('editItn_Time'), Title: title, Notes: g('editItn_Notes') })
+      body: JSON.stringify({ ItemType: type, ItemDate: g('editItn_Date'), Time: type === 'header' ? '' : g('editItn_Time'), Title: title, Notes: g('editItn_Notes') })
     });
     const data = await res.json();
     if (!res.ok) { _modalError('editItnError', data.error || 'Failed.'); return; }

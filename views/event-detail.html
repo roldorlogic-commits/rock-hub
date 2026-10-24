@@ -609,11 +609,15 @@
     </button>
     <div class="modal-title">Add Itinerary Item</div>
     <form id="addItnForm" onsubmit="event.preventDefault(); submitAddItn();">
+      <div class="itn-type-toggle">
+        <label><input type="radio" name="addItnType" value="timed" checked onchange="_syncItnType('add')"> Timed item</label>
+        <label><input type="radio" name="addItnType" value="header" onchange="_syncItnType('add')"> Section header</label>
+      </div>
       <div style="display:grid;grid-template-columns:150px auto;gap:12px;margin-bottom:12px;">
         <label>Date
           <input type="date" id="addItn_Date">
         </label>
-        <label>Time
+        <label id="addItn_TimeWrap">Time
           <input type="time" id="addItn_Time">
         </label>
       </div>
@@ -680,11 +684,15 @@
     <div class="modal-title">Edit Itinerary Item</div>
     <form id="editItnForm" onsubmit="event.preventDefault(); submitEditItn();">
       <input type="hidden" id="editItn_ID">
+      <div class="itn-type-toggle">
+        <label><input type="radio" name="editItnType" value="timed" checked onchange="_syncItnType('edit')"> Timed item</label>
+        <label><input type="radio" name="editItnType" value="header" onchange="_syncItnType('edit')"> Section header</label>
+      </div>
       <div style="display:grid;grid-template-columns:150px auto;gap:12px;margin-bottom:12px;">
         <label>Date
           <input type="date" id="editItn_Date">
         </label>
-        <label>Time
+        <label id="editItn_TimeWrap">Time
           <input type="time" id="editItn_Time">
         </label>
       </div>
