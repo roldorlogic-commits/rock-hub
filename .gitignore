@@ -3,3 +3,4 @@ node_modules/
 .oauth_tokens.json
 *.log
 .DS_Store
+_to_delete/
