@@ -37,11 +37,8 @@ function isUpcomingEvent(e) {
 
 router.get('/stats', async (req, res) => {
   try {
-    const [volunteers, tasks, youthGroups] = await Promise.all([
-      sheets.getVolunteers(),
-      sheets.getTasks(),
-      sheets.getYouthGroups()
-    ]);
+    const s = await sheets.getSheets(['Volunteers', 'Tasks', 'YouthGroups']);
+    const volunteers = s.Volunteers, tasks = s.Tasks, youthGroups = s.YouthGroups;
     res.json({
       partners:         youthGroups.filter(g => g.category === 'Partner').length,
       prospects:        youthGroups.filter(g => g.category === 'Prospect').length,
@@ -808,9 +805,8 @@ router.get('/search', async (req, res) => {
   const q = (req.query.q || '').trim().toLowerCase();
   if (!q) return res.json({ members: [], events: [], volunteers: [], documents: [] });
   try {
-    const [members, events, volunteers, documents] = await Promise.all([
-      sheets.getMembers(), sheets.getEvents(), sheets.getVolunteers(), sheets.getDocuments()
-    ]);
+    const s = await sheets.getSheets(['Members', 'Events', 'Volunteers', 'Documents']);
+    const members = s.Members, events = s.Events, volunteers = s.Volunteers, documents = s.Documents;
     const fullName  = (a, b) => `${a || ''} ${b || ''}`.toLowerCase();
     const nameMatch = (a, b) => fullName(a, b).includes(q);
 

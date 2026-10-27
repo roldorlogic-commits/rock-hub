@@ -43,17 +43,21 @@ function checkRateLimit(email_) {
 // ── Hub data loader ───────────────────────────────────────────────────────────
 
 async function loadHubContext() {
-  const comms = require('../lib/comms');
-  const [members, events, volunteers, tasks, youthGroups, announcements, templates, optOuts] = await Promise.all([
-    sheets.getMembers(),
-    sheets.getEvents(),
-    sheets.getVolunteers(),
-    sheets.getTasks(),
-    sheets.getYouthGroups(),
-    sheets.getAnnouncements().catch(() => []),
-    comms.getTemplates().catch(() => []),
-    comms.getOptOuts().catch(() => []),
-  ]);
+  // All eight tabs in ONE batchGet — one Sheets read request per chat message
+  // instead of eight. (MessageTemplates/SmsOptOuts are what comms.getTemplates/
+  // getOptOuts read under the hood, so we pull them straight from the batch.)
+  const s = await sheets.getSheets([
+    'Members', 'Events', 'Volunteers', 'Tasks', 'YouthGroups',
+    'Announcements', 'MessageTemplates', 'SmsOptOuts',
+  ]).catch(() => ({}));
+  const members      = s.Members          || [];
+  const events       = s.Events           || [];
+  const volunteers   = s.Volunteers       || [];
+  const tasks        = s.Tasks            || [];
+  const youthGroups  = s.YouthGroups      || [];
+  const announcements= s.Announcements    || [];
+  const templates    = s.MessageTemplates || [];
+  const optOuts      = s.SmsOptOuts       || [];
 
   const now = new Date();
 

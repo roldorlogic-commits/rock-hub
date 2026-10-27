@@ -2310,24 +2310,38 @@ function _rerenderItnList(list, isBoard) {
   _attachItnDrag(list, isBoard);
 }
 
+// Reorder saves are serialized: only one PATCH is ever in flight, and if more
+// drags happen while it's running we remember to save again afterward (with the
+// then-current order). This guarantees a stale request can never land after a
+// newer one and re-scramble the list during rapid consecutive drags.
+let _itnSaveInFlight = false;
+let _itnSavePending  = false;
+
 async function _saveItnOrder() {
   const eventId = currentEvent?.EventID;
   if (!eventId) return;
-  // Persist in display order → SortOrder is always a clean, monotonic sequence
-  // that matches the visible order (and the PDF). No duplicates/gaps.
-  const ordered = _itnDisplayOrder(_dragItems);
-  _dragItems = ordered;
-  const updates = ordered.map((item, idx) => ({
-    ItineraryID: item.ItineraryID,
-    SortOrder:   idx * 10,
-    ItemDate:    item.ItemDate || '',
-  }));
+  if (_itnSaveInFlight) { _itnSavePending = true; return; }
+  _itnSaveInFlight = true;
   try {
+    // Persist in display order → SortOrder is always a clean, monotonic sequence
+    // that matches the visible order (and the PDF). No duplicates/gaps.
+    const ordered = _itnDisplayOrder(_dragItems);
+    _dragItems = ordered;
+    const updates = ordered.map((item, idx) => ({
+      ItineraryID: item.ItineraryID,
+      SortOrder:   idx * 10,
+      ItemDate:    item.ItemDate || '',
+    }));
     await fetch(`/api/events/${encodeURIComponent(eventId)}/itinerary/reorder`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-  } catch (err) { console.error('Failed to save itinerary order:', err); }
+  } catch (err) {
+    console.error('Failed to save itinerary order:', err);
+  } finally {
+    _itnSaveInFlight = false;
+    if (_itnSavePending) { _itnSavePending = false; _saveItnOrder(); }
+  }
 }
 
 async function resetItnSort() {

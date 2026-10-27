@@ -62,4 +62,13 @@ router.post('/calendar-backfill', async (req, res) => {
   }
 });
 
+// GET /api/admin/sheet-reads — which tabs/operations generate the most actual
+// Sheets read requests (cache misses) since boot or last reset. Lets us see at
+// a glance where read-quota pressure is coming from. ?reset=1 zeroes counters.
+router.get('/sheet-reads', (req, res) => {
+  const stats = sheets.getReadStats();
+  if (req.query.reset === '1') sheets.resetReadStats();
+  res.json({ total: stats.reduce((n, s) => n + s.count, 0), byTab: stats });
+});
+
 module.exports = router;
