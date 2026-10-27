@@ -20,6 +20,14 @@ router.use(requireAuth);
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 function nowStr()   { return new Date().toISOString(); }
 
+// Translates an error into an HTTP response. A QuotaError (Sheets 429 that
+// survived all retries) becomes a 503 with a friendly "busy, try again"
+// message — the raw Google quota error is never surfaced to the UI.
+function sendErr(res, err) {
+  if (err && err.isQuota) return res.status(503).json({ error: err.message });
+  res.status(500).json({ error: err.message });
+}
+
 function canEditTask(task, user) {
   if (user.role === 'Board') return true;
   const assignee = (task.AssignedTo || '').toLowerCase();
@@ -967,30 +975,36 @@ router.get('/events/:id/itinerary', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Bulk-save manual drag order: [{ItineraryID, SortOrder, ItemDate?}]
+// Bulk-save manual drag order: [{ItineraryID, SortOrder, ItemDate?}].
+// Written in ONE atomic batch (one read + one write) so a drag either lands in
+// full or not at all — it can never leave the itinerary half-renumbered, which
+// was the root of items "shuffling for no reason" when per-row writes raced
+// against the Sheets quota.
 router.patch('/events/:id/itinerary/reorder', requireBoard, async (req, res) => {
   try {
-    const updates = Array.isArray(req.body) ? req.body : [];
-    await Promise.all(updates.map(u => {
-      if (!u.ItineraryID) return Promise.resolve();
-      const fields = { SortOrder: String(u.SortOrder ?? '') };
-      if (u.ItemDate !== undefined) fields.ItemDate = u.ItemDate;
-      return sheets.updateRowFields('EventItinerary', 'ItineraryID', u.ItineraryID, fields);
-    }));
+    const updates = (Array.isArray(req.body) ? req.body : [])
+      .filter(u => u && u.ItineraryID)
+      .map(u => {
+        const fields = { SortOrder: String(u.SortOrder ?? '') };
+        if (u.ItemDate !== undefined) fields.ItemDate = String(u.ItemDate ?? '');
+        return { idValue: u.ItineraryID, fields };
+      });
+    await sheets.batchUpdateRowFields('EventItinerary', 'ItineraryID', updates);
     res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { sendErr(res, err); }
 });
 
-// Clear manual order → revert to chronological auto-sort
+// "Sort by time" → clear every manual SortOrder for this event in one atomic
+// batch write so the next read falls back to chronological auto-sort.
 router.delete('/events/:id/itinerary/sort', requireBoard, async (req, res) => {
   try {
     const all = await sheets.getEventItinerary();
-    const toReset = all.filter(i => i.EventID === req.params.id && i.SortOrder);
-    await Promise.all(toReset.map(i =>
-      sheets.updateRowFields('EventItinerary', 'ItineraryID', i.ItineraryID, { SortOrder: '' })
-    ));
+    const updates = all
+      .filter(i => i.EventID === req.params.id && i.SortOrder !== '' && i.SortOrder != null)
+      .map(i => ({ idValue: i.ItineraryID, fields: { SortOrder: '' } }));
+    await sheets.batchUpdateRowFields('EventItinerary', 'ItineraryID', updates);
     res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { sendErr(res, err); }
 });
 
 router.post('/events/:id/itinerary', requireBoard, async (req, res) => {
